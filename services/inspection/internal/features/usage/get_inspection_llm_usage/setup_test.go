@@ -97,7 +97,8 @@ func usageQueryDB(t *testing.T) *gorm.DB {
 		prompt_digest text NOT NULL, provider text NOT NULL, model text NOT NULL, gateway_request_id text NOT NULL,
 		gateway_call_id text NOT NULL DEFAULT '', cost_source text,
 		state text NOT NULL, technical_outcome text NOT NULL, transport_delivered numeric, http_status integer,
-		input_tokens integer, output_tokens integer, cached_input_tokens integer, image_count integer,
+		input_tokens integer, output_tokens integer, cached_input_tokens integer, audio_duration_ms integer,
+		audio_input_tokens integer, text_input_tokens integer, reasoning_tokens integer, audio_token_unit text, image_count integer,
 		request_body_bytes integer, reported_cost numeric, duration_ms integer,
 		started_at datetime NOT NULL, finished_at datetime, updated_at datetime
 	)`).Error; err != nil {

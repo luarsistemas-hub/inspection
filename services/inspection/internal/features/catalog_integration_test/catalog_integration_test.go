@@ -67,7 +67,7 @@ func TestCatalogSlicesIT021ToIT070(t *testing.T) {
 	}
 	tenantID, unitID, identityID, membershipID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	now := time.Now().UTC()
-	seed := []any{&database.Tenant{ID: tenantID, TenantID: tenantID, Name: "Catalog tenant", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}, &database.BusinessUnit{ID: unitID, TenantID: tenantID, Code: "main-" + tenantID.String(), Name: "Main", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}, &database.Membership{ID: membershipID, TenantID: tenantID, IdentityID: identityID, Issuer: "test", Subject: identityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}}
+	seed := []any{&database.Tenant{ID: tenantID, TenantID: tenantID, Name: "Catalog tenant", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}, &database.BusinessUnit{ID: unitID, TenantID: tenantID, Code: "main-" + tenantID.String(), Name: "Main", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}, &database.Membership{ID: membershipID, TenantID: tenantID, IdentityID: identityID, Issuer: "test", Subject: identityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}, &database.ProductEntitlement{ID: identity.NewID(), TenantID: tenantID, MembershipID: membershipID, Product: auth.AdminProduct, CreatedAt: now}, &database.ProductEntitlement{ID: identity.NewID(), TenantID: tenantID, MembershipID: membershipID, Product: auth.DashboardProduct, CreatedAt: now}}
 	for _, row := range seed {
 		if err := admin.Create(row).Error; err != nil {
 			t.Fatal(err)
@@ -316,6 +316,8 @@ func TestVideoTemplateGraphQLTransportIT381ToIT388(t *testing.T) {
 	for _, row := range []any{
 		&database.Tenant{ID: tenantID, TenantID: tenantID, Name: "Video template tenant", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&database.Membership{ID: membershipID, TenantID: tenantID, IdentityID: identityID, Issuer: "test", Subject: identityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: tenantID, MembershipID: membershipID, Product: auth.AdminProduct, CreatedAt: now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: tenantID, MembershipID: membershipID, Product: auth.DashboardProduct, CreatedAt: now},
 		&database.Membership{ID: viewerMembershipID, TenantID: tenantID, IdentityID: viewerIdentityID, Issuer: "test", Subject: viewerIdentityID.String(), Role: auth.Viewer, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&database.Membership{ID: customerViewerMembershipID, TenantID: tenantID, IdentityID: customerViewerIdentityID, Issuer: "test", Subject: customerViewerIdentityID.String(), Role: auth.CustomerViewer, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
 	} {
@@ -435,6 +437,8 @@ func TestVideoTemplateGraphQLTransportIT381ToIT388(t *testing.T) {
 	for _, row := range []any{
 		&database.Tenant{ID: foreignTenantID, TenantID: foreignTenantID, Name: "Foreign video template tenant", Language: "pt-BR", DefaultTimezone: "UTC", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&database.Membership{ID: foreignMembershipID, TenantID: foreignTenantID, IdentityID: foreignIdentityID, Issuer: "test", Subject: foreignIdentityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: foreignTenantID, MembershipID: foreignMembershipID, Product: auth.AdminProduct, CreatedAt: now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: foreignTenantID, MembershipID: foreignMembershipID, Product: auth.DashboardProduct, CreatedAt: now},
 	} {
 		if err := admin.Create(row).Error; err != nil {
 			t.Fatal(err)
@@ -595,6 +599,8 @@ func assertTenantIsolation(t *testing.T, admin *gorm.DB, bus *mediator.Bus, pare
 		&database.Tenant{ID: tenantID, TenantID: tenantID, Name: "Isolated tenant", Language: "pt-BR", DefaultTimezone: "UTC", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&database.BusinessUnit{ID: unitID, TenantID: tenantID, Code: "isolated-" + tenantID.String(), Name: "Isolated", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
 		&database.Membership{ID: membershipID, TenantID: tenantID, IdentityID: identityID, Issuer: "test", Subject: identityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: tenantID, MembershipID: membershipID, Product: auth.AdminProduct, CreatedAt: now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: tenantID, MembershipID: membershipID, Product: auth.DashboardProduct, CreatedAt: now},
 	}
 	for _, row := range rows {
 		if err := admin.Create(row).Error; err != nil {

@@ -49,11 +49,18 @@ em container e faz o bootstrap do Admin automaticamente quando necessário:
 Para validar vídeo na stack local, execute
 `INSPECTION_QA_MEDIA_KIND=VIDEO ./scripts/local.sh seed`.
 
-O seed aceita `INSPECTION_QA_SCENARIO=ORIGIN_VIDEO` para preparar um convite
-descartável de origem em vídeo e `INSPECTION_QA_SCENARIO=FIXED_ORIGIN_VIDEO`
-para criar uma O1 ativa com frames e scope sintéticos no MinIO. Ambos os
-cenários só são aceitos com `INSPECTION_ENV=local`. Para gerar, sob demanda e
-fora do Git, o clipe preto de limite, use
+Para habilitar jornadas de notas de voz no cenário QA, execute
+`INSPECTION_QA_VOICE=1 ./scripts/local.sh seed`. O padrão é `0`; com `1`, o
+seed habilita a política de voz do tenant de QA com tetos de 500 notas e 300
+minutos por tenant, e 20 notas e 30 minutos por vistoria. O teto de 500 notas
+permite repetir as jornadas E2E no tenant persistente sem a acumulação de dados
+de QA bloquear novas execuções; os limites por vistoria continuam controlando
+cada cenário. A configuração pode ser reaplicada com segurança ao rodar o seed
+novamente.
+
+O seed de vídeo usa a criação de vistoria vigente; os antigos cenários
+`ORIGIN_VIDEO` e `FIXED_ORIGIN_VIDEO` foram removidos. Para gerar, sob demanda
+e fora do Git, o clipe preto de limite, use
 `./scripts/generate-video-boundary-clips.sh`; o script cria um diretório
 temporário se nenhum diretório de saída for informado.
 

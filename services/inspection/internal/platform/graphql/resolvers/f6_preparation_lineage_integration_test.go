@@ -29,7 +29,7 @@ func TestSealedPreparationEvidenceProjectsFrameSourcePTSAndComponentLinkIT162(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	queryCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}})
+	queryCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	query := `query { videoPreparationEvidence(preparationId:"` + fixture.PreparationID.String() + `",first:10) { nodes { id kind frameId sourceMediaId ptsMicros component } } }`
 	response := executeTask06GraphQL(t, task06GraphQLServer(h.DB), query, queryCtx)
 	if strings.Contains(response, `"errors"`) {

@@ -133,3 +133,58 @@ func ledgerDB(t *testing.T) *gorm.DB {
 	}
 	return db
 }
+
+func TestLedgerPersistsTranscriptionAudioUsageUT019(t *testing.T) {
+	db := ledgerDB(t)
+	ledger, err := Setup(Dependencies{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantID, inspectionID, jobID, eventID, executionID, callID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	ctx := observability.WithCorrelation(context.Background(), observability.Correlation{TenantID: tenantID.String()})
+	if err := ledger.Start(ctx, llm.CallStart{
+		CallID: callID.String(), TenantID: tenantID.String(), InspectionID: inspectionID.String(), JobID: jobID.String(),
+		EventID: eventID.String(), ExecutionID: executionID.String(), CorrelationID: "audio-attempt",
+		Mode: "live", ComparisonMode: "TRANSCRIPTION", ModelAlias: "GEMINI_2_5_FLASH_LITE",
+		PromptDigest: "prompt-v1", AudioDurationMS: 30_000, AudioTokenUnit: "TOKENS",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	audioTokens, textTokens, reasoningTokens := int64(24), int64(8), int64(2)
+	if err := ledger.Finish(ctx, llm.CallFinish{
+		CallID: callID.String(), Provider: "litellm", Model: "gemini-2.5-flash-lite",
+		TechnicalOutcome: "success", TransportDelivered: true, HTTPStatus: 200,
+		AudioDurationMS: int64Ptr(30_000), AudioInputTokens: &audioTokens, TextInputTokens: &textTokens,
+		ReasoningTokens: &reasoningTokens, AudioTokenUnit: "TOKENS",
+		ReportedCostDecimal: stringPtr("0.0002"), CostSource: "header", FinishedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var row database.LLMCallRecord
+	if err := db.Where("call_id = ?", callID).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.ComparisonMode != "TRANSCRIPTION" || row.AudioDurationMS == nil || *row.AudioDurationMS != 30_000 ||
+		row.AudioInputTokens == nil || *row.AudioInputTokens != audioTokens || row.TextInputTokens == nil ||
+		*row.TextInputTokens != textTokens || row.ReasoningTokens == nil || *row.ReasoningTokens != reasoningTokens ||
+		row.AudioTokenUnit == nil || *row.AudioTokenUnit != "TOKENS" || row.CostSource == nil || *row.CostSource != "header" {
+		t.Fatalf("audio usage/provenance was not persisted: %+v", row)
+	}
+}
+
+func int64Ptr(value int64) *int64 { return &value }
+
+func TestOptionalAudioDurationOmitsZeroWithoutChangingInt64Helper(t *testing.T) {
+	if got := optionalAudioDurationMS(0); got != nil {
+		t.Fatalf("zero audio duration must be stored as null, got %d", *got)
+	}
+	if got := optionalAudioDurationMS(1); got == nil || *got != 1 {
+		t.Fatalf("positive audio duration was omitted: %v", got)
+	}
+	if got := optionalInt64(0); got == nil || *got != 0 {
+		t.Fatalf("generic zero metadata (duration/body bytes) must remain zero, got %v", got)
+	}
+	if got := optionalInt64(-1); got != nil {
+		t.Fatalf("negative metadata must be stored as null, got %d", *got)
+	}
+}

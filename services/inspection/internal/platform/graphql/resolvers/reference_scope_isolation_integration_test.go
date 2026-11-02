@@ -46,7 +46,7 @@ func TestOtherTenantCannotReadVideoOriginScopeIT052(t *testing.T) {
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: bus}}))
 	server.SetErrorPresenter(graph.PresentError)
-	operator := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: other.TenantID, Principal: requestctx.Principal{IdentityID: other.IdentityID, MembershipID: other.MembershipID, TenantID: other.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "it052"})
+	operator := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: other.TenantID, Principal: requestctx.Principal{IdentityID: other.IdentityID, MembershipID: other.MembershipID, TenantID: other.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "it052"})
 	query := `query { originVersions(assetId:"` + origin.AssetID.String() + `") { nodes { id mediaKind status } } }`
 	response := executeTask06GraphQL(t, server, query, operator)
 	if !strings.Contains(response, `"code":"NOT_FOUND"`) || strings.Contains(response, origin.FrameID.String()) || strings.Contains(response, `"component":"sink"`) || strings.Contains(response, `"environment":"kitchen"`) {

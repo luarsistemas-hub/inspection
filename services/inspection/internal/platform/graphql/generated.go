@@ -37,6 +37,15 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	AccessResource struct {
+		Grantable  func(childComplexity int) int
+		Historical func(childComplexity int) int
+		Kind       func(childComplexity int) int
+		Name       func(childComplexity int) int
+		ResourceID func(childComplexity int) int
+		Status     func(childComplexity int) int
+	}
+
 	AnalysisPrompt struct {
 		AnalysisType         func(childComplexity int) int
 		CanonicalDigest      func(childComplexity int) int
@@ -88,6 +97,93 @@ type ComplexityRoot struct {
 	AssetPayload struct {
 		Asset            func(childComplexity int) int
 		ClientMutationID func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	AudioNote struct {
+		Anchor              func(childComplexity int) int
+		AnchorStatus        func(childComplexity int) int
+		AudioAvailability   func(childComplexity int) int
+		AudioDeletionStatus func(childComplexity int) int
+		CreatedAt           func(childComplexity int) int
+		CurrentRevisionID   func(childComplexity int) int
+		DurationMs          func(childComplexity int) int
+		EndMs               func(childComplexity int) int
+		EnvironmentID       func(childComplexity int) int
+		EnvironmentName     func(childComplexity int) int
+		FailureCode         func(childComplexity int) int
+		HighlightSource     func(childComplexity int) int
+		Highlighted         func(childComplexity int) int
+		ID                  func(childComplexity int) int
+		InspectionID        func(childComplexity int) int
+		NoSpeech            func(childComplexity int) int
+		PhotoMediaID        func(childComplexity int) int
+		RequirementKey      func(childComplexity int) int
+		ResponsibilityID    func(childComplexity int) int
+		Revisions           func(childComplexity int) int
+		SourceMediaID       func(childComplexity int) int
+		StartMs             func(childComplexity int) int
+		Status              func(childComplexity int) int
+		TargetKind          func(childComplexity int) int
+		TextConfirmed       func(childComplexity int) int
+		UpdatedAt           func(childComplexity int) int
+		Version             func(childComplexity int) int
+		VideoAttemptID      func(childComplexity int) int
+	}
+
+	AudioNoteAnchor struct {
+		Approximate     func(childComplexity int) int
+		Frames          func(childComplexity int) int
+		FramesTruncated func(childComplexity int) int
+		Kind            func(childComplexity int) int
+		MediaID         func(childComplexity int) int
+		MediaStatus     func(childComplexity int) int
+		PlaybackURL     func(childComplexity int) int
+		PreviewURL      func(childComplexity int) int
+		Status          func(childComplexity int) int
+		VisualCoverage  func(childComplexity int) int
+	}
+
+	AudioNoteAnchorFrame struct {
+		ID          func(childComplexity int) int
+		Status      func(childComplexity int) int
+		TimestampMs func(childComplexity int) int
+		URL         func(childComplexity int) int
+	}
+
+	AudioNoteConnection struct {
+		Nodes    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
+	}
+
+	AudioNotePayload struct {
+		ClientMutationID func(childComplexity int) int
+		Note             func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	AudioNoteRevision struct {
+		AuthorID       func(childComplexity int) int
+		AuthorName     func(childComplexity int) int
+		CallID         func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Kind           func(childComplexity int) int
+		RevisionNumber func(childComplexity int) int
+		Text           func(childComplexity int) int
+	}
+
+	AudioNoteUploadIntent struct {
+		ExpiresAt func(childComplexity int) int
+		Headers   func(childComplexity int) int
+		Method    func(childComplexity int) int
+		URL       func(childComplexity int) int
+	}
+
+	AudioNoteUploadPayload struct {
+		ClientMutationID func(childComplexity int) int
+		NoteID           func(childComplexity int) int
+		Upload           func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 	}
 
@@ -435,6 +531,32 @@ type ComplexityRoot struct {
 		Total       func(childComplexity int) int
 	}
 
+	EffectiveAccess struct {
+		Descendants         func(childComplexity int) int
+		Grants              func(childComplexity int) int
+		MembershipID        func(childComplexity int) int
+		ProductEntitlements func(childComplexity int) int
+		Role                func(childComplexity int) int
+		Status              func(childComplexity int) int
+		TenantWide          func(childComplexity int) int
+		Version             func(childComplexity int) int
+	}
+
+	EffectiveAccessEntry struct {
+		Grantable     func(childComplexity int) int
+		Historical    func(childComplexity int) int
+		InheritedFrom func(childComplexity int) int
+		Kind          func(childComplexity int) int
+		Name          func(childComplexity int) int
+		ResourceID    func(childComplexity int) int
+		Status        func(childComplexity int) int
+	}
+
+	EffectiveAccessEntryConnection struct {
+		Nodes    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
+	}
+
 	ExternalCapture struct {
 		Answers               func(childComplexity int) int
 		CaptureLayout         func(childComplexity int) int
@@ -466,6 +588,9 @@ type ComplexityRoot struct {
 
 	GlobalLLMCallUsage struct {
 		Attempt             func(childComplexity int) int
+		AudioDurationMs     func(childComplexity int) int
+		AudioInputTokens    func(childComplexity int) int
+		AudioTokenUnit      func(childComplexity int) int
 		CachedInputTokens   func(childComplexity int) int
 		CallID              func(childComplexity int) int
 		ComparisonMode      func(childComplexity int) int
@@ -488,6 +613,7 @@ type ComplexityRoot struct {
 		ModelAlias          func(childComplexity int) int
 		OutputTokens        func(childComplexity int) int
 		Provider            func(childComplexity int) int
+		ReasoningTokens     func(childComplexity int) int
 		ReplayGeneration    func(childComplexity int) int
 		ReportedCost        func(childComplexity int) int
 		ReportedCostDecimal func(childComplexity int) int
@@ -497,6 +623,7 @@ type ComplexityRoot struct {
 		TechnicalOutcome    func(childComplexity int) int
 		TenantID            func(childComplexity int) int
 		TenantName          func(childComplexity int) int
+		TextInputTokens     func(childComplexity int) int
 		TransportDelivered  func(childComplexity int) int
 	}
 
@@ -643,6 +770,19 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	InventoryAttributeSource struct {
+		AttributeName     func(childComplexity int) int
+		CreatedAt         func(childComplexity int) int
+		CurrentRevisionID func(childComplexity int) int
+		ID                func(childComplexity int) int
+		NoteID            func(childComplexity int) int
+		ReviewedBy        func(childComplexity int) int
+		RevisionID        func(childComplexity int) int
+		SourceKind        func(childComplexity int) int
+		Stale             func(childComplexity int) int
+		VisualEvidenceID  func(childComplexity int) int
+	}
+
 	InventoryCounts struct {
 		Included    func(childComplexity int) int
 		NotReviewed func(childComplexity int) int
@@ -650,13 +790,15 @@ type ComplexityRoot struct {
 	}
 
 	InventoryDraft struct {
-		AssetID      func(childComplexity int) int
-		Environments func(childComplexity int) int
-		NoticeCode   func(childComplexity int) int
-		Progress     func(childComplexity int) int
-		ReadOnly     func(childComplexity int) int
-		Version      func(childComplexity int) int
-		Warnings     func(childComplexity int) int
+		AssetID            func(childComplexity int) int
+		Environments       func(childComplexity int) int
+		NoticeCode         func(childComplexity int) int
+		Progress           func(childComplexity int) int
+		ReadOnly           func(childComplexity int) int
+		SourceInspectionID func(childComplexity int) int
+		Version            func(childComplexity int) int
+		VoiceSummary       func(childComplexity int) int
+		Warnings           func(childComplexity int) int
 	}
 
 	InventoryEnvironment struct {
@@ -670,6 +812,7 @@ type ComplexityRoot struct {
 		Position           func(childComplexity int) int
 		RequirementKey     func(childComplexity int) int
 		TypeCode           func(childComplexity int) int
+		VoiceSummary       func(childComplexity int) int
 	}
 
 	InventoryEnvironmentPayload struct {
@@ -692,26 +835,28 @@ type ComplexityRoot struct {
 	}
 
 	InventoryItem struct {
-		Color           func(childComplexity int) int
-		Condition       func(childComplexity int) int
-		ConfidenceBps   func(childComplexity int) int
-		Decision        func(childComplexity int) int
-		Declared        func(childComplexity int) int
-		EnvironmentID   func(childComplexity int) int
-		Evidence        func(childComplexity int) int
-		ID              func(childComplexity int) int
-		IdentityID      func(childComplexity int) int
-		Limitation      func(childComplexity int) int
-		Material        func(childComplexity int) int
-		Name            func(childComplexity int) int
-		Observation     func(childComplexity int) int
-		Origin          func(childComplexity int) int
-		Quantity        func(childComplexity int) int
-		RejectionReason func(childComplexity int) int
-		RejectionText   func(childComplexity int) int
-		Suggested       func(childComplexity int) int
-		TypeCode        func(childComplexity int) int
-		Version         func(childComplexity int) int
+		AttributeSources func(childComplexity int) int
+		Color            func(childComplexity int) int
+		Condition        func(childComplexity int) int
+		ConfidenceBps    func(childComplexity int) int
+		Decision         func(childComplexity int) int
+		Declared         func(childComplexity int) int
+		EnvironmentID    func(childComplexity int) int
+		Evidence         func(childComplexity int) int
+		ID               func(childComplexity int) int
+		IdentityID       func(childComplexity int) int
+		Limitation       func(childComplexity int) int
+		Material         func(childComplexity int) int
+		Name             func(childComplexity int) int
+		Observation      func(childComplexity int) int
+		Origin           func(childComplexity int) int
+		Quantity         func(childComplexity int) int
+		RejectionReason  func(childComplexity int) int
+		RejectionText    func(childComplexity int) int
+		Suggested        func(childComplexity int) int
+		TypeCode         func(childComplexity int) int
+		Version          func(childComplexity int) int
+		VoiceConflicts   func(childComplexity int) int
 	}
 
 	InventoryItemPayload struct {
@@ -730,6 +875,13 @@ type ComplexityRoot struct {
 	InventoryProgress struct {
 		Decided func(childComplexity int) int
 		Pending func(childComplexity int) int
+	}
+
+	InventoryRegenerationPayload struct {
+		ClientMutationID func(childComplexity int) int
+		JobID            func(childComplexity int) int
+		Status           func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
 	}
 
 	InventoryTrail struct {
@@ -752,6 +904,19 @@ type ComplexityRoot struct {
 		TargetType        func(childComplexity int) int
 	}
 
+	InventoryVoiceConflict struct {
+		AttributeName func(childComplexity int) int
+		VisualValue   func(childComplexity int) int
+		VoiceValue    func(childComplexity int) int
+	}
+
+	InventoryVoiceSummary struct {
+		ConflictItems     func(childComplexity int) int
+		NotesWithoutItem  func(childComplexity int) int
+		PendingVoiceItems func(childComplexity int) int
+		StaleSuggestions  func(childComplexity int) int
+	}
+
 	InvitationOtpPayload struct {
 		ClientMutationID func(childComplexity int) int
 		Status           func(childComplexity int) int
@@ -766,6 +931,9 @@ type ComplexityRoot struct {
 
 	LLMCallUsage struct {
 		Attempt             func(childComplexity int) int
+		AudioDurationMs     func(childComplexity int) int
+		AudioInputTokens    func(childComplexity int) int
+		AudioTokenUnit      func(childComplexity int) int
 		CachedInputTokens   func(childComplexity int) int
 		CallID              func(childComplexity int) int
 		ComparisonMode      func(childComplexity int) int
@@ -787,6 +955,7 @@ type ComplexityRoot struct {
 		ModelAlias          func(childComplexity int) int
 		OutputTokens        func(childComplexity int) int
 		Provider            func(childComplexity int) int
+		ReasoningTokens     func(childComplexity int) int
 		ReplayGeneration    func(childComplexity int) int
 		ReportedCost        func(childComplexity int) int
 		ReportedCostDecimal func(childComplexity int) int
@@ -794,6 +963,7 @@ type ComplexityRoot struct {
 		StartedAt           func(childComplexity int) int
 		State               func(childComplexity int) int
 		TechnicalOutcome    func(childComplexity int) int
+		TextInputTokens     func(childComplexity int) int
 		TransportDelivered  func(childComplexity int) int
 	}
 
@@ -910,15 +1080,16 @@ type ComplexityRoot struct {
 	}
 
 	Membership struct {
-		Email            func(childComplexity int) int
-		ID               func(childComplexity int) int
-		InvitationStatus func(childComplexity int) int
-		Name             func(childComplexity int) int
-		Role             func(childComplexity int) int
-		Scopes           func(childComplexity int) int
-		Status           func(childComplexity int) int
-		TenantID         func(childComplexity int) int
-		Version          func(childComplexity int) int
+		Email               func(childComplexity int) int
+		ID                  func(childComplexity int) int
+		InvitationStatus    func(childComplexity int) int
+		Name                func(childComplexity int) int
+		ProductEntitlements func(childComplexity int) int
+		Role                func(childComplexity int) int
+		Scopes              func(childComplexity int) int
+		Status              func(childComplexity int) int
+		TenantID            func(childComplexity int) int
+		Version             func(childComplexity int) int
 	}
 
 	MembershipConnection struct {
@@ -944,6 +1115,7 @@ type ComplexityRoot struct {
 		ApplyLegalHold                         func(childComplexity int, input LegalHoldInput) int
 		ArchiveAsset                           func(childComplexity int, input ArchiveAssetInput) int
 		ArchiveBusinessUnit                    func(childComplexity int, input ArchiveBusinessUnitInput) int
+		AssignMembershipAccess                 func(childComplexity int, input AssignMembershipAccessInput) int
 		AssignRoleScopes                       func(childComplexity int, input AssignRoleScopesInput) int
 		BeginVideoCapture                      func(childComplexity int, input BeginVideoCaptureInput) int
 		BulkAcceptInventoryEnvironment         func(childComplexity int, input BulkAcceptInventoryEnvironmentInput) int
@@ -951,6 +1123,7 @@ type ComplexityRoot struct {
 		CancelSchedule                         func(childComplexity int, input CancelScheduleInput) int
 		CloseOriginInvitation                  func(childComplexity int, input CloseOriginInvitationInput) int
 		CloseProject                           func(childComplexity int, input ProjectTransitionInput) int
+		CompleteAudioNoteUpload                func(childComplexity int, input CompleteAudioNoteUploadInput) int
 		CompleteInternalUserActivation         func(childComplexity int, input CompleteInternalUserActivationInput) int
 		CompleteMediaUpload                    func(childComplexity int, input CompleteMediaUploadInput) int
 		CompleteOnboarding                     func(childComplexity int, input CompleteOnboardingInput) int
@@ -958,9 +1131,12 @@ type ComplexityRoot struct {
 		ConfigurePublicationPolicy             func(childComplexity int, input ConfigurePublicationPolicyInput) int
 		ConfigureRetentionPolicy               func(childComplexity int, input ConfigureRetentionPolicyInput) int
 		ConfigureVideoPolicy                   func(childComplexity int, input ConfigureVideoPolicyInput) int
+		ConfigureVoicePolicy                   func(childComplexity int, input ConfigureVoicePolicyInput) int
+		ConfirmAudioNoteText                   func(childComplexity int, input ConfirmAudioNoteTextInput) int
 		ContestBaseline                        func(childComplexity int, input ContestBaselineInput) int
 		CorrectInspectionResponsibleEmail      func(childComplexity int, input CorrectInspectionResponsibleEmailInput) int
 		CorrectOnboardingResponsibleEmail      func(childComplexity int, input CorrectOnboardingResponsibleEmailInput) int
+		CreateAudioNoteUpload                  func(childComplexity int, input CreateAudioNoteUploadInput) int
 		CreateBusinessUnit                     func(childComplexity int, input CreateBusinessUnitInput) int
 		CreateInspection                       func(childComplexity int, input CreateInspectionInput) int
 		CreateMediaUpload                      func(childComplexity int, input CreateMediaUploadInput) int
@@ -972,10 +1148,12 @@ type ComplexityRoot struct {
 		DeclareCaptureImpossibility            func(childComplexity int, input DeclareCaptureImpossibilityInput) int
 		DeclareSensitiveDetectionFalsePositive func(childComplexity int, input SensitiveFalsePositiveInput) int
 		DisableMembership                      func(childComplexity int, input DisableMembershipInput) int
+		DiscardAudioNote                       func(childComplexity int, input DiscardAudioNoteInput) int
 		DiscardBaselineDraft                   func(childComplexity int, input DiscardBaselineDraftInput) int
 		InvalidateInspection                   func(childComplexity int, input InvalidateInspectionInput) int
 		InvalidateOriginVersion                func(childComplexity int, input OriginVersionInput) int
 		InvalidateReportPublication            func(childComplexity int, input InvalidateReportPublicationInput) int
+		InviteCustomerUser                     func(childComplexity int, input InviteCustomerUserInput) int
 		InviteInternalUser                     func(childComplexity int, input InviteInternalUserInput) int
 		InviteOriginCapture                    func(childComplexity int, input InviteOriginCaptureInput) int
 		MarkNotificationRead                   func(childComplexity int, input MarkNotificationReadInput) int
@@ -991,6 +1169,7 @@ type ComplexityRoot struct {
 		ReanalyzeVideoInspection               func(childComplexity int, input ReanalyzeVideoInspectionInput) int
 		RecordCaptureQualityWarning            func(childComplexity int, input RecordCaptureQualityWarningInput) int
 		RecordDeletionRequest                  func(childComplexity int, input RecordDeletionRequestInput) int
+		RegenerateInventorySuggestions         func(childComplexity int, input RegenerateInventorySuggestionsInput) int
 		RegisterAsset                          func(childComplexity int, input RegisterAssetInput) int
 		ReleaseLegalHold                       func(childComplexity int, input LegalHoldInput) int
 		RemoveInventoryEnvironment             func(childComplexity int, input RemoveInventoryEnvironmentInput) int
@@ -1008,12 +1187,15 @@ type ComplexityRoot struct {
 		ResendInspectionInvitation             func(childComplexity int, input ResendInspectionInvitationInput) int
 		ResendInternalUserInvitation           func(childComplexity int, input ResendInternalUserInvitationInput) int
 		ResolveBaselineContestation            func(childComplexity int, input ResolveBaselineContestationInput) int
+		RetryAudioNote                         func(childComplexity int, input RetryAudioNoteInput) int
 		RetryInventoryDraft                    func(childComplexity int, input RetryInventoryDraftInput) int
 		RetryVideoPreparation                  func(childComplexity int, input RetryVideoPreparationInput) int
+		ReviseAudioNote                        func(childComplexity int, input ReviseAudioNoteInput) int
 		RevokeInvitation                       func(childComplexity int, input RevokeInvitationInput) int
 		SaveCaptureMetadata                    func(childComplexity int, input SaveCaptureMetadataInput) int
 		SaveOnboardingStep                     func(childComplexity int, input OnboardingStepInput) int
 		SetAdminInitialPassword                func(childComplexity int, input SetAdminInitialPasswordInput) int
+		SetAudioNoteHighlight                  func(childComplexity int, input SetAudioNoteHighlightInput) int
 		SetDeliveryChannels                    func(childComplexity int, input SetDeliveryChannelsInput) int
 		SkipProjectStage                       func(childComplexity int, input SkipProjectStageInput) int
 		SplitInventoryItem                     func(childComplexity int, input SplitInventoryItemInput) int
@@ -1412,6 +1594,8 @@ type ComplexityRoot struct {
 		AnalysisPrompt                    func(childComplexity int, typeArg AnalysisType, task *AnalysisPromptTask) int
 		Asset                             func(childComplexity int, id string) int
 		Assets                            func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
+		AudioNote                         func(childComplexity int, id string) int
+		AudioNotes                        func(childComplexity int, inspectionID string, environmentID string, first *int, after *string) int
 		AuditEvents                       func(childComplexity int, first *int, after *string) int
 		BaselineInventory                 func(childComplexity int, assetID string, versionID *string) int
 		BaselinePolicy                    func(childComplexity int) int
@@ -1423,6 +1607,7 @@ type ComplexityRoot struct {
 		CustomerReport                    func(childComplexity int, inspectionID string, version *int) int
 		CustomerTimeline                  func(childComplexity int, assetID *string, projectID *string, first *int, after *string) int
 		DashboardSummary                  func(childComplexity int, projectID *string, businessUnitID *string) int
+		EffectiveAccess                   func(childComplexity int, membershipID string, first *int, after *string) int
 		ExternalCapture                   func(childComplexity int) int
 		Inspection                        func(childComplexity int, id string) int
 		InspectionLLMUsage                func(childComplexity int, inspectionID string, mode *LLMExecutionMode, includeTestData *bool, first *int, after *string) int
@@ -1455,6 +1640,7 @@ type ComplexityRoot struct {
 		Reports                           func(childComplexity int, first *int, after *string, search *string, classification *string) int
 		RetentionPolicies                 func(childComplexity int) int
 		Schedules                         func(childComplexity int, first *int, after *string) int
+		ScopePreview                      func(childComplexity int, kind string, resourceID string, first *int, after *string) int
 		SegmentDefinitionVersion          func(childComplexity int, id string) int
 		SegmentDefinitions                func(childComplexity int, search *string, first *int, after *string) int
 		SensitiveContentScreeningBypassed func(childComplexity int) int
@@ -1473,6 +1659,7 @@ type ComplexityRoot struct {
 		VideoPreparationEvidence          func(childComplexity int, preparationID string, first *int, after *string) int
 		VideoPreparations                 func(childComplexity int, status []string, first *int, after *string) int
 		VideoUploadStatus                 func(childComplexity int, mediaID string) int
+		VoicePolicy                       func(childComplexity int) int
 	}
 
 	ReanalyzeVideoInspectionPayload struct {
@@ -1541,6 +1728,7 @@ type ComplexityRoot struct {
 		Mode           func(childComplexity int) int
 		PDFStatus      func(childComplexity int) int
 		ProjectID      func(childComplexity int) int
+		Publication    func(childComplexity int) int
 		Requirements   func(childComplexity int) int
 		Timeline       func(childComplexity int) int
 		Version        func(childComplexity int) int
@@ -1665,6 +1853,7 @@ type ComplexityRoot struct {
 		ID               func(childComplexity int) int
 		InspectionID     func(childComplexity int) int
 		ParticipantName  func(childComplexity int) int
+		Publication      func(childComplexity int) int
 		Version          func(childComplexity int) int
 	}
 
@@ -1771,6 +1960,11 @@ type ComplexityRoot struct {
 	Scope struct {
 		Kind       func(childComplexity int) int
 		ResourceID func(childComplexity int) int
+	}
+
+	ScopePreview struct {
+		Descendants func(childComplexity int) int
+		Target      func(childComplexity int) int
 	}
 
 	SegmentDefinition struct {
@@ -2114,6 +2308,21 @@ type ComplexityRoot struct {
 		ReceivedParts  func(childComplexity int) int
 		Status         func(childComplexity int) int
 	}
+
+	VoicePolicy struct {
+		Enabled                func(childComplexity int) int
+		InspectionAudioLimitMs func(childComplexity int) int
+		InspectionNoteLimit    func(childComplexity int) int
+		TenantAudioLimitMs     func(childComplexity int) int
+		TenantNoteLimit        func(childComplexity int) int
+		Version                func(childComplexity int) int
+	}
+
+	VoicePolicyPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Policy           func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
 }
 
 // endregion ***************************** api!.gotpl *****************************
@@ -2138,8 +2347,10 @@ type MutationResolver interface {
 	UpsertBusinessUnit(ctx context.Context, input UpsertBusinessUnitInput) (*BusinessUnitPayload, error)
 	ArchiveBusinessUnit(ctx context.Context, input ArchiveBusinessUnitInput) (*BusinessUnitPayload, error)
 	InviteInternalUser(ctx context.Context, input InviteInternalUserInput) (*MembershipPayload, error)
+	InviteCustomerUser(ctx context.Context, input InviteCustomerUserInput) (*MembershipPayload, error)
 	ResendInternalUserInvitation(ctx context.Context, input ResendInternalUserInvitationInput) (*MembershipPayload, error)
 	AssignRoleScopes(ctx context.Context, input AssignRoleScopesInput) (*MembershipPayload, error)
+	AssignMembershipAccess(ctx context.Context, input AssignMembershipAccessInput) (*MembershipPayload, error)
 	DisableMembership(ctx context.Context, input DisableMembershipInput) (*MembershipPayload, error)
 	UpsertParticipant(ctx context.Context, input UpsertParticipantInput) (*ParticipantPayload, error)
 	VerifyContact(ctx context.Context, input VerifyContactInput) (*ParticipantContactPayload, error)
@@ -2199,6 +2410,15 @@ type MutationResolver interface {
 	AcceptProcessing(ctx context.Context, input AcceptProcessingInput) (*CapturePayload, error)
 	BeginVideoCapture(ctx context.Context, input BeginVideoCaptureInput) (*VideoAttemptPayload, error)
 	ConfigureVideoPolicy(ctx context.Context, input ConfigureVideoPolicyInput) (*VideoPolicyPayload, error)
+	ConfigureVoicePolicy(ctx context.Context, input ConfigureVoicePolicyInput) (*VoicePolicyPayload, error)
+	CreateAudioNoteUpload(ctx context.Context, input CreateAudioNoteUploadInput) (*AudioNoteUploadPayload, error)
+	CompleteAudioNoteUpload(ctx context.Context, input CompleteAudioNoteUploadInput) (*AudioNotePayload, error)
+	ReviseAudioNote(ctx context.Context, input ReviseAudioNoteInput) (*AudioNotePayload, error)
+	DiscardAudioNote(ctx context.Context, input DiscardAudioNoteInput) (*AudioNotePayload, error)
+	RetryAudioNote(ctx context.Context, input RetryAudioNoteInput) (*AudioNotePayload, error)
+	SetAudioNoteHighlight(ctx context.Context, input SetAudioNoteHighlightInput) (*AudioNotePayload, error)
+	ConfirmAudioNoteText(ctx context.Context, input ConfirmAudioNoteTextInput) (*AudioNotePayload, error)
+	RegenerateInventorySuggestions(ctx context.Context, input RegenerateInventorySuggestionsInput) (*InventoryRegenerationPayload, error)
 	RetryVideoPreparation(ctx context.Context, input RetryVideoPreparationInput) (*VideoPreparationPayload, error)
 	ReprocessVideoPreparation(ctx context.Context, input ReprocessVideoPreparationInput) (*VideoPreparationPayload, error)
 	ReanalyzeVideoInspection(ctx context.Context, input ReanalyzeVideoInspectionInput) (*ReanalyzeVideoInspectionPayload, error)
@@ -2236,6 +2456,8 @@ type QueryResolver interface {
 	Me(ctx context.Context) (*Me, error)
 	Tenant(ctx context.Context) (*Tenant, error)
 	Memberships(ctx context.Context, first *int, after *string) (*MembershipConnection, error)
+	EffectiveAccess(ctx context.Context, membershipID string, first *int, after *string) (*EffectiveAccess, error)
+	ScopePreview(ctx context.Context, kind string, resourceID string, first *int, after *string) (*ScopePreview, error)
 	BusinessUnits(ctx context.Context, first *int, after *string) (*BusinessUnitConnection, error)
 	AuditEvents(ctx context.Context, first *int, after *string) (*AuditEventConnection, error)
 	Participants(ctx context.Context, search *string, first *int, after *string) (*ParticipantConnection, error)
@@ -2293,6 +2515,9 @@ type QueryResolver interface {
 	VideoPolicy(ctx context.Context) (*VideoPolicy, error)
 	VideoUploadStatus(ctx context.Context, mediaID string) (*VideoUploadStatus, error)
 	VideoPreparation(ctx context.Context, mediaID string) (*VideoPreparationStatus, error)
+	VoicePolicy(ctx context.Context) (*VoicePolicy, error)
+	AudioNotes(ctx context.Context, inspectionID string, environmentID string, first *int, after *string) (*AudioNoteConnection, error)
+	AudioNote(ctx context.Context, id string) (*AudioNote, error)
 }
 type ReportResolver interface {
 	Evidence(ctx context.Context, obj *Report, first *int, after *string) (*ReportEvidenceConnection, error)
@@ -2315,6 +2540,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
+
+	case "AccessResource.grantable":
+		if e.ComplexityRoot.AccessResource.Grantable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AccessResource.Grantable(childComplexity), true
+	case "AccessResource.historical":
+		if e.ComplexityRoot.AccessResource.Historical == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AccessResource.Historical(childComplexity), true
+	case "AccessResource.kind":
+		if e.ComplexityRoot.AccessResource.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AccessResource.Kind(childComplexity), true
+	case "AccessResource.name":
+		if e.ComplexityRoot.AccessResource.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AccessResource.Name(childComplexity), true
+	case "AccessResource.resourceId":
+		if e.ComplexityRoot.AccessResource.ResourceID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AccessResource.ResourceID(childComplexity), true
+	case "AccessResource.status":
+		if e.ComplexityRoot.AccessResource.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AccessResource.Status(childComplexity), true
 
 	case "AnalysisPrompt.analysisType":
 		if e.ComplexityRoot.AnalysisPrompt.AnalysisType == nil {
@@ -2537,6 +2799,392 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AssetPayload.UserErrors(childComplexity), true
+
+	case "AudioNote.anchor":
+		if e.ComplexityRoot.AudioNote.Anchor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.Anchor(childComplexity), true
+	case "AudioNote.anchorStatus":
+		if e.ComplexityRoot.AudioNote.AnchorStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.AnchorStatus(childComplexity), true
+	case "AudioNote.audioAvailability":
+		if e.ComplexityRoot.AudioNote.AudioAvailability == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.AudioAvailability(childComplexity), true
+	case "AudioNote.audioDeletionStatus":
+		if e.ComplexityRoot.AudioNote.AudioDeletionStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.AudioDeletionStatus(childComplexity), true
+	case "AudioNote.createdAt":
+		if e.ComplexityRoot.AudioNote.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.CreatedAt(childComplexity), true
+	case "AudioNote.currentRevisionId":
+		if e.ComplexityRoot.AudioNote.CurrentRevisionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.CurrentRevisionID(childComplexity), true
+	case "AudioNote.durationMs":
+		if e.ComplexityRoot.AudioNote.DurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.DurationMs(childComplexity), true
+	case "AudioNote.endMs":
+		if e.ComplexityRoot.AudioNote.EndMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.EndMs(childComplexity), true
+	case "AudioNote.environmentId":
+		if e.ComplexityRoot.AudioNote.EnvironmentID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.EnvironmentID(childComplexity), true
+	case "AudioNote.environmentName":
+		if e.ComplexityRoot.AudioNote.EnvironmentName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.EnvironmentName(childComplexity), true
+	case "AudioNote.failureCode":
+		if e.ComplexityRoot.AudioNote.FailureCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.FailureCode(childComplexity), true
+	case "AudioNote.highlightSource":
+		if e.ComplexityRoot.AudioNote.HighlightSource == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.HighlightSource(childComplexity), true
+	case "AudioNote.highlighted":
+		if e.ComplexityRoot.AudioNote.Highlighted == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.Highlighted(childComplexity), true
+	case "AudioNote.id":
+		if e.ComplexityRoot.AudioNote.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.ID(childComplexity), true
+	case "AudioNote.inspectionId":
+		if e.ComplexityRoot.AudioNote.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.InspectionID(childComplexity), true
+	case "AudioNote.noSpeech":
+		if e.ComplexityRoot.AudioNote.NoSpeech == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.NoSpeech(childComplexity), true
+	case "AudioNote.photoMediaId":
+		if e.ComplexityRoot.AudioNote.PhotoMediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.PhotoMediaID(childComplexity), true
+	case "AudioNote.requirementKey":
+		if e.ComplexityRoot.AudioNote.RequirementKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.RequirementKey(childComplexity), true
+	case "AudioNote.responsibilityId":
+		if e.ComplexityRoot.AudioNote.ResponsibilityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.ResponsibilityID(childComplexity), true
+	case "AudioNote.revisions":
+		if e.ComplexityRoot.AudioNote.Revisions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.Revisions(childComplexity), true
+	case "AudioNote.sourceMediaId":
+		if e.ComplexityRoot.AudioNote.SourceMediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.SourceMediaID(childComplexity), true
+	case "AudioNote.startMs":
+		if e.ComplexityRoot.AudioNote.StartMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.StartMs(childComplexity), true
+	case "AudioNote.status":
+		if e.ComplexityRoot.AudioNote.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.Status(childComplexity), true
+	case "AudioNote.targetKind":
+		if e.ComplexityRoot.AudioNote.TargetKind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.TargetKind(childComplexity), true
+	case "AudioNote.textConfirmed":
+		if e.ComplexityRoot.AudioNote.TextConfirmed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.TextConfirmed(childComplexity), true
+	case "AudioNote.updatedAt":
+		if e.ComplexityRoot.AudioNote.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.UpdatedAt(childComplexity), true
+	case "AudioNote.version":
+		if e.ComplexityRoot.AudioNote.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.Version(childComplexity), true
+	case "AudioNote.videoAttemptId":
+		if e.ComplexityRoot.AudioNote.VideoAttemptID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNote.VideoAttemptID(childComplexity), true
+
+	case "AudioNoteAnchor.approximate":
+		if e.ComplexityRoot.AudioNoteAnchor.Approximate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.Approximate(childComplexity), true
+	case "AudioNoteAnchor.frames":
+		if e.ComplexityRoot.AudioNoteAnchor.Frames == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.Frames(childComplexity), true
+	case "AudioNoteAnchor.framesTruncated":
+		if e.ComplexityRoot.AudioNoteAnchor.FramesTruncated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.FramesTruncated(childComplexity), true
+	case "AudioNoteAnchor.kind":
+		if e.ComplexityRoot.AudioNoteAnchor.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.Kind(childComplexity), true
+	case "AudioNoteAnchor.mediaId":
+		if e.ComplexityRoot.AudioNoteAnchor.MediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.MediaID(childComplexity), true
+	case "AudioNoteAnchor.mediaStatus":
+		if e.ComplexityRoot.AudioNoteAnchor.MediaStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.MediaStatus(childComplexity), true
+	case "AudioNoteAnchor.playbackUrl":
+		if e.ComplexityRoot.AudioNoteAnchor.PlaybackURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.PlaybackURL(childComplexity), true
+	case "AudioNoteAnchor.previewUrl":
+		if e.ComplexityRoot.AudioNoteAnchor.PreviewURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.PreviewURL(childComplexity), true
+	case "AudioNoteAnchor.status":
+		if e.ComplexityRoot.AudioNoteAnchor.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.Status(childComplexity), true
+	case "AudioNoteAnchor.visualCoverage":
+		if e.ComplexityRoot.AudioNoteAnchor.VisualCoverage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchor.VisualCoverage(childComplexity), true
+
+	case "AudioNoteAnchorFrame.id":
+		if e.ComplexityRoot.AudioNoteAnchorFrame.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchorFrame.ID(childComplexity), true
+	case "AudioNoteAnchorFrame.status":
+		if e.ComplexityRoot.AudioNoteAnchorFrame.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchorFrame.Status(childComplexity), true
+	case "AudioNoteAnchorFrame.timestampMs":
+		if e.ComplexityRoot.AudioNoteAnchorFrame.TimestampMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchorFrame.TimestampMs(childComplexity), true
+	case "AudioNoteAnchorFrame.url":
+		if e.ComplexityRoot.AudioNoteAnchorFrame.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteAnchorFrame.URL(childComplexity), true
+
+	case "AudioNoteConnection.nodes":
+		if e.ComplexityRoot.AudioNoteConnection.Nodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteConnection.Nodes(childComplexity), true
+	case "AudioNoteConnection.pageInfo":
+		if e.ComplexityRoot.AudioNoteConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteConnection.PageInfo(childComplexity), true
+
+	case "AudioNotePayload.clientMutationId":
+		if e.ComplexityRoot.AudioNotePayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNotePayload.ClientMutationID(childComplexity), true
+	case "AudioNotePayload.note":
+		if e.ComplexityRoot.AudioNotePayload.Note == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNotePayload.Note(childComplexity), true
+	case "AudioNotePayload.userErrors":
+		if e.ComplexityRoot.AudioNotePayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNotePayload.UserErrors(childComplexity), true
+
+	case "AudioNoteRevision.authorId":
+		if e.ComplexityRoot.AudioNoteRevision.AuthorID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.AuthorID(childComplexity), true
+	case "AudioNoteRevision.authorName":
+		if e.ComplexityRoot.AudioNoteRevision.AuthorName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.AuthorName(childComplexity), true
+	case "AudioNoteRevision.callId":
+		if e.ComplexityRoot.AudioNoteRevision.CallID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.CallID(childComplexity), true
+	case "AudioNoteRevision.createdAt":
+		if e.ComplexityRoot.AudioNoteRevision.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.CreatedAt(childComplexity), true
+	case "AudioNoteRevision.id":
+		if e.ComplexityRoot.AudioNoteRevision.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.ID(childComplexity), true
+	case "AudioNoteRevision.kind":
+		if e.ComplexityRoot.AudioNoteRevision.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.Kind(childComplexity), true
+	case "AudioNoteRevision.revisionNumber":
+		if e.ComplexityRoot.AudioNoteRevision.RevisionNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.RevisionNumber(childComplexity), true
+	case "AudioNoteRevision.text":
+		if e.ComplexityRoot.AudioNoteRevision.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteRevision.Text(childComplexity), true
+
+	case "AudioNoteUploadIntent.expiresAt":
+		if e.ComplexityRoot.AudioNoteUploadIntent.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadIntent.ExpiresAt(childComplexity), true
+	case "AudioNoteUploadIntent.headers":
+		if e.ComplexityRoot.AudioNoteUploadIntent.Headers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadIntent.Headers(childComplexity), true
+	case "AudioNoteUploadIntent.method":
+		if e.ComplexityRoot.AudioNoteUploadIntent.Method == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadIntent.Method(childComplexity), true
+	case "AudioNoteUploadIntent.url":
+		if e.ComplexityRoot.AudioNoteUploadIntent.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadIntent.URL(childComplexity), true
+
+	case "AudioNoteUploadPayload.clientMutationId":
+		if e.ComplexityRoot.AudioNoteUploadPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadPayload.ClientMutationID(childComplexity), true
+	case "AudioNoteUploadPayload.noteId":
+		if e.ComplexityRoot.AudioNoteUploadPayload.NoteID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadPayload.NoteID(childComplexity), true
+	case "AudioNoteUploadPayload.upload":
+		if e.ComplexityRoot.AudioNoteUploadPayload.Upload == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadPayload.Upload(childComplexity), true
+	case "AudioNoteUploadPayload.userErrors":
+		if e.ComplexityRoot.AudioNoteUploadPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AudioNoteUploadPayload.UserErrors(childComplexity), true
 
 	case "AuditEvent.action":
 		if e.ComplexityRoot.AuditEvent.Action == nil {
@@ -3939,6 +4587,111 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.DashboardSummary.Total(childComplexity), true
 
+	case "EffectiveAccess.descendants":
+		if e.ComplexityRoot.EffectiveAccess.Descendants == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.Descendants(childComplexity), true
+	case "EffectiveAccess.grants":
+		if e.ComplexityRoot.EffectiveAccess.Grants == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.Grants(childComplexity), true
+	case "EffectiveAccess.membershipId":
+		if e.ComplexityRoot.EffectiveAccess.MembershipID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.MembershipID(childComplexity), true
+	case "EffectiveAccess.productEntitlements":
+		if e.ComplexityRoot.EffectiveAccess.ProductEntitlements == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.ProductEntitlements(childComplexity), true
+	case "EffectiveAccess.role":
+		if e.ComplexityRoot.EffectiveAccess.Role == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.Role(childComplexity), true
+	case "EffectiveAccess.status":
+		if e.ComplexityRoot.EffectiveAccess.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.Status(childComplexity), true
+	case "EffectiveAccess.tenantWide":
+		if e.ComplexityRoot.EffectiveAccess.TenantWide == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.TenantWide(childComplexity), true
+	case "EffectiveAccess.version":
+		if e.ComplexityRoot.EffectiveAccess.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccess.Version(childComplexity), true
+
+	case "EffectiveAccessEntry.grantable":
+		if e.ComplexityRoot.EffectiveAccessEntry.Grantable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.Grantable(childComplexity), true
+	case "EffectiveAccessEntry.historical":
+		if e.ComplexityRoot.EffectiveAccessEntry.Historical == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.Historical(childComplexity), true
+	case "EffectiveAccessEntry.inheritedFrom":
+		if e.ComplexityRoot.EffectiveAccessEntry.InheritedFrom == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.InheritedFrom(childComplexity), true
+	case "EffectiveAccessEntry.kind":
+		if e.ComplexityRoot.EffectiveAccessEntry.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.Kind(childComplexity), true
+	case "EffectiveAccessEntry.name":
+		if e.ComplexityRoot.EffectiveAccessEntry.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.Name(childComplexity), true
+	case "EffectiveAccessEntry.resourceId":
+		if e.ComplexityRoot.EffectiveAccessEntry.ResourceID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.ResourceID(childComplexity), true
+	case "EffectiveAccessEntry.status":
+		if e.ComplexityRoot.EffectiveAccessEntry.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntry.Status(childComplexity), true
+
+	case "EffectiveAccessEntryConnection.nodes":
+		if e.ComplexityRoot.EffectiveAccessEntryConnection.Nodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntryConnection.Nodes(childComplexity), true
+	case "EffectiveAccessEntryConnection.pageInfo":
+		if e.ComplexityRoot.EffectiveAccessEntryConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EffectiveAccessEntryConnection.PageInfo(childComplexity), true
+
 	case "ExternalCapture.answers":
 		if e.ComplexityRoot.ExternalCapture.Answers == nil {
 			break
@@ -4085,6 +4838,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.GlobalLLMCallUsage.Attempt(childComplexity), true
+	case "GlobalLLMCallUsage.audioDurationMs":
+		if e.ComplexityRoot.GlobalLLMCallUsage.AudioDurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.AudioDurationMs(childComplexity), true
+	case "GlobalLLMCallUsage.audioInputTokens":
+		if e.ComplexityRoot.GlobalLLMCallUsage.AudioInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.AudioInputTokens(childComplexity), true
+	case "GlobalLLMCallUsage.audioTokenUnit":
+		if e.ComplexityRoot.GlobalLLMCallUsage.AudioTokenUnit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.AudioTokenUnit(childComplexity), true
 	case "GlobalLLMCallUsage.cachedInputTokens":
 		if e.ComplexityRoot.GlobalLLMCallUsage.CachedInputTokens == nil {
 			break
@@ -4217,6 +4988,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.GlobalLLMCallUsage.Provider(childComplexity), true
+	case "GlobalLLMCallUsage.reasoningTokens":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ReasoningTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ReasoningTokens(childComplexity), true
 	case "GlobalLLMCallUsage.replayGeneration":
 		if e.ComplexityRoot.GlobalLLMCallUsage.ReplayGeneration == nil {
 			break
@@ -4271,6 +5048,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.GlobalLLMCallUsage.TenantName(childComplexity), true
+	case "GlobalLLMCallUsage.textInputTokens":
+		if e.ComplexityRoot.GlobalLLMCallUsage.TextInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.TextInputTokens(childComplexity), true
 	case "GlobalLLMCallUsage.transportDelivered":
 		if e.ComplexityRoot.GlobalLLMCallUsage.TransportDelivered == nil {
 			break
@@ -4932,6 +5715,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InternalUserActivationPayload.UserErrors(childComplexity), true
 
+	case "InventoryAttributeSource.attributeName":
+		if e.ComplexityRoot.InventoryAttributeSource.AttributeName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.AttributeName(childComplexity), true
+	case "InventoryAttributeSource.createdAt":
+		if e.ComplexityRoot.InventoryAttributeSource.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.CreatedAt(childComplexity), true
+	case "InventoryAttributeSource.currentRevisionId":
+		if e.ComplexityRoot.InventoryAttributeSource.CurrentRevisionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.CurrentRevisionID(childComplexity), true
+	case "InventoryAttributeSource.id":
+		if e.ComplexityRoot.InventoryAttributeSource.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.ID(childComplexity), true
+	case "InventoryAttributeSource.noteId":
+		if e.ComplexityRoot.InventoryAttributeSource.NoteID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.NoteID(childComplexity), true
+	case "InventoryAttributeSource.reviewedBy":
+		if e.ComplexityRoot.InventoryAttributeSource.ReviewedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.ReviewedBy(childComplexity), true
+	case "InventoryAttributeSource.revisionId":
+		if e.ComplexityRoot.InventoryAttributeSource.RevisionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.RevisionID(childComplexity), true
+	case "InventoryAttributeSource.sourceKind":
+		if e.ComplexityRoot.InventoryAttributeSource.SourceKind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.SourceKind(childComplexity), true
+	case "InventoryAttributeSource.stale":
+		if e.ComplexityRoot.InventoryAttributeSource.Stale == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.Stale(childComplexity), true
+	case "InventoryAttributeSource.visualEvidenceId":
+		if e.ComplexityRoot.InventoryAttributeSource.VisualEvidenceID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryAttributeSource.VisualEvidenceID(childComplexity), true
+
 	case "InventoryCounts.included":
 		if e.ComplexityRoot.InventoryCounts.Included == nil {
 			break
@@ -4981,12 +5825,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InventoryDraft.ReadOnly(childComplexity), true
+	case "InventoryDraft.sourceInspectionId":
+		if e.ComplexityRoot.InventoryDraft.SourceInspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.SourceInspectionID(childComplexity), true
 	case "InventoryDraft.version":
 		if e.ComplexityRoot.InventoryDraft.Version == nil {
 			break
 		}
 
 		return e.ComplexityRoot.InventoryDraft.Version(childComplexity), true
+	case "InventoryDraft.voiceSummary":
+		if e.ComplexityRoot.InventoryDraft.VoiceSummary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.VoiceSummary(childComplexity), true
 	case "InventoryDraft.warnings":
 		if e.ComplexityRoot.InventoryDraft.Warnings == nil {
 			break
@@ -5054,6 +5910,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InventoryEnvironment.TypeCode(childComplexity), true
+	case "InventoryEnvironment.voiceSummary":
+		if e.ComplexityRoot.InventoryEnvironment.VoiceSummary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.VoiceSummary(childComplexity), true
 
 	case "InventoryEnvironmentPayload.clientMutationId":
 		if e.ComplexityRoot.InventoryEnvironmentPayload.ClientMutationID == nil {
@@ -5135,6 +5997,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InventoryEvidence.URL(childComplexity), true
 
+	case "InventoryItem.attributeSources":
+		if e.ComplexityRoot.InventoryItem.AttributeSources == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.AttributeSources(childComplexity), true
 	case "InventoryItem.color":
 		if e.ComplexityRoot.InventoryItem.Color == nil {
 			break
@@ -5255,6 +6123,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InventoryItem.Version(childComplexity), true
+	case "InventoryItem.voiceConflicts":
+		if e.ComplexityRoot.InventoryItem.VoiceConflicts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.VoiceConflicts(childComplexity), true
 
 	case "InventoryItemPayload.clientMutationId":
 		if e.ComplexityRoot.InventoryItemPayload.ClientMutationID == nil {
@@ -5312,6 +6186,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InventoryProgress.Pending(childComplexity), true
+
+	case "InventoryRegenerationPayload.clientMutationId":
+		if e.ComplexityRoot.InventoryRegenerationPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryRegenerationPayload.ClientMutationID(childComplexity), true
+	case "InventoryRegenerationPayload.jobId":
+		if e.ComplexityRoot.InventoryRegenerationPayload.JobID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryRegenerationPayload.JobID(childComplexity), true
+	case "InventoryRegenerationPayload.status":
+		if e.ComplexityRoot.InventoryRegenerationPayload.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryRegenerationPayload.Status(childComplexity), true
+	case "InventoryRegenerationPayload.userErrors":
+		if e.ComplexityRoot.InventoryRegenerationPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryRegenerationPayload.UserErrors(childComplexity), true
 
 	case "InventoryTrail.counterpartyEvents":
 		if e.ComplexityRoot.InventoryTrail.CounterpartyEvents == nil {
@@ -5399,6 +6298,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InventoryTrailEntry.TargetType(childComplexity), true
 
+	case "InventoryVoiceConflict.attributeName":
+		if e.ComplexityRoot.InventoryVoiceConflict.AttributeName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceConflict.AttributeName(childComplexity), true
+	case "InventoryVoiceConflict.visualValue":
+		if e.ComplexityRoot.InventoryVoiceConflict.VisualValue == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceConflict.VisualValue(childComplexity), true
+	case "InventoryVoiceConflict.voiceValue":
+		if e.ComplexityRoot.InventoryVoiceConflict.VoiceValue == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceConflict.VoiceValue(childComplexity), true
+
+	case "InventoryVoiceSummary.conflictItems":
+		if e.ComplexityRoot.InventoryVoiceSummary.ConflictItems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceSummary.ConflictItems(childComplexity), true
+	case "InventoryVoiceSummary.notesWithoutItem":
+		if e.ComplexityRoot.InventoryVoiceSummary.NotesWithoutItem == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceSummary.NotesWithoutItem(childComplexity), true
+	case "InventoryVoiceSummary.pendingVoiceItems":
+		if e.ComplexityRoot.InventoryVoiceSummary.PendingVoiceItems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceSummary.PendingVoiceItems(childComplexity), true
+	case "InventoryVoiceSummary.staleSuggestions":
+		if e.ComplexityRoot.InventoryVoiceSummary.StaleSuggestions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryVoiceSummary.StaleSuggestions(childComplexity), true
+
 	case "InvitationOtpPayload.clientMutationId":
 		if e.ComplexityRoot.InvitationOtpPayload.ClientMutationID == nil {
 			break
@@ -5443,6 +6386,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMCallUsage.Attempt(childComplexity), true
+	case "LLMCallUsage.audioDurationMs":
+		if e.ComplexityRoot.LLMCallUsage.AudioDurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.AudioDurationMs(childComplexity), true
+	case "LLMCallUsage.audioInputTokens":
+		if e.ComplexityRoot.LLMCallUsage.AudioInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.AudioInputTokens(childComplexity), true
+	case "LLMCallUsage.audioTokenUnit":
+		if e.ComplexityRoot.LLMCallUsage.AudioTokenUnit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.AudioTokenUnit(childComplexity), true
 	case "LLMCallUsage.cachedInputTokens":
 		if e.ComplexityRoot.LLMCallUsage.CachedInputTokens == nil {
 			break
@@ -5569,6 +6530,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMCallUsage.Provider(childComplexity), true
+	case "LLMCallUsage.reasoningTokens":
+		if e.ComplexityRoot.LLMCallUsage.ReasoningTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.ReasoningTokens(childComplexity), true
 	case "LLMCallUsage.replayGeneration":
 		if e.ComplexityRoot.LLMCallUsage.ReplayGeneration == nil {
 			break
@@ -5611,6 +6578,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMCallUsage.TechnicalOutcome(childComplexity), true
+	case "LLMCallUsage.textInputTokens":
+		if e.ComplexityRoot.LLMCallUsage.TextInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.TextInputTokens(childComplexity), true
 	case "LLMCallUsage.transportDelivered":
 		if e.ComplexityRoot.LLMCallUsage.TransportDelivered == nil {
 			break
@@ -6144,6 +7117,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Membership.Name(childComplexity), true
+	case "Membership.productEntitlements":
+		if e.ComplexityRoot.Membership.ProductEntitlements == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Membership.ProductEntitlements(childComplexity), true
 	case "Membership.role":
 		if e.ComplexityRoot.Membership.Role == nil {
 			break
@@ -6328,6 +7307,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ArchiveBusinessUnit(childComplexity, args["input"].(ArchiveBusinessUnitInput)), true
+	case "Mutation.assignMembershipAccess":
+		if e.ComplexityRoot.Mutation.AssignMembershipAccess == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_assignMembershipAccess_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AssignMembershipAccess(childComplexity, args["input"].(AssignMembershipAccessInput)), true
 	case "Mutation.assignRoleScopes":
 		if e.ComplexityRoot.Mutation.AssignRoleScopes == nil {
 			break
@@ -6405,6 +7395,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CloseProject(childComplexity, args["input"].(ProjectTransitionInput)), true
+	case "Mutation.completeAudioNoteUpload":
+		if e.ComplexityRoot.Mutation.CompleteAudioNoteUpload == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_completeAudioNoteUpload_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CompleteAudioNoteUpload(childComplexity, args["input"].(CompleteAudioNoteUploadInput)), true
 	case "Mutation.completeInternalUserActivation":
 		if e.ComplexityRoot.Mutation.CompleteInternalUserActivation == nil {
 			break
@@ -6482,6 +7483,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ConfigureVideoPolicy(childComplexity, args["input"].(ConfigureVideoPolicyInput)), true
+	case "Mutation.configureVoicePolicy":
+		if e.ComplexityRoot.Mutation.ConfigureVoicePolicy == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_configureVoicePolicy_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ConfigureVoicePolicy(childComplexity, args["input"].(ConfigureVoicePolicyInput)), true
+	case "Mutation.confirmAudioNoteText":
+		if e.ComplexityRoot.Mutation.ConfirmAudioNoteText == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_confirmAudioNoteText_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ConfirmAudioNoteText(childComplexity, args["input"].(ConfirmAudioNoteTextInput)), true
 	case "Mutation.contestBaseline":
 		if e.ComplexityRoot.Mutation.ContestBaseline == nil {
 			break
@@ -6515,6 +7538,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CorrectOnboardingResponsibleEmail(childComplexity, args["input"].(CorrectOnboardingResponsibleEmailInput)), true
+	case "Mutation.createAudioNoteUpload":
+		if e.ComplexityRoot.Mutation.CreateAudioNoteUpload == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createAudioNoteUpload_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateAudioNoteUpload(childComplexity, args["input"].(CreateAudioNoteUploadInput)), true
 	case "Mutation.createBusinessUnit":
 		if e.ComplexityRoot.Mutation.CreateBusinessUnit == nil {
 			break
@@ -6636,6 +7670,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DisableMembership(childComplexity, args["input"].(DisableMembershipInput)), true
+	case "Mutation.discardAudioNote":
+		if e.ComplexityRoot.Mutation.DiscardAudioNote == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_discardAudioNote_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DiscardAudioNote(childComplexity, args["input"].(DiscardAudioNoteInput)), true
 	case "Mutation.discardBaselineDraft":
 		if e.ComplexityRoot.Mutation.DiscardBaselineDraft == nil {
 			break
@@ -6680,6 +7725,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.InvalidateReportPublication(childComplexity, args["input"].(InvalidateReportPublicationInput)), true
+	case "Mutation.inviteCustomerUser":
+		if e.ComplexityRoot.Mutation.InviteCustomerUser == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_inviteCustomerUser_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.InviteCustomerUser(childComplexity, args["input"].(InviteCustomerUserInput)), true
 	case "Mutation.inviteInternalUser":
 		if e.ComplexityRoot.Mutation.InviteInternalUser == nil {
 			break
@@ -6845,6 +7901,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RecordDeletionRequest(childComplexity, args["input"].(RecordDeletionRequestInput)), true
+	case "Mutation.regenerateInventorySuggestions":
+		if e.ComplexityRoot.Mutation.RegenerateInventorySuggestions == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_regenerateInventorySuggestions_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RegenerateInventorySuggestions(childComplexity, args["input"].(RegenerateInventorySuggestionsInput)), true
 	case "Mutation.registerAsset":
 		if e.ComplexityRoot.Mutation.RegisterAsset == nil {
 			break
@@ -7032,6 +8099,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResolveBaselineContestation(childComplexity, args["input"].(ResolveBaselineContestationInput)), true
+	case "Mutation.retryAudioNote":
+		if e.ComplexityRoot.Mutation.RetryAudioNote == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_retryAudioNote_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RetryAudioNote(childComplexity, args["input"].(RetryAudioNoteInput)), true
 	case "Mutation.retryInventoryDraft":
 		if e.ComplexityRoot.Mutation.RetryInventoryDraft == nil {
 			break
@@ -7054,6 +8132,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RetryVideoPreparation(childComplexity, args["input"].(RetryVideoPreparationInput)), true
+	case "Mutation.reviseAudioNote":
+		if e.ComplexityRoot.Mutation.ReviseAudioNote == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_reviseAudioNote_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ReviseAudioNote(childComplexity, args["input"].(ReviseAudioNoteInput)), true
 	case "Mutation.revokeInvitation":
 		if e.ComplexityRoot.Mutation.RevokeInvitation == nil {
 			break
@@ -7098,6 +8187,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAdminInitialPassword(childComplexity, args["input"].(SetAdminInitialPasswordInput)), true
+	case "Mutation.setAudioNoteHighlight":
+		if e.ComplexityRoot.Mutation.SetAudioNoteHighlight == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setAudioNoteHighlight_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetAudioNoteHighlight(childComplexity, args["input"].(SetAudioNoteHighlightInput)), true
 	case "Mutation.setDeliveryChannels":
 		if e.ComplexityRoot.Mutation.SetDeliveryChannels == nil {
 			break
@@ -8863,6 +9963,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Assets(childComplexity, args["businessUnitId"].(*string), args["search"].(*string), args["first"].(*int), args["after"].(*string)), true
+	case "Query.audioNote":
+		if e.ComplexityRoot.Query.AudioNote == nil {
+			break
+		}
+
+		args, err := ec.field_Query_audioNote_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AudioNote(childComplexity, args["id"].(string)), true
+	case "Query.audioNotes":
+		if e.ComplexityRoot.Query.AudioNotes == nil {
+			break
+		}
+
+		args, err := ec.field_Query_audioNotes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AudioNotes(childComplexity, args["inspectionId"].(string), args["environmentId"].(string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.auditEvents":
 		if e.ComplexityRoot.Query.AuditEvents == nil {
 			break
@@ -8974,6 +10096,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.DashboardSummary(childComplexity, args["projectId"].(*string), args["businessUnitId"].(*string)), true
+	case "Query.effectiveAccess":
+		if e.ComplexityRoot.Query.EffectiveAccess == nil {
+			break
+		}
+
+		args, err := ec.field_Query_effectiveAccess_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.EffectiveAccess(childComplexity, args["membershipId"].(string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.externalCapture":
 		if e.ComplexityRoot.Query.ExternalCapture == nil {
 			break
@@ -9297,6 +10430,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Schedules(childComplexity, args["first"].(*int), args["after"].(*string)), true
+	case "Query.scopePreview":
+		if e.ComplexityRoot.Query.ScopePreview == nil {
+			break
+		}
+
+		args, err := ec.field_Query_scopePreview_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ScopePreview(childComplexity, args["kind"].(string), args["resourceId"].(string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.segmentDefinitionVersion":
 		if e.ComplexityRoot.Query.SegmentDefinitionVersion == nil {
 			break
@@ -9480,6 +10624,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.VideoUploadStatus(childComplexity, args["mediaId"].(string)), true
+	case "Query.voicePolicy":
+		if e.ComplexityRoot.Query.VoicePolicy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.VoicePolicy(childComplexity), true
 
 	case "ReanalyzeVideoInspectionPayload.clientMutationId":
 		if e.ComplexityRoot.ReanalyzeVideoInspectionPayload.ClientMutationID == nil {
@@ -9774,6 +10924,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Report.ProjectID(childComplexity), true
+	case "Report.publication":
+		if e.ComplexityRoot.Report.Publication == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Report.Publication(childComplexity), true
 	case "Report.requirements":
 		if e.ComplexityRoot.Report.Requirements == nil {
 			break
@@ -10297,6 +11453,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportSummary.ParticipantName(childComplexity), true
+	case "ReportSummary.publication":
+		if e.ComplexityRoot.ReportSummary.Publication == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.Publication(childComplexity), true
 	case "ReportSummary.version":
 		if e.ComplexityRoot.ReportSummary.Version == nil {
 			break
@@ -10712,6 +11874,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Scope.ResourceID(childComplexity), true
+
+	case "ScopePreview.descendants":
+		if e.ComplexityRoot.ScopePreview.Descendants == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScopePreview.Descendants(childComplexity), true
+	case "ScopePreview.target":
+		if e.ComplexityRoot.ScopePreview.Target == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ScopePreview.Target(childComplexity), true
 
 	case "SegmentDefinition.activeVersionId":
 		if e.ComplexityRoot.SegmentDefinition.ActiveVersionID == nil {
@@ -12068,6 +13243,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.VideoUploadStatus.Status(childComplexity), true
 
+	case "VoicePolicy.enabled":
+		if e.ComplexityRoot.VoicePolicy.Enabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicy.Enabled(childComplexity), true
+	case "VoicePolicy.inspectionAudioLimitMs":
+		if e.ComplexityRoot.VoicePolicy.InspectionAudioLimitMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicy.InspectionAudioLimitMs(childComplexity), true
+	case "VoicePolicy.inspectionNoteLimit":
+		if e.ComplexityRoot.VoicePolicy.InspectionNoteLimit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicy.InspectionNoteLimit(childComplexity), true
+	case "VoicePolicy.tenantAudioLimitMs":
+		if e.ComplexityRoot.VoicePolicy.TenantAudioLimitMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicy.TenantAudioLimitMs(childComplexity), true
+	case "VoicePolicy.tenantNoteLimit":
+		if e.ComplexityRoot.VoicePolicy.TenantNoteLimit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicy.TenantNoteLimit(childComplexity), true
+	case "VoicePolicy.version":
+		if e.ComplexityRoot.VoicePolicy.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicy.Version(childComplexity), true
+
+	case "VoicePolicyPayload.clientMutationId":
+		if e.ComplexityRoot.VoicePolicyPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicyPayload.ClientMutationID(childComplexity), true
+	case "VoicePolicyPayload.policy":
+		if e.ComplexityRoot.VoicePolicyPayload.Policy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicyPayload.Policy(childComplexity), true
+	case "VoicePolicyPayload.userErrors":
+		if e.ComplexityRoot.VoicePolicyPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VoicePolicyPayload.UserErrors(childComplexity), true
+
 	}
 	return 0, false
 }
@@ -12086,12 +13317,14 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputArchiveBusinessUnitInput,
 		ec.unmarshalInputAssetAssignmentInput,
 		ec.unmarshalInputAssetInput,
+		ec.unmarshalInputAssignMembershipAccessInput,
 		ec.unmarshalInputAssignRoleScopesInput,
 		ec.unmarshalInputBeginVideoCaptureInput,
 		ec.unmarshalInputBulkAcceptInventoryEnvironmentInput,
 		ec.unmarshalInputCancelScheduleInput,
 		ec.unmarshalInputCaptureGPSInput,
 		ec.unmarshalInputCloseOriginInvitationInput,
+		ec.unmarshalInputCompleteAudioNoteUploadInput,
 		ec.unmarshalInputCompleteInternalUserActivationInput,
 		ec.unmarshalInputCompleteMediaUploadInput,
 		ec.unmarshalInputCompleteOnboardingInput,
@@ -12100,11 +13333,14 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputConfigurePublicationPolicyInput,
 		ec.unmarshalInputConfigureRetentionPolicyInput,
 		ec.unmarshalInputConfigureVideoPolicyInput,
+		ec.unmarshalInputConfigureVoicePolicyInput,
+		ec.unmarshalInputConfirmAudioNoteTextInput,
 		ec.unmarshalInputContactInput,
 		ec.unmarshalInputContestBaselineInput,
 		ec.unmarshalInputCorrectInspectionResponsibleEmailInput,
 		ec.unmarshalInputCorrectOnboardingResponsibleEmailInput,
 		ec.unmarshalInputCounterpartyResponseInput,
+		ec.unmarshalInputCreateAudioNoteUploadInput,
 		ec.unmarshalInputCreateBusinessUnitInput,
 		ec.unmarshalInputCreateInspectionInput,
 		ec.unmarshalInputCreateMediaUploadInput,
@@ -12116,6 +13352,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputDeclareCaptureEnvironmentInput,
 		ec.unmarshalInputDeclareCaptureImpossibilityInput,
 		ec.unmarshalInputDisableMembershipInput,
+		ec.unmarshalInputDiscardAudioNoteInput,
 		ec.unmarshalInputDiscardBaselineDraftInput,
 		ec.unmarshalInputInspectionTransitionInput,
 		ec.unmarshalInputInvalidateInspectionInput,
@@ -12124,6 +13361,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputInventoryEvidenceInput,
 		ec.unmarshalInputInventoryItemPatchInput,
 		ec.unmarshalInputInventorySplitPartInput,
+		ec.unmarshalInputInviteCustomerUserInput,
 		ec.unmarshalInputInviteInternalUserInput,
 		ec.unmarshalInputInviteOriginCaptureInput,
 		ec.unmarshalInputLLMUsageFilter,
@@ -12147,6 +13385,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputRecaptureItemInput,
 		ec.unmarshalInputRecordCaptureQualityWarningInput,
 		ec.unmarshalInputRecordDeletionRequestInput,
+		ec.unmarshalInputRegenerateInventorySuggestionsInput,
 		ec.unmarshalInputRegisterAssetInput,
 		ec.unmarshalInputRemoveInventoryEnvironmentInput,
 		ec.unmarshalInputReopenProjectInput,
@@ -12163,13 +13402,16 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputResendInspectionInvitationInput,
 		ec.unmarshalInputResendInternalUserInvitationInput,
 		ec.unmarshalInputResolveBaselineContestationInput,
+		ec.unmarshalInputRetryAudioNoteInput,
 		ec.unmarshalInputRetryInventoryDraftInput,
 		ec.unmarshalInputRetryVideoPreparationInput,
+		ec.unmarshalInputReviseAudioNoteInput,
 		ec.unmarshalInputRevokeInvitationInput,
 		ec.unmarshalInputSaveCaptureMetadataInput,
 		ec.unmarshalInputScopeAssignmentInput,
 		ec.unmarshalInputSensitiveFalsePositiveInput,
 		ec.unmarshalInputSetAdminInitialPasswordInput,
+		ec.unmarshalInputSetAudioNoteHighlightInput,
 		ec.unmarshalInputSetDeliveryChannelsInput,
 		ec.unmarshalInputSkipProjectStageInput,
 		ec.unmarshalInputSplitInventoryItemInput,
@@ -12277,6 +13519,8 @@ type Query {
   me: Me!
   tenant: Tenant
   memberships(first: Int = 25, after: String): MembershipConnection!
+  effectiveAccess(membershipId: ID!, first: Int = 25, after: String): EffectiveAccess!
+  scopePreview(kind: String!, resourceId: ID!, first: Int = 25, after: String): ScopePreview!
   businessUnits(first: Int = 25, after: String): BusinessUnitConnection!
   auditEvents(first: Int = 25, after: String): AuditEventConnection!
   participants(search: String, first: Int = 25, after: String): ParticipantConnection!
@@ -12334,6 +13578,9 @@ type Query {
   videoPolicy: VideoPolicy!
   videoUploadStatus(mediaId: ID!): VideoUploadStatus!
   videoPreparation(mediaId: ID!): VideoPreparationStatus!
+  voicePolicy: VoicePolicy
+  audioNotes(inspectionId: ID!, environmentId: ID!, first: Int = 25, after: String): AudioNoteConnection!
+  audioNote(id: ID!): AudioNote
 }
 
 type OnboardingOption { value: String!, label: String! }
@@ -12376,8 +13623,10 @@ type Mutation {
   upsertBusinessUnit(input: UpsertBusinessUnitInput!): BusinessUnitPayload!
   archiveBusinessUnit(input: ArchiveBusinessUnitInput!): BusinessUnitPayload!
   inviteInternalUser(input: InviteInternalUserInput!): MembershipPayload!
+  inviteCustomerUser(input: InviteCustomerUserInput!): MembershipPayload!
   resendInternalUserInvitation(input: ResendInternalUserInvitationInput!): MembershipPayload!
   assignRoleScopes(input: AssignRoleScopesInput!): MembershipPayload!
+  assignMembershipAccess(input: AssignMembershipAccessInput!): MembershipPayload!
   disableMembership(input: DisableMembershipInput!): MembershipPayload!
   upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
   verifyContact(input: VerifyContactInput!): ParticipantContactPayload!
@@ -12437,6 +13686,15 @@ type Mutation {
   acceptProcessing(input: AcceptProcessingInput!): CapturePayload!
   beginVideoCapture(input: BeginVideoCaptureInput!): VideoAttemptPayload!
   configureVideoPolicy(input: ConfigureVideoPolicyInput!): VideoPolicyPayload!
+  configureVoicePolicy(input: ConfigureVoicePolicyInput!): VoicePolicyPayload!
+  createAudioNoteUpload(input: CreateAudioNoteUploadInput!): AudioNoteUploadPayload!
+  completeAudioNoteUpload(input: CompleteAudioNoteUploadInput!): AudioNotePayload!
+  reviseAudioNote(input: ReviseAudioNoteInput!): AudioNotePayload!
+  discardAudioNote(input: DiscardAudioNoteInput!): AudioNotePayload!
+  retryAudioNote(input: RetryAudioNoteInput!): AudioNotePayload!
+  setAudioNoteHighlight(input: SetAudioNoteHighlightInput!): AudioNotePayload!
+  confirmAudioNoteText(input: ConfirmAudioNoteTextInput!): AudioNotePayload!
+  regenerateInventorySuggestions(input: RegenerateInventorySuggestionsInput!): InventoryRegenerationPayload!
   retryVideoPreparation(input: RetryVideoPreparationInput!): VideoPreparationPayload!
   reprocessVideoPreparation(input: ReprocessVideoPreparationInput!): VideoPreparationPayload!
   reanalyzeVideoInspection(input: ReanalyzeVideoInspectionInput!): ReanalyzeVideoInspectionPayload!
@@ -12465,9 +13723,14 @@ type Mutation {
 }
 
 type Scope { kind: String! resourceId: ID! }
-type Membership { id: ID! tenantId: ID! name: String! email: String! role: String! status: String! invitationStatus: String! version: Int! scopes: [Scope!]! }
+type Membership { id: ID! tenantId: ID! name: String! email: String! role: String! status: String! invitationStatus: String! version: Int! productEntitlements: [String!]! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
+type AccessResource { kind: String! resourceId: ID! name: String! status: String! historical: Boolean! grantable: Boolean! }
+type EffectiveAccessEntry { kind: String! resourceId: ID! name: String! status: String! historical: Boolean! grantable: Boolean! inheritedFrom: Scope! }
+type EffectiveAccessEntryConnection { nodes: [EffectiveAccessEntry!]! pageInfo: PageInfo! }
+type EffectiveAccess { membershipId: ID! role: String! status: String! version: Int! productEntitlements: [String!]! tenantWide: Boolean! grants: [AccessResource!]! descendants: EffectiveAccessEntryConnection! }
+type ScopePreview { target: AccessResource! descendants: EffectiveAccessEntryConnection! }
 type InternalUserActivation { membershipId: ID! email: String! name: String! newIdentity: Boolean! status: String! }
 type InternalUserActivationPayload { activation: InternalUserActivation userErrors: [UserError!]! clientMutationId: String! }
 type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! canViewLLMCosts: Boolean! }
@@ -12505,10 +13768,13 @@ type InventoryCounts { included: Int! rejected: Int! notReviewed: Int! }
 type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! open: Int! noResponse: Int! }
 type BaselineCounterpartyInvitation { id: ID! participantId: ID! response: String! deadlineAt: String! respondedAt: String statement: String resolution: String! resolutionReason: String adjustmentVersionId: ID deliveryStatus: String deliveryId: ID }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
-type InventoryDraft { assetId: ID! version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
+type InventoryDraft { assetId: ID! version: OriginVersion! sourceInspectionId: ID environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! voiceSummary: InventoryVoiceSummary! }
 type InventoryProgress { decided: Int! pending: Int! }
-type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! }
-type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
+type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! voiceSummary: InventoryVoiceSummary! }
+type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! attributeSources: [InventoryAttributeSource!]! voiceConflicts: [InventoryVoiceConflict!]! }
+type InventoryVoiceConflict { attributeName: String! visualValue: String! voiceValue: String }
+type InventoryVoiceSummary { pendingVoiceItems: Int! conflictItems: Int! staleSuggestions: Int! notesWithoutItem: Int! }
+type InventoryAttributeSource { id: ID! attributeName: String! sourceKind: String! noteId: ID revisionId: ID currentRevisionId: ID stale: Boolean! visualEvidenceId: ID reviewedBy: ID createdAt: String! }
 type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
 type CounterpartyBaselineEvidence { kind: String! position: Int! url: String timestampMs: Int }
@@ -12597,6 +13863,17 @@ type CaptureReviewHandoff { inspectionId: ID! originVersionId: ID }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
 type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! captureLayout: String reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! environments: [CaptureEnvironment!]! reviewHandoff: CaptureReviewHandoff answers: [CaptureAnswer!]! disclosureVersion: String! }
+type VoicePolicy { enabled: Boolean! tenantNoteLimit: Int tenantAudioLimitMs: Int inspectionNoteLimit: Int inspectionAudioLimitMs: Int version: Int! }
+type VoicePolicyPayload { policy: VoicePolicy userErrors: [UserError!]! clientMutationId: String! }
+type AudioNoteRevision { id: ID! revisionNumber: Int! text: String! kind: String! authorId: ID authorName: String callId: ID createdAt: String! }
+type AudioNote { id: ID! inspectionId: ID! environmentId: ID! environmentName: String responsibilityId: ID! requirementKey: String! targetKind: String! photoMediaId: ID videoAttemptId: ID sourceMediaId: ID startMs: Int endMs: Int durationMs: Int! status: String! anchorStatus: String! anchor: AudioNoteAnchor! highlighted: Boolean! highlightSource: String version: Int! currentRevisionId: ID revisions: [AudioNoteRevision!]! textConfirmed: Boolean! noSpeech: Boolean! failureCode: String audioAvailability: String! audioDeletionStatus: String! createdAt: String! updatedAt: String! }
+type AudioNoteAnchor { kind: String! status: String! mediaId: ID mediaStatus: String! approximate: Boolean! previewUrl: String playbackUrl: String frames: [AudioNoteAnchorFrame!]! framesTruncated: Boolean! visualCoverage: String! }
+type AudioNoteAnchorFrame { id: ID! timestampMs: Int! url: String status: String! }
+type AudioNoteConnection { nodes: [AudioNote!]! pageInfo: PageInfo! }
+type AudioNoteUploadIntent { url: String! method: String! headers: JSON! expiresAt: String! }
+type AudioNoteUploadPayload { noteId: ID upload: AudioNoteUploadIntent userErrors: [UserError!]! clientMutationId: String! }
+type AudioNotePayload { note: AudioNote userErrors: [UserError!]! clientMutationId: String! }
+type InventoryRegenerationPayload { jobId: ID status: String userErrors: [UserError!]! clientMutationId: String! }
 type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
@@ -12625,8 +13902,8 @@ type ReportEvidence { id: ID! requirementKey: String! role: String! description:
 type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
-type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! publication: ReportPublication }
+type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! publication: ReportPublication }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
@@ -12704,7 +13981,7 @@ enum LLMCallState { STARTED FINISHED }
 enum LLMUsageCostState { INFORMED MISSING UNCERTAIN ERROR_WITHOUT_COST UNVERIFIED NOT_SENT }
 enum LLMUsageCostSource { HEADER BODY UNKNOWN ERROR_WITHOUT_COST UNVERIFIED UNCERTAIN NOT_SENT }
 enum LLMCostState { CONFIRMED UNKNOWN UNCERTAIN ERROR_WITHOUT_COST UNVERIFIED NOT_SENT }
-input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID withoutInspection: Boolean = false provider: String model: String modelAlias: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState includeTestData: Boolean = false }
+input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID withoutInspection: Boolean = false provider: String model: String modelAlias: String comparisonMode: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState includeTestData: Boolean = false }
 type LLMUsage {
   from: String!
   to: String!
@@ -12760,6 +14037,11 @@ type GlobalLLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  audioInputTokens: Int
+  textInputTokens: Int
+  reasoningTokens: Int
+  audioDurationMs: Int
+  audioTokenUnit: String
   cachedInputTokens: Int
   imageCount: Int
   requestBodyBytes: Int
@@ -12816,6 +14098,11 @@ type LLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  audioInputTokens: Int
+  textInputTokens: Int
+  reasoningTokens: Int
+  audioDurationMs: Int
+  audioTokenUnit: String
   cachedInputTokens: Int
   imageCount: Int
   requestBodyBytes: Int
@@ -12831,12 +14118,14 @@ input CreateBusinessUnitInput { code: String! name: String! expectedTenantVersio
 input UpsertBusinessUnitInput { businessUnitId: ID code: String! name: String! expectedVersion: Int expectedTenantVersion: Int clientMutationId: String! }
 input ArchiveBusinessUnitInput { businessUnitId: ID! expectedVersion: Int! clientMutationId: String! }
 input ScopeAssignmentInput { kind: String! resourceId: ID! }
-input InviteInternalUserInput { name: String! email: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input InviteInternalUserInput { name: String! email: String! role: String! scopes: [ScopeAssignmentInput!]! productEntitlements: [String!] clientMutationId: String! }
+input InviteCustomerUserInput { name: String! email: String! scopes: [ScopeAssignmentInput!]! productEntitlements: [String!] clientMutationId: String! }
 input ResendInternalUserInvitationInput { membershipId: ID! clientMutationId: String! }
 input RequestInternalUserActivationOtpInput { invitationToken: String clientMutationId: String! }
 input VerifyInternalUserActivationOtpInput { code: String! clientMutationId: String! }
 input CompleteInternalUserActivationInput { password: String clientMutationId: String! }
 input AssignRoleScopesInput { membershipId: ID! role: String! scopes: [ScopeAssignmentInput!]! expectedVersion: Int clientMutationId: String! }
+input AssignMembershipAccessInput { membershipId: ID! role: String! productEntitlements: [String!]! scopes: [ScopeAssignmentInput!]! expectedVersion: Int! clientMutationId: String! }
 input DisableMembershipInput { membershipId: ID! expectedVersion: Int! clientMutationId: String! }
 input ContactInput { channel: String! value: String! }
 input UpsertParticipantInput { participantId: ID expectedVersion: Int businessUnitId: ID! name: String! segmentRole: String! contacts: [ContactInput!]! clientMutationId: String! }
@@ -12876,9 +14165,19 @@ input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersio
 input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
-input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
+input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false voiceProcessing: Boolean = false voiceConsentVersion: String aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
 input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
 input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int expectedVersion: Int! clientMutationId: String! }
+input ConfigureVoicePolicyInput { enabled: Boolean! tenantNoteLimit: Int! tenantAudioLimitMs: Int! inspectionNoteLimit: Int! inspectionAudioLimitMs: Int! expectedVersion: Int! clientMutationId: String! }
+input CreateAudioNoteUploadInput { clientNoteId: ID! requirementKey: String! photoMediaId: ID videoAttemptId: ID startMs: Int endMs: Int timeBasis: String consentVersion: String! disclosureVersion: String! contentType: String! contentSha256: String! sizeBytes: Int! durationMs: Int! clientMutationId: String! }
+input CompleteAudioNoteUploadInput { noteId: ID! uploadProof: String! clientMutationId: String! }
+enum AudioNoteRevisionKind { HUMAN_EDIT PARTICIPANT_DECLARATION }
+input ReviseAudioNoteInput { noteId: ID! text: String! revisionKind: AudioNoteRevisionKind expectedVersion: Int! clientMutationId: String! }
+input DiscardAudioNoteInput { noteId: ID! expectedVersion: Int! clientMutationId: String! }
+input RetryAudioNoteInput { noteId: ID! expectedVersion: Int! clientMutationId: String! }
+input SetAudioNoteHighlightInput { noteId: ID! highlighted: Boolean! expectedVersion: Int! clientMutationId: String! }
+input ConfirmAudioNoteTextInput { noteId: ID! expectedVersion: Int! clientMutationId: String! }
+input RegenerateInventorySuggestionsInput { originVersionId: ID! environmentId: ID! expectedVersion: Int! revisionIds: [ID!]! clientMutationId: String! }
 input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }
@@ -12953,6 +14252,24 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // childFields_* functions provide shared child field context lookups.
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
+
+func (ec *executionContext) childFields_AccessResource(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_AccessResource_kind(ctx, field)
+	case "resourceId":
+		return ec.fieldContext_AccessResource_resourceId(ctx, field)
+	case "name":
+		return ec.fieldContext_AccessResource_name(ctx, field)
+	case "status":
+		return ec.fieldContext_AccessResource_status(ctx, field)
+	case "historical":
+		return ec.fieldContext_AccessResource_historical(ctx, field)
+	case "grantable":
+		return ec.fieldContext_AccessResource_grantable(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AccessResource", field.Name)
+}
 
 func (ec *executionContext) childFields_AnalysisPrompt(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
@@ -13060,6 +14377,180 @@ func (ec *executionContext) childFields_AssetPayload(ctx context.Context, field 
 		return ec.fieldContext_AssetPayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AssetPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNote(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AudioNote_id(ctx, field)
+	case "inspectionId":
+		return ec.fieldContext_AudioNote_inspectionId(ctx, field)
+	case "environmentId":
+		return ec.fieldContext_AudioNote_environmentId(ctx, field)
+	case "environmentName":
+		return ec.fieldContext_AudioNote_environmentName(ctx, field)
+	case "responsibilityId":
+		return ec.fieldContext_AudioNote_responsibilityId(ctx, field)
+	case "requirementKey":
+		return ec.fieldContext_AudioNote_requirementKey(ctx, field)
+	case "targetKind":
+		return ec.fieldContext_AudioNote_targetKind(ctx, field)
+	case "photoMediaId":
+		return ec.fieldContext_AudioNote_photoMediaId(ctx, field)
+	case "videoAttemptId":
+		return ec.fieldContext_AudioNote_videoAttemptId(ctx, field)
+	case "sourceMediaId":
+		return ec.fieldContext_AudioNote_sourceMediaId(ctx, field)
+	case "startMs":
+		return ec.fieldContext_AudioNote_startMs(ctx, field)
+	case "endMs":
+		return ec.fieldContext_AudioNote_endMs(ctx, field)
+	case "durationMs":
+		return ec.fieldContext_AudioNote_durationMs(ctx, field)
+	case "status":
+		return ec.fieldContext_AudioNote_status(ctx, field)
+	case "anchorStatus":
+		return ec.fieldContext_AudioNote_anchorStatus(ctx, field)
+	case "anchor":
+		return ec.fieldContext_AudioNote_anchor(ctx, field)
+	case "highlighted":
+		return ec.fieldContext_AudioNote_highlighted(ctx, field)
+	case "highlightSource":
+		return ec.fieldContext_AudioNote_highlightSource(ctx, field)
+	case "version":
+		return ec.fieldContext_AudioNote_version(ctx, field)
+	case "currentRevisionId":
+		return ec.fieldContext_AudioNote_currentRevisionId(ctx, field)
+	case "revisions":
+		return ec.fieldContext_AudioNote_revisions(ctx, field)
+	case "textConfirmed":
+		return ec.fieldContext_AudioNote_textConfirmed(ctx, field)
+	case "noSpeech":
+		return ec.fieldContext_AudioNote_noSpeech(ctx, field)
+	case "failureCode":
+		return ec.fieldContext_AudioNote_failureCode(ctx, field)
+	case "audioAvailability":
+		return ec.fieldContext_AudioNote_audioAvailability(ctx, field)
+	case "audioDeletionStatus":
+		return ec.fieldContext_AudioNote_audioDeletionStatus(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AudioNote_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_AudioNote_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNote", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNoteAnchor(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_AudioNoteAnchor_kind(ctx, field)
+	case "status":
+		return ec.fieldContext_AudioNoteAnchor_status(ctx, field)
+	case "mediaId":
+		return ec.fieldContext_AudioNoteAnchor_mediaId(ctx, field)
+	case "mediaStatus":
+		return ec.fieldContext_AudioNoteAnchor_mediaStatus(ctx, field)
+	case "approximate":
+		return ec.fieldContext_AudioNoteAnchor_approximate(ctx, field)
+	case "previewUrl":
+		return ec.fieldContext_AudioNoteAnchor_previewUrl(ctx, field)
+	case "playbackUrl":
+		return ec.fieldContext_AudioNoteAnchor_playbackUrl(ctx, field)
+	case "frames":
+		return ec.fieldContext_AudioNoteAnchor_frames(ctx, field)
+	case "framesTruncated":
+		return ec.fieldContext_AudioNoteAnchor_framesTruncated(ctx, field)
+	case "visualCoverage":
+		return ec.fieldContext_AudioNoteAnchor_visualCoverage(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNoteAnchor", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNoteAnchorFrame(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AudioNoteAnchorFrame_id(ctx, field)
+	case "timestampMs":
+		return ec.fieldContext_AudioNoteAnchorFrame_timestampMs(ctx, field)
+	case "url":
+		return ec.fieldContext_AudioNoteAnchorFrame_url(ctx, field)
+	case "status":
+		return ec.fieldContext_AudioNoteAnchorFrame_status(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNoteAnchorFrame", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNoteConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "nodes":
+		return ec.fieldContext_AudioNoteConnection_nodes(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_AudioNoteConnection_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNoteConnection", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNotePayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "note":
+		return ec.fieldContext_AudioNotePayload_note(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_AudioNotePayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_AudioNotePayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNotePayload", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNoteRevision(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AudioNoteRevision_id(ctx, field)
+	case "revisionNumber":
+		return ec.fieldContext_AudioNoteRevision_revisionNumber(ctx, field)
+	case "text":
+		return ec.fieldContext_AudioNoteRevision_text(ctx, field)
+	case "kind":
+		return ec.fieldContext_AudioNoteRevision_kind(ctx, field)
+	case "authorId":
+		return ec.fieldContext_AudioNoteRevision_authorId(ctx, field)
+	case "authorName":
+		return ec.fieldContext_AudioNoteRevision_authorName(ctx, field)
+	case "callId":
+		return ec.fieldContext_AudioNoteRevision_callId(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AudioNoteRevision_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNoteRevision", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNoteUploadIntent(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "url":
+		return ec.fieldContext_AudioNoteUploadIntent_url(ctx, field)
+	case "method":
+		return ec.fieldContext_AudioNoteUploadIntent_method(ctx, field)
+	case "headers":
+		return ec.fieldContext_AudioNoteUploadIntent_headers(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_AudioNoteUploadIntent_expiresAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNoteUploadIntent", field.Name)
+}
+
+func (ec *executionContext) childFields_AudioNoteUploadPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "noteId":
+		return ec.fieldContext_AudioNoteUploadPayload_noteId(ctx, field)
+	case "upload":
+		return ec.fieldContext_AudioNoteUploadPayload_upload(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_AudioNoteUploadPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_AudioNoteUploadPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AudioNoteUploadPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_AuditEvent(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -13750,6 +15241,58 @@ func (ec *executionContext) childFields_DashboardSummary(ctx context.Context, fi
 	return nil, fmt.Errorf("no field named %q was found under type DashboardSummary", field.Name)
 }
 
+func (ec *executionContext) childFields_EffectiveAccess(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "membershipId":
+		return ec.fieldContext_EffectiveAccess_membershipId(ctx, field)
+	case "role":
+		return ec.fieldContext_EffectiveAccess_role(ctx, field)
+	case "status":
+		return ec.fieldContext_EffectiveAccess_status(ctx, field)
+	case "version":
+		return ec.fieldContext_EffectiveAccess_version(ctx, field)
+	case "productEntitlements":
+		return ec.fieldContext_EffectiveAccess_productEntitlements(ctx, field)
+	case "tenantWide":
+		return ec.fieldContext_EffectiveAccess_tenantWide(ctx, field)
+	case "grants":
+		return ec.fieldContext_EffectiveAccess_grants(ctx, field)
+	case "descendants":
+		return ec.fieldContext_EffectiveAccess_descendants(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type EffectiveAccess", field.Name)
+}
+
+func (ec *executionContext) childFields_EffectiveAccessEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_EffectiveAccessEntry_kind(ctx, field)
+	case "resourceId":
+		return ec.fieldContext_EffectiveAccessEntry_resourceId(ctx, field)
+	case "name":
+		return ec.fieldContext_EffectiveAccessEntry_name(ctx, field)
+	case "status":
+		return ec.fieldContext_EffectiveAccessEntry_status(ctx, field)
+	case "historical":
+		return ec.fieldContext_EffectiveAccessEntry_historical(ctx, field)
+	case "grantable":
+		return ec.fieldContext_EffectiveAccessEntry_grantable(ctx, field)
+	case "inheritedFrom":
+		return ec.fieldContext_EffectiveAccessEntry_inheritedFrom(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type EffectiveAccessEntry", field.Name)
+}
+
+func (ec *executionContext) childFields_EffectiveAccessEntryConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "nodes":
+		return ec.fieldContext_EffectiveAccessEntryConnection_nodes(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_EffectiveAccessEntryConnection_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type EffectiveAccessEntryConnection", field.Name)
+}
+
 func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "responsibilityId":
@@ -13862,6 +15405,16 @@ func (ec *executionContext) childFields_GlobalLLMCallUsage(ctx context.Context, 
 		return ec.fieldContext_GlobalLLMCallUsage_inputTokens(ctx, field)
 	case "outputTokens":
 		return ec.fieldContext_GlobalLLMCallUsage_outputTokens(ctx, field)
+	case "audioInputTokens":
+		return ec.fieldContext_GlobalLLMCallUsage_audioInputTokens(ctx, field)
+	case "textInputTokens":
+		return ec.fieldContext_GlobalLLMCallUsage_textInputTokens(ctx, field)
+	case "reasoningTokens":
+		return ec.fieldContext_GlobalLLMCallUsage_reasoningTokens(ctx, field)
+	case "audioDurationMs":
+		return ec.fieldContext_GlobalLLMCallUsage_audioDurationMs(ctx, field)
+	case "audioTokenUnit":
+		return ec.fieldContext_GlobalLLMCallUsage_audioTokenUnit(ctx, field)
 	case "cachedInputTokens":
 		return ec.fieldContext_GlobalLLMCallUsage_cachedInputTokens(ctx, field)
 	case "imageCount":
@@ -14166,6 +15719,32 @@ func (ec *executionContext) childFields_InternalUserActivationPayload(ctx contex
 	return nil, fmt.Errorf("no field named %q was found under type InternalUserActivationPayload", field.Name)
 }
 
+func (ec *executionContext) childFields_InventoryAttributeSource(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InventoryAttributeSource_id(ctx, field)
+	case "attributeName":
+		return ec.fieldContext_InventoryAttributeSource_attributeName(ctx, field)
+	case "sourceKind":
+		return ec.fieldContext_InventoryAttributeSource_sourceKind(ctx, field)
+	case "noteId":
+		return ec.fieldContext_InventoryAttributeSource_noteId(ctx, field)
+	case "revisionId":
+		return ec.fieldContext_InventoryAttributeSource_revisionId(ctx, field)
+	case "currentRevisionId":
+		return ec.fieldContext_InventoryAttributeSource_currentRevisionId(ctx, field)
+	case "stale":
+		return ec.fieldContext_InventoryAttributeSource_stale(ctx, field)
+	case "visualEvidenceId":
+		return ec.fieldContext_InventoryAttributeSource_visualEvidenceId(ctx, field)
+	case "reviewedBy":
+		return ec.fieldContext_InventoryAttributeSource_reviewedBy(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_InventoryAttributeSource_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryAttributeSource", field.Name)
+}
+
 func (ec *executionContext) childFields_InventoryCounts(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "included":
@@ -14184,6 +15763,8 @@ func (ec *executionContext) childFields_InventoryDraft(ctx context.Context, fiel
 		return ec.fieldContext_InventoryDraft_assetId(ctx, field)
 	case "version":
 		return ec.fieldContext_InventoryDraft_version(ctx, field)
+	case "sourceInspectionId":
+		return ec.fieldContext_InventoryDraft_sourceInspectionId(ctx, field)
 	case "environments":
 		return ec.fieldContext_InventoryDraft_environments(ctx, field)
 	case "progress":
@@ -14194,6 +15775,8 @@ func (ec *executionContext) childFields_InventoryDraft(ctx context.Context, fiel
 		return ec.fieldContext_InventoryDraft_noticeCode(ctx, field)
 	case "warnings":
 		return ec.fieldContext_InventoryDraft_warnings(ctx, field)
+	case "voiceSummary":
+		return ec.fieldContext_InventoryDraft_voiceSummary(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InventoryDraft", field.Name)
 }
@@ -14220,6 +15803,8 @@ func (ec *executionContext) childFields_InventoryEnvironment(ctx context.Context
 		return ec.fieldContext_InventoryEnvironment_position(ctx, field)
 	case "items":
 		return ec.fieldContext_InventoryEnvironment_items(ctx, field)
+	case "voiceSummary":
+		return ec.fieldContext_InventoryEnvironment_voiceSummary(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InventoryEnvironment", field.Name)
 }
@@ -14304,6 +15889,10 @@ func (ec *executionContext) childFields_InventoryItem(ctx context.Context, field
 		return ec.fieldContext_InventoryItem_version(ctx, field)
 	case "evidence":
 		return ec.fieldContext_InventoryItem_evidence(ctx, field)
+	case "attributeSources":
+		return ec.fieldContext_InventoryItem_attributeSources(ctx, field)
+	case "voiceConflicts":
+		return ec.fieldContext_InventoryItem_voiceConflicts(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InventoryItem", field.Name)
 }
@@ -14344,6 +15933,20 @@ func (ec *executionContext) childFields_InventoryProgress(ctx context.Context, f
 	return nil, fmt.Errorf("no field named %q was found under type InventoryProgress", field.Name)
 }
 
+func (ec *executionContext) childFields_InventoryRegenerationPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "jobId":
+		return ec.fieldContext_InventoryRegenerationPayload_jobId(ctx, field)
+	case "status":
+		return ec.fieldContext_InventoryRegenerationPayload_status(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_InventoryRegenerationPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_InventoryRegenerationPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryRegenerationPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_InventoryTrail(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "suggestions":
@@ -14382,6 +15985,32 @@ func (ec *executionContext) childFields_InventoryTrailEntry(ctx context.Context,
 		return ec.fieldContext_InventoryTrailEntry_occurredAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InventoryTrailEntry", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryVoiceConflict(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "attributeName":
+		return ec.fieldContext_InventoryVoiceConflict_attributeName(ctx, field)
+	case "visualValue":
+		return ec.fieldContext_InventoryVoiceConflict_visualValue(ctx, field)
+	case "voiceValue":
+		return ec.fieldContext_InventoryVoiceConflict_voiceValue(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryVoiceConflict", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryVoiceSummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "pendingVoiceItems":
+		return ec.fieldContext_InventoryVoiceSummary_pendingVoiceItems(ctx, field)
+	case "conflictItems":
+		return ec.fieldContext_InventoryVoiceSummary_conflictItems(ctx, field)
+	case "staleSuggestions":
+		return ec.fieldContext_InventoryVoiceSummary_staleSuggestions(ctx, field)
+	case "notesWithoutItem":
+		return ec.fieldContext_InventoryVoiceSummary_notesWithoutItem(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryVoiceSummary", field.Name)
 }
 
 func (ec *executionContext) childFields_InvitationOtpPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -14456,6 +16085,16 @@ func (ec *executionContext) childFields_LLMCallUsage(ctx context.Context, field 
 		return ec.fieldContext_LLMCallUsage_inputTokens(ctx, field)
 	case "outputTokens":
 		return ec.fieldContext_LLMCallUsage_outputTokens(ctx, field)
+	case "audioInputTokens":
+		return ec.fieldContext_LLMCallUsage_audioInputTokens(ctx, field)
+	case "textInputTokens":
+		return ec.fieldContext_LLMCallUsage_textInputTokens(ctx, field)
+	case "reasoningTokens":
+		return ec.fieldContext_LLMCallUsage_reasoningTokens(ctx, field)
+	case "audioDurationMs":
+		return ec.fieldContext_LLMCallUsage_audioDurationMs(ctx, field)
+	case "audioTokenUnit":
+		return ec.fieldContext_LLMCallUsage_audioTokenUnit(ctx, field)
 	case "cachedInputTokens":
 		return ec.fieldContext_LLMCallUsage_cachedInputTokens(ctx, field)
 	case "imageCount":
@@ -14716,6 +16355,8 @@ func (ec *executionContext) childFields_Membership(ctx context.Context, field gr
 		return ec.fieldContext_Membership_invitationStatus(ctx, field)
 	case "version":
 		return ec.fieldContext_Membership_version(ctx, field)
+	case "productEntitlements":
+		return ec.fieldContext_Membership_productEntitlements(ctx, field)
 	case "scopes":
 		return ec.fieldContext_Membership_scopes(ctx, field)
 	}
@@ -15622,6 +17263,8 @@ func (ec *executionContext) childFields_Report(ctx context.Context, field graphq
 		return ec.fieldContext_Report_timeline(ctx, field)
 	case "pdfStatus":
 		return ec.fieldContext_Report_pdfStatus(ctx, field)
+	case "publication":
+		return ec.fieldContext_Report_publication(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Report", field.Name)
 }
@@ -15866,6 +17509,8 @@ func (ec *executionContext) childFields_ReportSummary(ctx context.Context, field
 		return ec.fieldContext_ReportSummary_classification(ctx, field)
 	case "version":
 		return ec.fieldContext_ReportSummary_version(ctx, field)
+	case "publication":
+		return ec.fieldContext_ReportSummary_publication(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportSummary", field.Name)
 }
@@ -16078,6 +17723,16 @@ func (ec *executionContext) childFields_Scope(ctx context.Context, field graphql
 		return ec.fieldContext_Scope_resourceId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Scope", field.Name)
+}
+
+func (ec *executionContext) childFields_ScopePreview(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "target":
+		return ec.fieldContext_ScopePreview_target(ctx, field)
+	case "descendants":
+		return ec.fieldContext_ScopePreview_descendants(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ScopePreview", field.Name)
 }
 
 func (ec *executionContext) childFields_SegmentDefinition(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -16764,6 +18419,36 @@ func (ec *executionContext) childFields_VideoUploadStatus(ctx context.Context, f
 	return nil, fmt.Errorf("no field named %q was found under type VideoUploadStatus", field.Name)
 }
 
+func (ec *executionContext) childFields_VoicePolicy(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "enabled":
+		return ec.fieldContext_VoicePolicy_enabled(ctx, field)
+	case "tenantNoteLimit":
+		return ec.fieldContext_VoicePolicy_tenantNoteLimit(ctx, field)
+	case "tenantAudioLimitMs":
+		return ec.fieldContext_VoicePolicy_tenantAudioLimitMs(ctx, field)
+	case "inspectionNoteLimit":
+		return ec.fieldContext_VoicePolicy_inspectionNoteLimit(ctx, field)
+	case "inspectionAudioLimitMs":
+		return ec.fieldContext_VoicePolicy_inspectionAudioLimitMs(ctx, field)
+	case "version":
+		return ec.fieldContext_VoicePolicy_version(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VoicePolicy", field.Name)
+}
+
+func (ec *executionContext) childFields_VoicePolicyPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "policy":
+		return ec.fieldContext_VoicePolicyPayload_policy(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_VoicePolicyPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_VoicePolicyPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VoicePolicyPayload", field.Name)
+}
+
 func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "name":
@@ -17034,6 +18719,20 @@ func (ec *executionContext) field_Mutation_archiveBusinessUnit_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_assignMembershipAccess_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (AssignMembershipAccessInput, error) {
+			return ec.unmarshalNAssignMembershipAccessInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAssignMembershipAccessInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_assignRoleScopes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -17124,6 +18823,20 @@ func (ec *executionContext) field_Mutation_closeProject_args(ctx context.Context
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (ProjectTransitionInput, error) {
 			return ec.unmarshalNProjectTransitionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐProjectTransitionInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_completeAudioNoteUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (CompleteAudioNoteUploadInput, error) {
+			return ec.unmarshalNCompleteAudioNoteUploadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCompleteAudioNoteUploadInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -17230,6 +18943,34 @@ func (ec *executionContext) field_Mutation_configureVideoPolicy_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_configureVoicePolicy_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ConfigureVoicePolicyInput, error) {
+			return ec.unmarshalNConfigureVoicePolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureVoicePolicyInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_confirmAudioNoteText_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ConfirmAudioNoteTextInput, error) {
+			return ec.unmarshalNConfirmAudioNoteTextInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfirmAudioNoteTextInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_contestBaseline_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -17264,6 +19005,20 @@ func (ec *executionContext) field_Mutation_correctOnboardingResponsibleEmail_arg
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (CorrectOnboardingResponsibleEmailInput, error) {
 			return ec.unmarshalNCorrectOnboardingResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectOnboardingResponsibleEmailInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createAudioNoteUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (CreateAudioNoteUploadInput, error) {
+			return ec.unmarshalNCreateAudioNoteUploadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCreateAudioNoteUploadInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -17426,6 +19181,20 @@ func (ec *executionContext) field_Mutation_disableMembership_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_discardAudioNote_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (DiscardAudioNoteInput, error) {
+			return ec.unmarshalNDiscardAudioNoteInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDiscardAudioNoteInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_discardBaselineDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -17474,6 +19243,20 @@ func (ec *executionContext) field_Mutation_invalidateReportPublication_args(ctx 
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (InvalidateReportPublicationInput, error) {
 			return ec.unmarshalNInvalidateReportPublicationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInvalidateReportPublicationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_inviteCustomerUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (InviteCustomerUserInput, error) {
+			return ec.unmarshalNInviteCustomerUserInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInviteCustomerUserInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -17684,6 +19467,20 @@ func (ec *executionContext) field_Mutation_recordDeletionRequest_args(ctx contex
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (RecordDeletionRequestInput, error) {
 			return ec.unmarshalNRecordDeletionRequestInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordDeletionRequestInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_regenerateInventorySuggestions_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RegenerateInventorySuggestionsInput, error) {
+			return ec.unmarshalNRegenerateInventorySuggestionsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRegenerateInventorySuggestionsInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -17930,6 +19727,20 @@ func (ec *executionContext) field_Mutation_resolveBaselineContestation_args(ctx 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_retryAudioNote_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RetryAudioNoteInput, error) {
+			return ec.unmarshalNRetryAudioNoteInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryAudioNoteInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_retryInventoryDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -17950,6 +19761,20 @@ func (ec *executionContext) field_Mutation_retryVideoPreparation_args(ctx contex
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (RetryVideoPreparationInput, error) {
 			return ec.unmarshalNRetryVideoPreparationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryVideoPreparationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_reviseAudioNote_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ReviseAudioNoteInput, error) {
+			return ec.unmarshalNReviseAudioNoteInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReviseAudioNoteInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -18006,6 +19831,20 @@ func (ec *executionContext) field_Mutation_setAdminInitialPassword_args(ctx cont
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (SetAdminInitialPasswordInput, error) {
 			return ec.unmarshalNSetAdminInitialPasswordInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSetAdminInitialPasswordInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setAudioNoteHighlight_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (SetAudioNoteHighlightInput, error) {
+			return ec.unmarshalNSetAudioNoteHighlightInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSetAudioNoteHighlightInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -18410,6 +20249,58 @@ func (ec *executionContext) field_Query_assets_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_audioNote_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_audioNotes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inspectionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["inspectionId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "environmentId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["environmentId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_auditEvents_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -18653,6 +20544,36 @@ func (ec *executionContext) field_Query_dashboardSummary_args(ctx context.Contex
 		return nil, err
 	}
 	args["businessUnitId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_effectiveAccess_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "membershipId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["membershipId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
 	return args, nil
 }
 
@@ -19292,6 +21213,44 @@ func (ec *executionContext) field_Query_schedules_args(ctx context.Context, rawA
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_scopePreview_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "kind",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["kind"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "resourceId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["resourceId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_segmentDefinitionVersion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -19735,6 +21694,144 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ***************************** args.gotpl *****************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _AccessResource_kind(ctx context.Context, field graphql.CollectedField, obj *AccessResource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AccessResource_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AccessResource_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AccessResource", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AccessResource_resourceId(ctx context.Context, field graphql.CollectedField, obj *AccessResource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AccessResource_resourceId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResourceID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AccessResource_resourceId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AccessResource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AccessResource_name(ctx context.Context, field graphql.CollectedField, obj *AccessResource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AccessResource_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AccessResource_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AccessResource", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AccessResource_status(ctx context.Context, field graphql.CollectedField, obj *AccessResource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AccessResource_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AccessResource_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AccessResource", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AccessResource_historical(ctx context.Context, field graphql.CollectedField, obj *AccessResource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AccessResource_historical(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Historical, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AccessResource_historical(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AccessResource", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AccessResource_grantable(ctx context.Context, field graphql.CollectedField, obj *AccessResource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AccessResource_grantable(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Grantable, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AccessResource_grantable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AccessResource", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
 
 func (ec *executionContext) _AnalysisPrompt_analysisType(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -20634,6 +22731,1536 @@ func (ec *executionContext) _AssetPayload_clientMutationId(ctx context.Context, 
 }
 func (ec *executionContext) fieldContext_AssetPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AssetPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_id(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_inspectionId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_environmentId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_environmentId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_environmentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_environmentName(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_environmentName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_environmentName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_responsibilityId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_responsibilityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_responsibilityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_requirementKey(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_requirementKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequirementKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_requirementKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_targetKind(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_targetKind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetKind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_targetKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_photoMediaId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_photoMediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PhotoMediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_photoMediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_videoAttemptId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_videoAttemptId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VideoAttemptID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_videoAttemptId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_sourceMediaId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_sourceMediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceMediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_sourceMediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_startMs(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_startMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StartMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_startMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_endMs(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_endMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EndMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_endMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_durationMs(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_durationMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DurationMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_status(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_anchorStatus(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_anchorStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AnchorStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_anchorStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_anchor(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_anchor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Anchor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNoteAnchor) graphql.Marshaler {
+			return ec.marshalNAudioNoteAnchor2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteAnchor(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_anchor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNote",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNoteAnchor(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNote_highlighted(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_highlighted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Highlighted, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_highlighted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_highlightSource(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_highlightSource(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HighlightSource, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_highlightSource(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_version(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_currentRevisionId(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_currentRevisionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentRevisionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_currentRevisionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_revisions(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_revisions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Revisions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AudioNoteRevision) graphql.Marshaler {
+			return ec.marshalNAudioNoteRevision2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevisionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_revisions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNote",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNoteRevision(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNote_textConfirmed(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_textConfirmed(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TextConfirmed, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_textConfirmed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_noSpeech(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_noSpeech(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NoSpeech, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_noSpeech(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_failureCode(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_failureCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FailureCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_failureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_audioAvailability(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_audioAvailability(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioAvailability, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_audioAvailability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_audioDeletionStatus(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_audioDeletionStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioDeletionStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_audioDeletionStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_createdAt(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNote_updatedAt(ctx context.Context, field graphql.CollectedField, obj *AudioNote) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNote_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNote_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNote", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_kind(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_status(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_mediaId(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_mediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_mediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_mediaStatus(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_mediaStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_mediaStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_approximate(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_approximate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Approximate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_approximate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_previewUrl(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_previewUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PreviewURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_previewUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_playbackUrl(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_playbackUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PlaybackURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_playbackUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_frames(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_frames(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Frames, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AudioNoteAnchorFrame) graphql.Marshaler {
+			return ec.marshalNAudioNoteAnchorFrame2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteAnchorFrameᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_frames(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNoteAnchor",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNoteAnchorFrame(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNoteAnchor_framesTruncated(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_framesTruncated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesTruncated, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_framesTruncated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchor_visualCoverage(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchor_visualCoverage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VisualCoverage, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchor_visualCoverage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchor", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchorFrame_id(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchorFrame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchorFrame_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchorFrame_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchorFrame", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchorFrame_timestampMs(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchorFrame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchorFrame_timestampMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchorFrame_timestampMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchorFrame", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchorFrame_url(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchorFrame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchorFrame_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchorFrame_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchorFrame", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteAnchorFrame_status(ctx context.Context, field graphql.CollectedField, obj *AudioNoteAnchorFrame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteAnchorFrame_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteAnchorFrame_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteAnchorFrame", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *AudioNoteConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteConnection_nodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Nodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AudioNote) graphql.Marshaler {
+			return ec.marshalNAudioNote2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteConnection_nodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNoteConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNote(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNoteConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *AudioNoteConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteConnection_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNoteConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNotePayload_note(ctx context.Context, field graphql.CollectedField, obj *AudioNotePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNotePayload_note(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Note, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNote) graphql.Marshaler {
+			return ec.marshalOAudioNote2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNote(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNotePayload_note(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNotePayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNote(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNotePayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *AudioNotePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNotePayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNotePayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNotePayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNotePayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *AudioNotePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNotePayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNotePayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNotePayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_id(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_revisionNumber(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_revisionNumber(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RevisionNumber, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_revisionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_text(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_text(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_kind(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_authorId(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_authorId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_authorId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_authorName(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_authorName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_authorName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_callId(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_callId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CallID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_callId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteRevision_createdAt(ctx context.Context, field graphql.CollectedField, obj *AudioNoteRevision) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteRevision_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteRevision_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteRevision", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteUploadIntent_url(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadIntent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadIntent_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadIntent_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteUploadIntent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteUploadIntent_method(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadIntent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadIntent_method(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Method, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadIntent_method(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteUploadIntent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteUploadIntent_headers(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadIntent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadIntent_headers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Headers, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalNJSON2map(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadIntent_headers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteUploadIntent", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteUploadIntent_expiresAt(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadIntent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadIntent_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadIntent_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteUploadIntent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteUploadPayload_noteId(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadPayload_noteId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NoteID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadPayload_noteId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteUploadPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AudioNoteUploadPayload_upload(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadPayload_upload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Upload, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNoteUploadIntent) graphql.Marshaler {
+			return ec.marshalOAudioNoteUploadIntent2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteUploadIntent(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadPayload_upload(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNoteUploadPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNoteUploadIntent(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNoteUploadPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AudioNoteUploadPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AudioNoteUploadPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *AudioNoteUploadPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AudioNoteUploadPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AudioNoteUploadPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AudioNoteUploadPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _AuditEvent_id(ctx context.Context, field graphql.CollectedField, obj *AuditEvent) (ret graphql.Marshaler) {
@@ -26181,6 +29808,442 @@ func (ec *executionContext) fieldContext_DashboardSummary_invalidated(_ context.
 	return graphql.NewScalarFieldContext("DashboardSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _EffectiveAccess_membershipId(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_membershipId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MembershipID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_membershipId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccess", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccess_role(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_role(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Role, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_role(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccess", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccess_status(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccess", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccess_version(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccess", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccess_productEntitlements(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_productEntitlements(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProductEntitlements, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_productEntitlements(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccess", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccess_tenantWide(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_tenantWide(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TenantWide, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_tenantWide(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccess", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccess_grants(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_grants(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Grants, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AccessResource) graphql.Marshaler {
+			return ec.marshalNAccessResource2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAccessResourceᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_grants(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EffectiveAccess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AccessResource(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EffectiveAccess_descendants(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccess_descendants(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Descendants, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *EffectiveAccessEntryConnection) graphql.Marshaler {
+			return ec.marshalNEffectiveAccessEntryConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntryConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccess_descendants(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EffectiveAccess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EffectiveAccessEntryConnection(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_kind(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccessEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_resourceId(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_resourceId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResourceID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_resourceId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccessEntry", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_name(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccessEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_status(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccessEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_historical(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_historical(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Historical, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_historical(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccessEntry", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_grantable(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_grantable(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Grantable, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_grantable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EffectiveAccessEntry", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _EffectiveAccessEntry_inheritedFrom(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntry_inheritedFrom(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InheritedFrom, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Scope) graphql.Marshaler {
+			return ec.marshalNScope2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐScope(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntry_inheritedFrom(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EffectiveAccessEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Scope(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EffectiveAccessEntryConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntryConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntryConnection_nodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Nodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*EffectiveAccessEntry) graphql.Marshaler {
+			return ec.marshalNEffectiveAccessEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntryConnection_nodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EffectiveAccessEntryConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EffectiveAccessEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EffectiveAccessEntryConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *EffectiveAccessEntryConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EffectiveAccessEntryConnection_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EffectiveAccessEntryConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EffectiveAccessEntryConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ExternalCapture_responsibilityId(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27360,6 +31423,121 @@ func (ec *executionContext) _GlobalLLMCallUsage_outputTokens(ctx context.Context
 }
 func (ec *executionContext) fieldContext_GlobalLLMCallUsage_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_audioInputTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_audioInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_audioInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_textInputTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_textInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TextInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_textInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_reasoningTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_reasoningTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReasoningTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_reasoningTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_audioDurationMs(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_audioDurationMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioDurationMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_audioDurationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_audioTokenUnit(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_audioTokenUnit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioTokenUnit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_audioTokenUnit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _GlobalLLMCallUsage_cachedInputTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
@@ -30110,6 +34288,236 @@ func (ec *executionContext) fieldContext_InternalUserActivationPayload_clientMut
 	return graphql.NewScalarFieldContext("InternalUserActivationPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _InventoryAttributeSource_id(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_attributeName(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_attributeName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AttributeName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_attributeName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_sourceKind(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_sourceKind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceKind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_sourceKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_noteId(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_noteId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NoteID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_noteId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_revisionId(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_revisionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RevisionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_revisionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_currentRevisionId(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_currentRevisionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentRevisionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_currentRevisionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_stale(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_stale(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Stale, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_stale(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_visualEvidenceId(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_visualEvidenceId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VisualEvidenceID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_visualEvidenceId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_reviewedBy(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_reviewedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReviewedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_reviewedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryAttributeSource_createdAt(ctx context.Context, field graphql.CollectedField, obj *InventoryAttributeSource) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryAttributeSource_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryAttributeSource_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryAttributeSource", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _InventoryCounts_included(ctx context.Context, field graphql.CollectedField, obj *InventoryCounts) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30232,6 +34640,29 @@ func (ec *executionContext) fieldContext_InventoryDraft_version(_ context.Contex
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _InventoryDraft_sourceInspectionId(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_sourceInspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceInspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_sourceInspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
 func (ec *executionContext) _InventoryDraft_environments(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
@@ -30365,6 +34796,38 @@ func (ec *executionContext) _InventoryDraft_warnings(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_InventoryDraft_warnings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryDraft_voiceSummary(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_voiceSummary(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VoiceSummary, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryVoiceSummary) graphql.Marshaler {
+			return ec.marshalNInventoryVoiceSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceSummary(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_voiceSummary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryVoiceSummary(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _InventoryEnvironment_id(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
@@ -30601,6 +35064,38 @@ func (ec *executionContext) fieldContext_InventoryEnvironment_items(_ context.Co
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_InventoryItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryEnvironment_voiceSummary(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_voiceSummary(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VoiceSummary, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryVoiceSummary) graphql.Marshaler {
+			return ec.marshalNInventoryVoiceSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceSummary(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_voiceSummary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryEnvironment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryVoiceSummary(ctx, field)
 		},
 	}
 	return fc, nil
@@ -31392,6 +35887,70 @@ func (ec *executionContext) fieldContext_InventoryItem_evidence(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _InventoryItem_attributeSources(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_attributeSources(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AttributeSources, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryAttributeSource) graphql.Marshaler {
+			return ec.marshalNInventoryAttributeSource2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryAttributeSourceᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_attributeSources(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryAttributeSource(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryItem_voiceConflicts(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_voiceConflicts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VoiceConflicts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryVoiceConflict) graphql.Marshaler {
+			return ec.marshalNInventoryVoiceConflict2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceConflictᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_voiceConflicts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryVoiceConflict(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _InventoryItemPayload_item(ctx context.Context, field graphql.CollectedField, obj *InventoryItemPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31633,6 +36192,107 @@ func (ec *executionContext) _InventoryProgress_pending(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_InventoryProgress_pending(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InventoryProgress", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryRegenerationPayload_jobId(ctx context.Context, field graphql.CollectedField, obj *InventoryRegenerationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryRegenerationPayload_jobId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryRegenerationPayload_jobId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryRegenerationPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryRegenerationPayload_status(ctx context.Context, field graphql.CollectedField, obj *InventoryRegenerationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryRegenerationPayload_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryRegenerationPayload_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryRegenerationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryRegenerationPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *InventoryRegenerationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryRegenerationPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryRegenerationPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryRegenerationPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryRegenerationPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *InventoryRegenerationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryRegenerationPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryRegenerationPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryRegenerationPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _InventoryTrail_suggestions(ctx context.Context, field graphql.CollectedField, obj *InventoryTrail) (ret graphql.Marshaler) {
@@ -31982,6 +36642,167 @@ func (ec *executionContext) _InventoryTrailEntry_occurredAt(ctx context.Context,
 }
 func (ec *executionContext) fieldContext_InventoryTrailEntry_occurredAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceConflict_attributeName(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceConflict) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceConflict_attributeName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AttributeName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceConflict_attributeName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceConflict", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceConflict_visualValue(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceConflict) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceConflict_visualValue(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VisualValue, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceConflict_visualValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceConflict", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceConflict_voiceValue(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceConflict) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceConflict_voiceValue(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VoiceValue, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceConflict_voiceValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceConflict", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceSummary_pendingVoiceItems(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceSummary_pendingVoiceItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PendingVoiceItems, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceSummary_pendingVoiceItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceSummary_conflictItems(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceSummary_conflictItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConflictItems, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceSummary_conflictItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceSummary_staleSuggestions(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceSummary_staleSuggestions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StaleSuggestions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceSummary_staleSuggestions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryVoiceSummary_notesWithoutItem(ctx context.Context, field graphql.CollectedField, obj *InventoryVoiceSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryVoiceSummary_notesWithoutItem(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotesWithoutItem, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryVoiceSummary_notesWithoutItem(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryVoiceSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _InvitationOtpPayload_status(ctx context.Context, field graphql.CollectedField, obj *InvitationOtpPayload) (ret graphql.Marshaler) {
@@ -32667,6 +37488,121 @@ func (ec *executionContext) _LLMCallUsage_outputTokens(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_LLMCallUsage_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_audioInputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_audioInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_audioInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_textInputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_textInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TextInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_textInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_reasoningTokens(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_reasoningTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReasoningTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_reasoningTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_audioDurationMs(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_audioDurationMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioDurationMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_audioDurationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_audioTokenUnit(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_audioTokenUnit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AudioTokenUnit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_audioTokenUnit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _LLMCallUsage_cachedInputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
@@ -35008,6 +39944,29 @@ func (ec *executionContext) fieldContext_Membership_version(_ context.Context, f
 	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _Membership_productEntitlements(ctx context.Context, field graphql.CollectedField, obj *Membership) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Membership_productEntitlements(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProductEntitlements, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Membership_productEntitlements(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Membership_scopes(ctx context.Context, field graphql.CollectedField, obj *Membership) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -35939,6 +40898,50 @@ func (ec *executionContext) fieldContext_Mutation_inviteInternalUser(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_inviteCustomerUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_inviteCustomerUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().InviteCustomerUser(ctx, fc.Args["input"].(InviteCustomerUserInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *MembershipPayload) graphql.Marshaler {
+			return ec.marshalNMembershipPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMembershipPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_inviteCustomerUser(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MembershipPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_inviteCustomerUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_resendInternalUserInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -36021,6 +41024,50 @@ func (ec *executionContext) fieldContext_Mutation_assignRoleScopes(ctx context.C
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_assignRoleScopes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_assignMembershipAccess(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_assignMembershipAccess(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AssignMembershipAccess(ctx, fc.Args["input"].(AssignMembershipAccessInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *MembershipPayload) graphql.Marshaler {
+			return ec.marshalNMembershipPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMembershipPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_assignMembershipAccess(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MembershipPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_assignMembershipAccess_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -38617,6 +43664,402 @@ func (ec *executionContext) fieldContext_Mutation_configureVideoPolicy(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_configureVideoPolicy_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_configureVoicePolicy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_configureVoicePolicy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ConfigureVoicePolicy(ctx, fc.Args["input"].(ConfigureVoicePolicyInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *VoicePolicyPayload) graphql.Marshaler {
+			return ec.marshalNVoicePolicyPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVoicePolicyPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_configureVoicePolicy(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VoicePolicyPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_configureVoicePolicy_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createAudioNoteUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createAudioNoteUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateAudioNoteUpload(ctx, fc.Args["input"].(CreateAudioNoteUploadInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNoteUploadPayload) graphql.Marshaler {
+			return ec.marshalNAudioNoteUploadPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteUploadPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createAudioNoteUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNoteUploadPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createAudioNoteUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_completeAudioNoteUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_completeAudioNoteUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CompleteAudioNoteUpload(ctx, fc.Args["input"].(CompleteAudioNoteUploadInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+			return ec.marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_completeAudioNoteUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNotePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_completeAudioNoteUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_reviseAudioNote(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_reviseAudioNote(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ReviseAudioNote(ctx, fc.Args["input"].(ReviseAudioNoteInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+			return ec.marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_reviseAudioNote(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNotePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_reviseAudioNote_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_discardAudioNote(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_discardAudioNote(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DiscardAudioNote(ctx, fc.Args["input"].(DiscardAudioNoteInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+			return ec.marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_discardAudioNote(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNotePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_discardAudioNote_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_retryAudioNote(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_retryAudioNote(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RetryAudioNote(ctx, fc.Args["input"].(RetryAudioNoteInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+			return ec.marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_retryAudioNote(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNotePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_retryAudioNote_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setAudioNoteHighlight(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setAudioNoteHighlight(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetAudioNoteHighlight(ctx, fc.Args["input"].(SetAudioNoteHighlightInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+			return ec.marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setAudioNoteHighlight(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNotePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setAudioNoteHighlight_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_confirmAudioNoteText(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_confirmAudioNoteText(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ConfirmAudioNoteText(ctx, fc.Args["input"].(ConfirmAudioNoteTextInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+			return ec.marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_confirmAudioNoteText(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNotePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_confirmAudioNoteText_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_regenerateInventorySuggestions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_regenerateInventorySuggestions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RegenerateInventorySuggestions(ctx, fc.Args["input"].(RegenerateInventorySuggestionsInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryRegenerationPayload) graphql.Marshaler {
+			return ec.marshalNInventoryRegenerationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryRegenerationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_regenerateInventorySuggestions(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryRegenerationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_regenerateInventorySuggestions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -45985,6 +51428,94 @@ func (ec *executionContext) fieldContext_Query_memberships(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_effectiveAccess(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_effectiveAccess(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().EffectiveAccess(ctx, fc.Args["membershipId"].(string), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *EffectiveAccess) graphql.Marshaler {
+			return ec.marshalNEffectiveAccess2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccess(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_effectiveAccess(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EffectiveAccess(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_effectiveAccess_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_scopePreview(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_scopePreview(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ScopePreview(ctx, fc.Args["kind"].(string), fc.Args["resourceId"].(string), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ScopePreview) graphql.Marshaler {
+			return ec.marshalNScopePreview2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐScopePreview(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_scopePreview(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ScopePreview(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_scopePreview_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_businessUnits(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -48400,6 +53931,126 @@ func (ec *executionContext) fieldContext_Query_videoPreparation(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_voicePolicy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_voicePolicy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().VoicePolicy(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *VoicePolicy) graphql.Marshaler {
+			return ec.marshalOVoicePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVoicePolicy(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_voicePolicy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VoicePolicy(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_audioNotes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_audioNotes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AudioNotes(ctx, fc.Args["inspectionId"].(string), fc.Args["environmentId"].(string), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNoteConnection) graphql.Marshaler {
+			return ec.marshalNAudioNoteConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_audioNotes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNoteConnection(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_audioNotes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_audioNote(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_audioNote(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AudioNote(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AudioNote) graphql.Marshaler {
+			return ec.marshalOAudioNote2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNote(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_audioNote(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AudioNote(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_audioNote_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -49753,6 +55404,38 @@ func (ec *executionContext) _Report_pdfStatus(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_Report_pdfStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Report", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Report_publication(ctx context.Context, field graphql.CollectedField, obj *Report) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Report_publication(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Publication, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ReportPublication) graphql.Marshaler {
+			return ec.marshalOReportPublication2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportPublication(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Report_publication(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Report",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportPublication(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _ReportAssetContext_id(ctx context.Context, field graphql.CollectedField, obj *ReportAssetContext) (ret graphql.Marshaler) {
@@ -51754,6 +57437,38 @@ func (ec *executionContext) fieldContext_ReportSummary_version(_ context.Context
 	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _ReportSummary_publication(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_publication(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Publication, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ReportPublication) graphql.Marshaler {
+			return ec.marshalOReportPublication2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportPublication(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_publication(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportPublication(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ReportTemplateContext_id(ctx context.Context, field graphql.CollectedField, obj *ReportTemplateContext) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53378,6 +59093,70 @@ func (ec *executionContext) _Scope_resourceId(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_Scope_resourceId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Scope", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ScopePreview_target(ctx context.Context, field graphql.CollectedField, obj *ScopePreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ScopePreview_target(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Target, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AccessResource) graphql.Marshaler {
+			return ec.marshalNAccessResource2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAccessResource(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ScopePreview_target(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ScopePreview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AccessResource(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ScopePreview_descendants(ctx context.Context, field graphql.CollectedField, obj *ScopePreview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ScopePreview_descendants(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Descendants, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *EffectiveAccessEntryConnection) graphql.Marshaler {
+			return ec.marshalNEffectiveAccessEntryConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntryConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ScopePreview_descendants(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ScopePreview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EffectiveAccessEntryConnection(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _SegmentDefinition_id(ctx context.Context, field graphql.CollectedField, obj *SegmentDefinition) (ret graphql.Marshaler) {
@@ -58777,6 +64556,231 @@ func (ec *executionContext) fieldContext_VideoUploadStatus_missingParts(_ contex
 	return graphql.NewScalarFieldContext("VideoUploadStatus", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _VoicePolicy_enabled(ctx context.Context, field graphql.CollectedField, obj *VoicePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicy_enabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Enabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicy_enabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicy", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _VoicePolicy_tenantNoteLimit(ctx context.Context, field graphql.CollectedField, obj *VoicePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicy_tenantNoteLimit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TenantNoteLimit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicy_tenantNoteLimit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VoicePolicy_tenantAudioLimitMs(ctx context.Context, field graphql.CollectedField, obj *VoicePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicy_tenantAudioLimitMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TenantAudioLimitMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicy_tenantAudioLimitMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VoicePolicy_inspectionNoteLimit(ctx context.Context, field graphql.CollectedField, obj *VoicePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicy_inspectionNoteLimit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionNoteLimit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicy_inspectionNoteLimit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VoicePolicy_inspectionAudioLimitMs(ctx context.Context, field graphql.CollectedField, obj *VoicePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicy_inspectionAudioLimitMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionAudioLimitMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicy_inspectionAudioLimitMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VoicePolicy_version(ctx context.Context, field graphql.CollectedField, obj *VoicePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicy_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicy_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VoicePolicyPayload_policy(ctx context.Context, field graphql.CollectedField, obj *VoicePolicyPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicyPayload_policy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Policy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *VoicePolicy) graphql.Marshaler {
+			return ec.marshalOVoicePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVoicePolicy(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicyPayload_policy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VoicePolicyPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VoicePolicy(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VoicePolicyPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *VoicePolicyPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicyPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicyPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VoicePolicyPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VoicePolicyPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *VoicePolicyPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VoicePolicyPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VoicePolicyPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VoicePolicyPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -59850,8 +65854,11 @@ func (ec *executionContext) unmarshalInputAcceptProcessingInput(ctx context.Cont
 	if _, present := asMap["videoProcessing"]; !present {
 		asMap["videoProcessing"] = false
 	}
+	if _, present := asMap["voiceProcessing"]; !present {
+		asMap["voiceProcessing"] = false
+	}
 
-	fieldsInOrder := [...]string{"disclosureVersion", "photoProcessing", "videoProcessing", "aiAnalysis", "gpsUse", "clientMutationId"}
+	fieldsInOrder := [...]string{"disclosureVersion", "photoProcessing", "videoProcessing", "voiceProcessing", "voiceConsentVersion", "aiAnalysis", "gpsUse", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -59879,6 +65886,20 @@ func (ec *executionContext) unmarshalInputAcceptProcessingInput(ctx context.Cont
 				return it, err
 			}
 			it.VideoProcessing = data
+		case "voiceProcessing":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("voiceProcessing"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.VoiceProcessing = data
+		case "voiceConsentVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("voiceConsentVersion"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.VoiceConsentVersion = data
 		case "aiAnalysis":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("aiAnalysis"))
 			data, err := ec.unmarshalNBoolean2bool(ctx, v)
@@ -60473,6 +66494,71 @@ func (ec *executionContext) unmarshalInputAssetInput(ctx context.Context, obj an
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputAssignMembershipAccessInput(ctx context.Context, obj any) (AssignMembershipAccessInput, error) {
+	var it AssignMembershipAccessInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"membershipId", "role", "productEntitlements", "scopes", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "membershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("membershipId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MembershipID = data
+		case "role":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Role = data
+		case "productEntitlements":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("productEntitlements"))
+			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProductEntitlements = data
+		case "scopes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("scopes"))
+			data, err := ec.unmarshalNScopeAssignmentInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐScopeAssignmentInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Scopes = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputAssignRoleScopesInput(ctx context.Context, obj any) (AssignRoleScopesInput, error) {
 	var it AssignRoleScopesInput
 	if obj == nil {
@@ -60771,6 +66857,50 @@ func (ec *executionContext) unmarshalInputCloseOriginInvitationInput(ctx context
 				return it, err
 			}
 			it.Reason = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCompleteAudioNoteUploadInput(ctx context.Context, obj any) (CompleteAudioNoteUploadInput, error) {
+	var it CompleteAudioNoteUploadInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"noteId", "uploadProof", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "noteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoteID = data
+		case "uploadProof":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("uploadProof"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.UploadProof = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -61135,6 +67265,122 @@ func (ec *executionContext) unmarshalInputConfigureVideoPolicyInput(ctx context.
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputConfigureVoicePolicyInput(ctx context.Context, obj any) (ConfigureVoicePolicyInput, error) {
+	var it ConfigureVoicePolicyInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"enabled", "tenantNoteLimit", "tenantAudioLimitMs", "inspectionNoteLimit", "inspectionAudioLimitMs", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "enabled":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Enabled = data
+		case "tenantNoteLimit":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tenantNoteLimit"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TenantNoteLimit = data
+		case "tenantAudioLimitMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tenantAudioLimitMs"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TenantAudioLimitMs = data
+		case "inspectionNoteLimit":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionNoteLimit"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionNoteLimit = data
+		case "inspectionAudioLimitMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionAudioLimitMs"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionAudioLimitMs = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputConfirmAudioNoteTextInput(ctx context.Context, obj any) (ConfirmAudioNoteTextInput, error) {
+	var it ConfirmAudioNoteTextInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"noteId", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "noteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoteID = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputContactInput(ctx context.Context, obj any) (ContactInput, error) {
 	var it ContactInput
 	if obj == nil {
@@ -61336,6 +67582,127 @@ func (ec *executionContext) unmarshalInputCounterpartyResponseInput(ctx context.
 			continue
 		}
 		switch k {
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCreateAudioNoteUploadInput(ctx context.Context, obj any) (CreateAudioNoteUploadInput, error) {
+	var it CreateAudioNoteUploadInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"clientNoteId", "requirementKey", "photoMediaId", "videoAttemptId", "startMs", "endMs", "timeBasis", "consentVersion", "disclosureVersion", "contentType", "contentSha256", "sizeBytes", "durationMs", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "clientNoteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientNoteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientNoteID = data
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
+		case "photoMediaId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("photoMediaId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PhotoMediaID = data
+		case "videoAttemptId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("videoAttemptId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.VideoAttemptID = data
+		case "startMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("startMs"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StartMs = data
+		case "endMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("endMs"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EndMs = data
+		case "timeBasis":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("timeBasis"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TimeBasis = data
+		case "consentVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("consentVersion"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ConsentVersion = data
+		case "disclosureVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("disclosureVersion"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DisclosureVersion = data
+		case "contentType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("contentType"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ContentType = data
+		case "contentSha256":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("contentSha256"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ContentSha256 = data
+		case "sizeBytes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sizeBytes"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SizeBytes = data
+		case "durationMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("durationMs"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DurationMs = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -62085,6 +68452,50 @@ func (ec *executionContext) unmarshalInputDisableMembershipInput(ctx context.Con
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputDiscardAudioNoteInput(ctx context.Context, obj any) (DiscardAudioNoteInput, error) {
+	var it DiscardAudioNoteInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"noteId", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "noteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoteID = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputDiscardBaselineDraftInput(ctx context.Context, obj any) (DiscardBaselineDraftInput, error) {
 	var it DiscardBaselineDraftInput
 	if obj == nil {
@@ -62528,6 +68939,64 @@ func (ec *executionContext) unmarshalInputInventorySplitPartInput(ctx context.Co
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputInviteCustomerUserInput(ctx context.Context, obj any) (InviteCustomerUserInput, error) {
+	var it InviteCustomerUserInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "email", "scopes", "productEntitlements", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		case "scopes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("scopes"))
+			data, err := ec.unmarshalNScopeAssignmentInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐScopeAssignmentInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Scopes = data
+		case "productEntitlements":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("productEntitlements"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProductEntitlements = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputInviteInternalUserInput(ctx context.Context, obj any) (InviteInternalUserInput, error) {
 	var it InviteInternalUserInput
 	if obj == nil {
@@ -62539,7 +69008,7 @@ func (ec *executionContext) unmarshalInputInviteInternalUserInput(ctx context.Co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "role", "scopes", "clientMutationId"}
+	fieldsInOrder := [...]string{"name", "email", "role", "scopes", "productEntitlements", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -62574,6 +69043,13 @@ func (ec *executionContext) unmarshalInputInviteInternalUserInput(ctx context.Co
 				return it, err
 			}
 			it.Scopes = data
+		case "productEntitlements":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("productEntitlements"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProductEntitlements = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -62665,7 +69141,7 @@ func (ec *executionContext) unmarshalInputLLMUsageFilter(ctx context.Context, ob
 		asMap["includeTestData"] = false
 	}
 
-	fieldsInOrder := [...]string{"from", "to", "tenantId", "inspectionId", "withoutInspection", "provider", "model", "modelAlias", "mode", "technicalOutcome", "state", "cost", "includeTestData"}
+	fieldsInOrder := [...]string{"from", "to", "tenantId", "inspectionId", "withoutInspection", "provider", "model", "modelAlias", "comparisonMode", "mode", "technicalOutcome", "state", "cost", "includeTestData"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -62728,6 +69204,13 @@ func (ec *executionContext) unmarshalInputLLMUsageFilter(ctx context.Context, ob
 				return it, err
 			}
 			it.ModelAlias = data
+		case "comparisonMode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("comparisonMode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ComparisonMode = data
 		case "mode":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mode"))
 			data, err := ec.unmarshalOLLMExecutionMode2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMExecutionMode(ctx, v)
@@ -63950,6 +70433,64 @@ func (ec *executionContext) unmarshalInputRecordDeletionRequestInput(ctx context
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRegenerateInventorySuggestionsInput(ctx context.Context, obj any) (RegenerateInventorySuggestionsInput, error) {
+	var it RegenerateInventorySuggestionsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "environmentId", "expectedVersion", "revisionIds", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "environmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environmentId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnvironmentID = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "revisionIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("revisionIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RevisionIds = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRegisterAssetInput(ctx context.Context, obj any) (RegisterAssetInput, error) {
 	var it RegisterAssetInput
 	if obj == nil {
@@ -64647,6 +71188,50 @@ func (ec *executionContext) unmarshalInputResolveBaselineContestationInput(ctx c
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRetryAudioNoteInput(ctx context.Context, obj any) (RetryAudioNoteInput, error) {
+	var it RetryAudioNoteInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"noteId", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "noteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoteID = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRetryInventoryDraftInput(ctx context.Context, obj any) (RetryInventoryDraftInput, error) {
 	var it RetryInventoryDraftInput
 	if obj == nil {
@@ -64716,6 +71301,64 @@ func (ec *executionContext) unmarshalInputRetryVideoPreparationInput(ctx context
 				return it, err
 			}
 			it.ExpectedPreparationVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputReviseAudioNoteInput(ctx context.Context, obj any) (ReviseAudioNoteInput, error) {
+	var it ReviseAudioNoteInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"noteId", "text", "revisionKind", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "noteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoteID = data
+		case "text":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Text = data
+		case "revisionKind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("revisionKind"))
+			data, err := ec.unmarshalOAudioNoteRevisionKind2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevisionKind(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RevisionKind = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -64950,6 +71593,57 @@ func (ec *executionContext) unmarshalInputSetAdminInitialPasswordInput(ctx conte
 				return it, err
 			}
 			it.Password = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputSetAudioNoteHighlightInput(ctx context.Context, obj any) (SetAudioNoteHighlightInput, error) {
+	var it SetAudioNoteHighlightInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"noteId", "highlighted", "expectedVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "noteId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noteId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoteID = data
+		case "highlighted":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("highlighted"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Highlighted = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -66124,6 +72818,69 @@ func (ec *executionContext) unmarshalInputVerifyOnboardingOtpInput(ctx context.C
 
 // region    **************************** object.gotpl ****************************
 
+var accessResourceImplementors = []string{"AccessResource"}
+
+func (ec *executionContext) _AccessResource(ctx context.Context, sel ast.SelectionSet, obj *AccessResource) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, accessResourceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AccessResource")
+		case "kind":
+			out.Values[i] = ec._AccessResource_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resourceId":
+			out.Values[i] = ec._AccessResource_resourceId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._AccessResource_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AccessResource_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "historical":
+			out.Values[i] = ec._AccessResource_historical(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "grantable":
+			out.Values[i] = ec._AccessResource_grantable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var analysisPromptImplementors = []string{"AnalysisPrompt"}
 
 func (ec *executionContext) _AnalysisPrompt(ctx context.Context, sel ast.SelectionSet, obj *AnalysisPrompt) graphql.Marshaler {
@@ -66478,6 +73235,585 @@ func (ec *executionContext) _AssetPayload(ctx context.Context, sel ast.Selection
 			}
 		case "clientMutationId":
 			out.Values[i] = ec._AssetPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteImplementors = []string{"AudioNote"}
+
+func (ec *executionContext) _AudioNote(ctx context.Context, sel ast.SelectionSet, obj *AudioNote) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNote")
+		case "id":
+			out.Values[i] = ec._AudioNote_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inspectionId":
+			out.Values[i] = ec._AudioNote_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentId":
+			out.Values[i] = ec._AudioNote_environmentId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentName":
+			out.Values[i] = ec._AudioNote_environmentName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "responsibilityId":
+			out.Values[i] = ec._AudioNote_responsibilityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requirementKey":
+			out.Values[i] = ec._AudioNote_requirementKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "targetKind":
+			out.Values[i] = ec._AudioNote_targetKind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "photoMediaId":
+			out.Values[i] = ec._AudioNote_photoMediaId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "videoAttemptId":
+			out.Values[i] = ec._AudioNote_videoAttemptId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "sourceMediaId":
+			out.Values[i] = ec._AudioNote_sourceMediaId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "startMs":
+			out.Values[i] = ec._AudioNote_startMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "endMs":
+			out.Values[i] = ec._AudioNote_endMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "durationMs":
+			out.Values[i] = ec._AudioNote_durationMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AudioNote_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "anchorStatus":
+			out.Values[i] = ec._AudioNote_anchorStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "anchor":
+			out.Values[i] = ec._AudioNote_anchor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "highlighted":
+			out.Values[i] = ec._AudioNote_highlighted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "highlightSource":
+			out.Values[i] = ec._AudioNote_highlightSource(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._AudioNote_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentRevisionId":
+			out.Values[i] = ec._AudioNote_currentRevisionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "revisions":
+			out.Values[i] = ec._AudioNote_revisions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "textConfirmed":
+			out.Values[i] = ec._AudioNote_textConfirmed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "noSpeech":
+			out.Values[i] = ec._AudioNote_noSpeech(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failureCode":
+			out.Values[i] = ec._AudioNote_failureCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioAvailability":
+			out.Values[i] = ec._AudioNote_audioAvailability(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "audioDeletionStatus":
+			out.Values[i] = ec._AudioNote_audioDeletionStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._AudioNote_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._AudioNote_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteAnchorImplementors = []string{"AudioNoteAnchor"}
+
+func (ec *executionContext) _AudioNoteAnchor(ctx context.Context, sel ast.SelectionSet, obj *AudioNoteAnchor) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteAnchorImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNoteAnchor")
+		case "kind":
+			out.Values[i] = ec._AudioNoteAnchor_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AudioNoteAnchor_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaId":
+			out.Values[i] = ec._AudioNoteAnchor_mediaId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "mediaStatus":
+			out.Values[i] = ec._AudioNoteAnchor_mediaStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "approximate":
+			out.Values[i] = ec._AudioNoteAnchor_approximate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "previewUrl":
+			out.Values[i] = ec._AudioNoteAnchor_previewUrl(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "playbackUrl":
+			out.Values[i] = ec._AudioNoteAnchor_playbackUrl(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "frames":
+			out.Values[i] = ec._AudioNoteAnchor_frames(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "framesTruncated":
+			out.Values[i] = ec._AudioNoteAnchor_framesTruncated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "visualCoverage":
+			out.Values[i] = ec._AudioNoteAnchor_visualCoverage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteAnchorFrameImplementors = []string{"AudioNoteAnchorFrame"}
+
+func (ec *executionContext) _AudioNoteAnchorFrame(ctx context.Context, sel ast.SelectionSet, obj *AudioNoteAnchorFrame) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteAnchorFrameImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNoteAnchorFrame")
+		case "id":
+			out.Values[i] = ec._AudioNoteAnchorFrame_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "timestampMs":
+			out.Values[i] = ec._AudioNoteAnchorFrame_timestampMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._AudioNoteAnchorFrame_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AudioNoteAnchorFrame_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteConnectionImplementors = []string{"AudioNoteConnection"}
+
+func (ec *executionContext) _AudioNoteConnection(ctx context.Context, sel ast.SelectionSet, obj *AudioNoteConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNoteConnection")
+		case "nodes":
+			out.Values[i] = ec._AudioNoteConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._AudioNoteConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNotePayloadImplementors = []string{"AudioNotePayload"}
+
+func (ec *executionContext) _AudioNotePayload(ctx context.Context, sel ast.SelectionSet, obj *AudioNotePayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNotePayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNotePayload")
+		case "note":
+			out.Values[i] = ec._AudioNotePayload_note(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._AudioNotePayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._AudioNotePayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteRevisionImplementors = []string{"AudioNoteRevision"}
+
+func (ec *executionContext) _AudioNoteRevision(ctx context.Context, sel ast.SelectionSet, obj *AudioNoteRevision) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteRevisionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNoteRevision")
+		case "id":
+			out.Values[i] = ec._AudioNoteRevision_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revisionNumber":
+			out.Values[i] = ec._AudioNoteRevision_revisionNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._AudioNoteRevision_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._AudioNoteRevision_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "authorId":
+			out.Values[i] = ec._AudioNoteRevision_authorId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "authorName":
+			out.Values[i] = ec._AudioNoteRevision_authorName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "callId":
+			out.Values[i] = ec._AudioNoteRevision_callId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._AudioNoteRevision_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteUploadIntentImplementors = []string{"AudioNoteUploadIntent"}
+
+func (ec *executionContext) _AudioNoteUploadIntent(ctx context.Context, sel ast.SelectionSet, obj *AudioNoteUploadIntent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteUploadIntentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNoteUploadIntent")
+		case "url":
+			out.Values[i] = ec._AudioNoteUploadIntent_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "method":
+			out.Values[i] = ec._AudioNoteUploadIntent_method(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "headers":
+			out.Values[i] = ec._AudioNoteUploadIntent_headers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._AudioNoteUploadIntent_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var audioNoteUploadPayloadImplementors = []string{"AudioNoteUploadPayload"}
+
+func (ec *executionContext) _AudioNoteUploadPayload(ctx context.Context, sel ast.SelectionSet, obj *AudioNoteUploadPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, audioNoteUploadPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AudioNoteUploadPayload")
+		case "noteId":
+			out.Values[i] = ec._AudioNoteUploadPayload_noteId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "upload":
+			out.Values[i] = ec._AudioNoteUploadPayload_upload(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._AudioNoteUploadPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._AudioNoteUploadPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -68924,6 +76260,190 @@ func (ec *executionContext) _DashboardSummary(ctx context.Context, sel ast.Selec
 	return out
 }
 
+var effectiveAccessImplementors = []string{"EffectiveAccess"}
+
+func (ec *executionContext) _EffectiveAccess(ctx context.Context, sel ast.SelectionSet, obj *EffectiveAccess) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, effectiveAccessImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EffectiveAccess")
+		case "membershipId":
+			out.Values[i] = ec._EffectiveAccess_membershipId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "role":
+			out.Values[i] = ec._EffectiveAccess_role(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._EffectiveAccess_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._EffectiveAccess_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "productEntitlements":
+			out.Values[i] = ec._EffectiveAccess_productEntitlements(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tenantWide":
+			out.Values[i] = ec._EffectiveAccess_tenantWide(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "grants":
+			out.Values[i] = ec._EffectiveAccess_grants(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "descendants":
+			out.Values[i] = ec._EffectiveAccess_descendants(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var effectiveAccessEntryImplementors = []string{"EffectiveAccessEntry"}
+
+func (ec *executionContext) _EffectiveAccessEntry(ctx context.Context, sel ast.SelectionSet, obj *EffectiveAccessEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, effectiveAccessEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EffectiveAccessEntry")
+		case "kind":
+			out.Values[i] = ec._EffectiveAccessEntry_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resourceId":
+			out.Values[i] = ec._EffectiveAccessEntry_resourceId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._EffectiveAccessEntry_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._EffectiveAccessEntry_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "historical":
+			out.Values[i] = ec._EffectiveAccessEntry_historical(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "grantable":
+			out.Values[i] = ec._EffectiveAccessEntry_grantable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inheritedFrom":
+			out.Values[i] = ec._EffectiveAccessEntry_inheritedFrom(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var effectiveAccessEntryConnectionImplementors = []string{"EffectiveAccessEntryConnection"}
+
+func (ec *executionContext) _EffectiveAccessEntryConnection(ctx context.Context, sel ast.SelectionSet, obj *EffectiveAccessEntryConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, effectiveAccessEntryConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EffectiveAccessEntryConnection")
+		case "nodes":
+			out.Values[i] = ec._EffectiveAccessEntryConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._EffectiveAccessEntryConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var externalCaptureImplementors = []string{"ExternalCapture"}
 
 func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.SelectionSet, obj *ExternalCapture) graphql.Marshaler {
@@ -69244,6 +76764,31 @@ func (ec *executionContext) _GlobalLLMCallUsage(ctx context.Context, sel ast.Sel
 			}
 		case "outputTokens":
 			out.Values[i] = ec._GlobalLLMCallUsage_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioInputTokens":
+			out.Values[i] = ec._GlobalLLMCallUsage_audioInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "textInputTokens":
+			out.Values[i] = ec._GlobalLLMCallUsage_textInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reasoningTokens":
+			out.Values[i] = ec._GlobalLLMCallUsage_reasoningTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioDurationMs":
+			out.Values[i] = ec._GlobalLLMCallUsage_audioDurationMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioTokenUnit":
+			out.Values[i] = ec._GlobalLLMCallUsage_audioTokenUnit(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -70234,6 +77779,89 @@ func (ec *executionContext) _InternalUserActivationPayload(ctx context.Context, 
 	return out
 }
 
+var inventoryAttributeSourceImplementors = []string{"InventoryAttributeSource"}
+
+func (ec *executionContext) _InventoryAttributeSource(ctx context.Context, sel ast.SelectionSet, obj *InventoryAttributeSource) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryAttributeSourceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryAttributeSource")
+		case "id":
+			out.Values[i] = ec._InventoryAttributeSource_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attributeName":
+			out.Values[i] = ec._InventoryAttributeSource_attributeName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceKind":
+			out.Values[i] = ec._InventoryAttributeSource_sourceKind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "noteId":
+			out.Values[i] = ec._InventoryAttributeSource_noteId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "revisionId":
+			out.Values[i] = ec._InventoryAttributeSource_revisionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "currentRevisionId":
+			out.Values[i] = ec._InventoryAttributeSource_currentRevisionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "stale":
+			out.Values[i] = ec._InventoryAttributeSource_stale(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "visualEvidenceId":
+			out.Values[i] = ec._InventoryAttributeSource_visualEvidenceId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reviewedBy":
+			out.Values[i] = ec._InventoryAttributeSource_reviewedBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._InventoryAttributeSource_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var inventoryCountsImplementors = []string{"InventoryCounts"}
 
 func (ec *executionContext) _InventoryCounts(ctx context.Context, sel ast.SelectionSet, obj *InventoryCounts) graphql.Marshaler {
@@ -70304,6 +77932,11 @@ func (ec *executionContext) _InventoryDraft(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "sourceInspectionId":
+			out.Values[i] = ec._InventoryDraft_sourceInspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "environments":
 			out.Values[i] = ec._InventoryDraft_environments(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -70326,6 +77959,11 @@ func (ec *executionContext) _InventoryDraft(ctx context.Context, sel ast.Selecti
 			}
 		case "warnings":
 			out.Values[i] = ec._InventoryDraft_warnings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "voiceSummary":
+			out.Values[i] = ec._InventoryDraft_voiceSummary(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -70409,6 +78047,11 @@ func (ec *executionContext) _InventoryEnvironment(ctx context.Context, sel ast.S
 			}
 		case "items":
 			out.Values[i] = ec._InventoryEnvironment_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "voiceSummary":
+			out.Values[i] = ec._InventoryEnvironment_voiceSummary(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -70676,6 +78319,16 @@ func (ec *executionContext) _InventoryItem(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "attributeSources":
+			out.Values[i] = ec._InventoryItem_attributeSources(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "voiceConflicts":
+			out.Values[i] = ec._InventoryItem_voiceConflicts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -70841,6 +78494,59 @@ func (ec *executionContext) _InventoryProgress(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var inventoryRegenerationPayloadImplementors = []string{"InventoryRegenerationPayload"}
+
+func (ec *executionContext) _InventoryRegenerationPayload(ctx context.Context, sel ast.SelectionSet, obj *InventoryRegenerationPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryRegenerationPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryRegenerationPayload")
+		case "jobId":
+			out.Values[i] = ec._InventoryRegenerationPayload_jobId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._InventoryRegenerationPayload_status(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._InventoryRegenerationPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._InventoryRegenerationPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var inventoryTrailImplementors = []string{"InventoryTrail"}
 
 func (ec *executionContext) _InventoryTrail(ctx context.Context, sel ast.SelectionSet, obj *InventoryTrail) graphql.Marshaler {
@@ -70953,6 +78659,107 @@ func (ec *executionContext) _InventoryTrailEntry(ctx context.Context, sel ast.Se
 			}
 		case "occurredAt":
 			out.Values[i] = ec._InventoryTrailEntry_occurredAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryVoiceConflictImplementors = []string{"InventoryVoiceConflict"}
+
+func (ec *executionContext) _InventoryVoiceConflict(ctx context.Context, sel ast.SelectionSet, obj *InventoryVoiceConflict) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryVoiceConflictImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryVoiceConflict")
+		case "attributeName":
+			out.Values[i] = ec._InventoryVoiceConflict_attributeName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "visualValue":
+			out.Values[i] = ec._InventoryVoiceConflict_visualValue(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "voiceValue":
+			out.Values[i] = ec._InventoryVoiceConflict_voiceValue(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryVoiceSummaryImplementors = []string{"InventoryVoiceSummary"}
+
+func (ec *executionContext) _InventoryVoiceSummary(ctx context.Context, sel ast.SelectionSet, obj *InventoryVoiceSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryVoiceSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryVoiceSummary")
+		case "pendingVoiceItems":
+			out.Values[i] = ec._InventoryVoiceSummary_pendingVoiceItems(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "conflictItems":
+			out.Values[i] = ec._InventoryVoiceSummary_conflictItems(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "staleSuggestions":
+			out.Values[i] = ec._InventoryVoiceSummary_staleSuggestions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "notesWithoutItem":
+			out.Values[i] = ec._InventoryVoiceSummary_notesWithoutItem(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -71197,6 +79004,31 @@ func (ec *executionContext) _LLMCallUsage(ctx context.Context, sel ast.Selection
 			}
 		case "outputTokens":
 			out.Values[i] = ec._LLMCallUsage_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioInputTokens":
+			out.Values[i] = ec._LLMCallUsage_audioInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "textInputTokens":
+			out.Values[i] = ec._LLMCallUsage_textInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reasoningTokens":
+			out.Values[i] = ec._LLMCallUsage_reasoningTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioDurationMs":
+			out.Values[i] = ec._LLMCallUsage_audioDurationMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "audioTokenUnit":
+			out.Values[i] = ec._LLMCallUsage_audioTokenUnit(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -72048,6 +79880,11 @@ func (ec *executionContext) _Membership(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "productEntitlements":
+			out.Values[i] = ec._Membership_productEntitlements(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "scopes":
 			out.Values[i] = ec._Membership_scopes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -72304,6 +80141,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "inviteCustomerUser":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_inviteCustomerUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "resendInternalUserInvitation":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_resendInternalUserInvitation(ctx, field)
@@ -72314,6 +80158,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "assignRoleScopes":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_assignRoleScopes(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assignMembershipAccess":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_assignMembershipAccess(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -72727,6 +80578,69 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "configureVideoPolicy":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_configureVideoPolicy(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "configureVoicePolicy":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_configureVoicePolicy(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createAudioNoteUpload":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createAudioNoteUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "completeAudioNoteUpload":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_completeAudioNoteUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviseAudioNote":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_reviseAudioNote(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "discardAudioNote":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_discardAudioNote(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "retryAudioNote":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_retryAudioNote(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setAudioNoteHighlight":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setAudioNoteHighlight(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "confirmAudioNoteText":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_confirmAudioNoteText(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "regenerateInventorySuggestions":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_regenerateInventorySuggestions(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -75758,6 +83672,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "effectiveAccess":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_effectiveAccess(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "scopePreview":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_scopePreview(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "businessUnits":
 			field := field
 
@@ -77012,6 +84970,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "voicePolicy":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_voicePolicy(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "audioNotes":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_audioNotes(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "audioNote":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_audioNote(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -77538,6 +85562,11 @@ func (ec *executionContext) _Report(ctx context.Context, sel ast.SelectionSet, o
 		case "pdfStatus":
 			out.Values[i] = ec._Report_pdfStatus(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "publication":
+			out.Values[i] = ec._Report_publication(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		default:
@@ -78384,6 +86413,11 @@ func (ec *executionContext) _ReportSummary(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "publication":
+			out.Values[i] = ec._ReportSummary_publication(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -79140,6 +87174,49 @@ func (ec *executionContext) _Scope(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "resourceId":
 			out.Values[i] = ec._Scope_resourceId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var scopePreviewImplementors = []string{"ScopePreview"}
+
+func (ec *executionContext) _ScopePreview(ctx context.Context, sel ast.SelectionSet, obj *ScopePreview) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, scopePreviewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ScopePreview")
+		case "target":
+			out.Values[i] = ec._ScopePreview_target(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "descendants":
+			out.Values[i] = ec._ScopePreview_descendants(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -81612,6 +89689,117 @@ func (ec *executionContext) _VideoUploadStatus(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var voicePolicyImplementors = []string{"VoicePolicy"}
+
+func (ec *executionContext) _VoicePolicy(ctx context.Context, sel ast.SelectionSet, obj *VoicePolicy) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, voicePolicyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VoicePolicy")
+		case "enabled":
+			out.Values[i] = ec._VoicePolicy_enabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tenantNoteLimit":
+			out.Values[i] = ec._VoicePolicy_tenantNoteLimit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "tenantAudioLimitMs":
+			out.Values[i] = ec._VoicePolicy_tenantAudioLimitMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "inspectionNoteLimit":
+			out.Values[i] = ec._VoicePolicy_inspectionNoteLimit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "inspectionAudioLimitMs":
+			out.Values[i] = ec._VoicePolicy_inspectionAudioLimitMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._VoicePolicy_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var voicePolicyPayloadImplementors = []string{"VoicePolicyPayload"}
+
+func (ec *executionContext) _VoicePolicyPayload(ctx context.Context, sel ast.SelectionSet, obj *VoicePolicyPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, voicePolicyPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VoicePolicyPayload")
+		case "policy":
+			out.Values[i] = ec._VoicePolicyPayload_policy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._VoicePolicyPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._VoicePolicyPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var __DirectiveImplementors = []string{"__Directive"}
 
 func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionSet, obj *introspection.Directive) graphql.Marshaler {
@@ -82009,6 +90197,32 @@ func (ec *executionContext) unmarshalNAcceptProcessingInput2inspectionᚋservice
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNAccessResource2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAccessResourceᚄ(ctx context.Context, sel ast.SelectionSet, v []*AccessResource) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAccessResource2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAccessResource(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAccessResource2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAccessResource(ctx context.Context, sel ast.SelectionSet, v *AccessResource) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AccessResource(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNActivateBaselineVersionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐActivateBaselineVersionInput(ctx context.Context, v any) (ActivateBaselineVersionInput, error) {
 	res, err := ec.unmarshalInputActivateBaselineVersionInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -82180,9 +90394,132 @@ func (ec *executionContext) marshalNAssetPayload2ᚖinspectionᚋservicesᚋinsp
 	return ec._AssetPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNAssignMembershipAccessInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAssignMembershipAccessInput(ctx context.Context, v any) (AssignMembershipAccessInput, error) {
+	res, err := ec.unmarshalInputAssignMembershipAccessInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNAssignRoleScopesInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAssignRoleScopesInput(ctx context.Context, v any) (AssignRoleScopesInput, error) {
 	res, err := ec.unmarshalInputAssignRoleScopesInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAudioNote2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteᚄ(ctx context.Context, sel ast.SelectionSet, v []*AudioNote) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAudioNote2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNote(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAudioNote2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNote(ctx context.Context, sel ast.SelectionSet, v *AudioNote) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNote(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAudioNoteAnchor2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteAnchor(ctx context.Context, sel ast.SelectionSet, v *AudioNoteAnchor) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNoteAnchor(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAudioNoteAnchorFrame2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteAnchorFrameᚄ(ctx context.Context, sel ast.SelectionSet, v []*AudioNoteAnchorFrame) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAudioNoteAnchorFrame2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteAnchorFrame(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAudioNoteAnchorFrame2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteAnchorFrame(ctx context.Context, sel ast.SelectionSet, v *AudioNoteAnchorFrame) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNoteAnchorFrame(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAudioNoteConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteConnection(ctx context.Context, sel ast.SelectionSet, v *AudioNoteConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNoteConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAudioNotePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNotePayload(ctx context.Context, sel ast.SelectionSet, v *AudioNotePayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNotePayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAudioNoteRevision2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevisionᚄ(ctx context.Context, sel ast.SelectionSet, v []*AudioNoteRevision) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAudioNoteRevision2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevision(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAudioNoteRevision2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevision(ctx context.Context, sel ast.SelectionSet, v *AudioNoteRevision) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNoteRevision(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAudioNoteUploadPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteUploadPayload(ctx context.Context, sel ast.SelectionSet, v *AudioNoteUploadPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AudioNoteUploadPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNAuditEvent2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAuditEventᚄ(ctx context.Context, sel ast.SelectionSet, v []*AuditEvent) graphql.Marshaler {
@@ -82503,6 +90840,11 @@ func (ec *executionContext) unmarshalNCloseOriginInvitationInput2inspectionᚋse
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCompleteAudioNoteUploadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCompleteAudioNoteUploadInput(ctx context.Context, v any) (CompleteAudioNoteUploadInput, error) {
+	res, err := ec.unmarshalInputCompleteAudioNoteUploadInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCompleteInternalUserActivationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCompleteInternalUserActivationInput(ctx context.Context, v any) (CompleteInternalUserActivationInput, error) {
 	res, err := ec.unmarshalInputCompleteInternalUserActivationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -82554,6 +90896,16 @@ func (ec *executionContext) unmarshalNConfigureRetentionPolicyInput2inspection�
 
 func (ec *executionContext) unmarshalNConfigureVideoPolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureVideoPolicyInput(ctx context.Context, v any) (ConfigureVideoPolicyInput, error) {
 	res, err := ec.unmarshalInputConfigureVideoPolicyInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNConfigureVoicePolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureVoicePolicyInput(ctx context.Context, v any) (ConfigureVoicePolicyInput, error) {
+	res, err := ec.unmarshalInputConfigureVoicePolicyInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNConfirmAudioNoteTextInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfirmAudioNoteTextInput(ctx context.Context, v any) (ConfirmAudioNoteTextInput, error) {
+	res, err := ec.unmarshalInputConfirmAudioNoteTextInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -82712,6 +91064,11 @@ func (ec *executionContext) marshalNCounterpartyResponsePayload2ᚖinspectionᚋ
 		return graphql.Null
 	}
 	return ec._CounterpartyResponsePayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCreateAudioNoteUploadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCreateAudioNoteUploadInput(ctx context.Context, v any) (CreateAudioNoteUploadInput, error) {
+	res, err := ec.unmarshalInputCreateAudioNoteUploadInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNCreateBusinessUnitInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCreateBusinessUnitInput(ctx context.Context, v any) (CreateBusinessUnitInput, error) {
@@ -82944,9 +91301,60 @@ func (ec *executionContext) unmarshalNDisableMembershipInput2inspectionᚋservic
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNDiscardAudioNoteInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDiscardAudioNoteInput(ctx context.Context, v any) (DiscardAudioNoteInput, error) {
+	res, err := ec.unmarshalInputDiscardAudioNoteInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNDiscardBaselineDraftInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDiscardBaselineDraftInput(ctx context.Context, v any) (DiscardBaselineDraftInput, error) {
 	res, err := ec.unmarshalInputDiscardBaselineDraftInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNEffectiveAccess2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccess(ctx context.Context, sel ast.SelectionSet, v *EffectiveAccess) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._EffectiveAccess(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNEffectiveAccessEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*EffectiveAccessEntry) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNEffectiveAccessEntry2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntry(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNEffectiveAccessEntry2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntry(ctx context.Context, sel ast.SelectionSet, v *EffectiveAccessEntry) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._EffectiveAccessEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNEffectiveAccessEntryConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐEffectiveAccessEntryConnection(ctx context.Context, sel ast.SelectionSet, v *EffectiveAccessEntryConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._EffectiveAccessEntryConnection(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNExternalCapture2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐExternalCapture(ctx context.Context, sel ast.SelectionSet, v *ExternalCapture) graphql.Marshaler {
@@ -83238,6 +91646,32 @@ func (ec *executionContext) unmarshalNInvalidateReportPublicationInput2inspectio
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNInventoryAttributeSource2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryAttributeSourceᚄ(ctx context.Context, sel ast.SelectionSet, v []*InventoryAttributeSource) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInventoryAttributeSource2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryAttributeSource(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInventoryAttributeSource2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryAttributeSource(ctx context.Context, sel ast.SelectionSet, v *InventoryAttributeSource) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryAttributeSource(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNInventoryDecisionInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDecisionInputᚄ(ctx context.Context, v any) ([]*InventoryDecisionInput, error) {
 	vSlice := graphql.CoerceList(v)
 	var err error
@@ -83394,6 +91828,16 @@ func (ec *executionContext) marshalNInventoryProgress2ᚖinspectionᚋservices�
 	return ec._InventoryProgress(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNInventoryRegenerationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryRegenerationPayload(ctx context.Context, sel ast.SelectionSet, v *InventoryRegenerationPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryRegenerationPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNInventorySplitPartInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventorySplitPartInputᚄ(ctx context.Context, v any) ([]*InventorySplitPartInput, error) {
 	vSlice := graphql.CoerceList(v)
 	var err error
@@ -83449,6 +91893,42 @@ func (ec *executionContext) marshalNInventoryTrailEntry2ᚖinspectionᚋservices
 	return ec._InventoryTrailEntry(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNInventoryVoiceConflict2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceConflictᚄ(ctx context.Context, sel ast.SelectionSet, v []*InventoryVoiceConflict) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInventoryVoiceConflict2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceConflict(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInventoryVoiceConflict2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceConflict(ctx context.Context, sel ast.SelectionSet, v *InventoryVoiceConflict) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryVoiceConflict(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryVoiceSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryVoiceSummary(ctx context.Context, sel ast.SelectionSet, v *InventoryVoiceSummary) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryVoiceSummary(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNInvitationOtpPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInvitationOtpPayload(ctx context.Context, sel ast.SelectionSet, v *InvitationOtpPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -83467,6 +91947,11 @@ func (ec *executionContext) marshalNInvitationPayload2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._InvitationPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNInviteCustomerUserInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInviteCustomerUserInput(ctx context.Context, v any) (InviteCustomerUserInput, error) {
+	res, err := ec.unmarshalInputInviteCustomerUserInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNInviteInternalUserInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInviteInternalUserInput(ctx context.Context, v any) (InviteInternalUserInput, error) {
@@ -84488,6 +92973,11 @@ func (ec *executionContext) unmarshalNRecordDeletionRequestInput2inspectionᚋse
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNRegenerateInventorySuggestionsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRegenerateInventorySuggestionsInput(ctx context.Context, v any) (RegenerateInventorySuggestionsInput, error) {
+	res, err := ec.unmarshalInputRegenerateInventorySuggestionsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNRegisterAssetInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRegisterAssetInput(ctx context.Context, v any) (RegisterAssetInput, error) {
 	res, err := ec.unmarshalInputRegisterAssetInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -84854,6 +93344,11 @@ func (ec *executionContext) marshalNRetentionPolicyPayload2ᚖinspectionᚋservi
 	return ec._RetentionPolicyPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNRetryAudioNoteInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryAudioNoteInput(ctx context.Context, v any) (RetryAudioNoteInput, error) {
+	res, err := ec.unmarshalInputRetryAudioNoteInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNRetryInventoryDraftInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryInventoryDraftInput(ctx context.Context, v any) (RetryInventoryDraftInput, error) {
 	res, err := ec.unmarshalInputRetryInventoryDraftInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -84861,6 +93356,11 @@ func (ec *executionContext) unmarshalNRetryInventoryDraftInput2inspectionᚋserv
 
 func (ec *executionContext) unmarshalNRetryVideoPreparationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryVideoPreparationInput(ctx context.Context, v any) (RetryVideoPreparationInput, error) {
 	res, err := ec.unmarshalInputRetryVideoPreparationInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNReviseAudioNoteInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReviseAudioNoteInput(ctx context.Context, v any) (ReviseAudioNoteInput, error) {
+	res, err := ec.unmarshalInputReviseAudioNoteInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -84965,6 +93465,16 @@ func (ec *executionContext) unmarshalNScopeAssignmentInput2ᚖinspectionᚋservi
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNScopePreview2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐScopePreview(ctx context.Context, sel ast.SelectionSet, v *ScopePreview) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ScopePreview(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNSegmentDefinition2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSegmentDefinitionᚄ(ctx context.Context, sel ast.SelectionSet, v []*SegmentDefinition) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -85064,6 +93574,11 @@ func (ec *executionContext) marshalNSensitiveMediaReviewConnection2ᚖinspection
 
 func (ec *executionContext) unmarshalNSetAdminInitialPasswordInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSetAdminInitialPasswordInput(ctx context.Context, v any) (SetAdminInitialPasswordInput, error) {
 	res, err := ec.unmarshalInputSetAdminInitialPasswordInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNSetAudioNoteHighlightInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSetAudioNoteHighlightInput(ctx context.Context, v any) (SetAudioNoteHighlightInput, error) {
+	res, err := ec.unmarshalInputSetAudioNoteHighlightInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -85718,6 +94233,16 @@ func (ec *executionContext) marshalNVideoUploadStatus2ᚖinspectionᚋservices�
 	return ec._VideoUploadStatus(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNVoicePolicyPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVoicePolicyPayload(ctx context.Context, sel ast.SelectionSet, v *VoicePolicyPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VoicePolicyPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
 	return ec.___Directive(ctx, sel, &v)
 }
@@ -85886,6 +94411,36 @@ func (ec *executionContext) marshalOAsset2ᚖinspectionᚋservicesᚋinspection�
 		return graphql.Null
 	}
 	return ec._Asset(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOAudioNote2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNote(ctx context.Context, sel ast.SelectionSet, v *AudioNote) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AudioNote(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAudioNoteRevisionKind2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevisionKind(ctx context.Context, v any) (*AudioNoteRevisionKind, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(AudioNoteRevisionKind)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAudioNoteRevisionKind2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteRevisionKind(ctx context.Context, sel ast.SelectionSet, v *AudioNoteRevisionKind) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) marshalOAudioNoteUploadIntent2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAudioNoteUploadIntent(ctx context.Context, sel ast.SelectionSet, v *AudioNoteUploadIntent) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AudioNoteUploadIntent(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOBaselineInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineInventory(ctx context.Context, sel ast.SelectionSet, v *BaselineInventory) graphql.Marshaler {
@@ -86638,6 +95193,13 @@ func (ec *executionContext) marshalOVideoReplacement2ᚖinspectionᚋservicesᚋ
 		return graphql.Null
 	}
 	return ec._VideoReplacement(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOVoicePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVoicePolicy(ctx context.Context, sel ast.SelectionSet, v *VoicePolicy) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._VoicePolicy(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

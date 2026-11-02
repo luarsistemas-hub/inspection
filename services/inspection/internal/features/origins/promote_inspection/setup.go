@@ -108,7 +108,11 @@ func request(ctx context.Context, d Dependencies, c Command) (Result, error) {
 	}); err != nil {
 		return Result{}, apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
 	}
-	if _, err := d.Authorizer.Authorize(ctx, c.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
+	roles := []string{auth.TenantAdmin, auth.Manager}
+	if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: c.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, Mutate: true}); err != nil {
+		return Result{}, err
+	}
+	if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: c.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: c.InspectionID}, Mutate: true, NewWork: true}); err != nil {
 		return Result{}, err
 	}
 	meta, _ := requestctx.FromContext(ctx)
@@ -184,7 +188,7 @@ func status(ctx context.Context, d Dependencies, q Query) (Result, error) {
 		if err := tx.Where("tenant_id=? AND id=?", q.TenantID, inspection.AssetID).First(&asset).Error; err != nil {
 			return err
 		}
-		if _, err := d.Authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, false); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: q.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}}); err != nil {
 			return err
 		}
 		if err := eligibleInspection(tx, q.TenantID, inspection); err != nil {

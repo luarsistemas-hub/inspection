@@ -377,9 +377,29 @@ func presentClassification(value string) string {
 func presentMode(value string) string {
 	return reportLabel(map[string]string{"CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico"}, value)
 }
-func presentReason(value string) string {
-	return reportLabel(map[string]string{"MISSING_EVIDENCE": "Evidência ausente", "QUALITY_LOW": "Qualidade insuficiente", "INCONCLUSIVE": "Comparação inconclusiva", "ANALYSIS_FAILED": "Falha técnica na análise", "OBSERVED_CHANGE": "Mudança observada", "CRITICAL_FINDING": "Achado crítico", "CLASSIFICATION_CRITICAL": "Classificação crítica"}, value)
+
+// reasonLabels is the single Portuguese vocabulary for classification reason
+// codes. The HTML report, the PDF and the dashboard (apps/dashboard
+// triage-journey.tsx) must show the same text for the same code.
+var reasonLabels = map[string]string{
+	// Codes the deterministic classifier emits.
+	"NO_COMPARISONS": "Sem comparações disponíveis", "PENDING_COMPARISON": "Análise pendente", "INCONCLUSIVE": "Análise inconclusiva",
+	"ANALYSIS_FAILED": "Falha técnica na análise", "MISSING_EVIDENCE": "Evidência ausente", "SKIPPED_STAGE": "Etapa pulada",
+	"EVIDENCE_FLAG": "Evidência com alerta", "UNCORRECTED_RECAPTURE": "Complemento não corrigido",
+	"OBSERVED_CHANGE": "Alteração observada", "CRITICAL_FINDING": "Achado crítico",
+	"INVENTORY_ITEM_MISSING": "Item do inventário ausente", "INVENTORY_CONDITION_WORSENED": "Condição de item do inventário piorou",
+	"INVENTORY_ITEM_NOT_OBSERVED": "Item do inventário não observado", "INVENTORY_ENVIRONMENT_NOT_CAPTURED": "Ambiente do inventário não capturado",
+	"INVENTORY_EMPTY_BASELINE": "Inventário de referência vazio",
+	// Codes persisted by earlier report versions; the classifier no longer emits them.
+	"QUALITY_LOW": "Qualidade insuficiente", "CLASSIFICATION_CRITICAL": "Classificação crítica",
 }
+
+// ReasonLabel returns the Portuguese explanation of a classification reason
+// code, or "Situação não reconhecida" for an unknown code: a raw code is never
+// shown to the reader.
+func ReasonLabel(code string) string { return reportLabel(reasonLabels, code) }
+
+func presentReason(value string) string { return ReasonLabel(value) }
 func presentRequirement(value string) string {
 	if value == "overview" || value == "Property overview" {
 		return "Visão geral do imóvel"

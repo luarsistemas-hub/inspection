@@ -9,7 +9,6 @@ import (
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
-	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
@@ -28,7 +27,7 @@ func prepareDraft(ctx context.Context, d Dependencies, c PrepareDraftCommand) (d
 		if err != nil {
 			return err
 		}
-		if _, err = d.Authorizer.Authorize(ctx, c.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: s.asset.BusinessUnitID}, true); err != nil {
+		if _, err = authorizeNewWork(ctx, d.Authorizer, c.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, s.asset.BusinessUnitID, c.InspectionID); err != nil {
 			return apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 		}
 		if s.inspection.Status != "COMPLETED" {

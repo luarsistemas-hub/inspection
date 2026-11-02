@@ -55,6 +55,8 @@ type jobInput struct {
 	// legacy marks a CATALOG job over a legacy origin version: the model
 	// proposes the environments itself.
 	legacy bool
+	// voice is the fixed voice-note input of a CATALOG job; nil for visual-only jobs.
+	voice *voiceInput
 }
 
 func (p *Processor) within(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {
@@ -150,7 +152,24 @@ func (p *Processor) load(ctx context.Context, job database.InventoryJob) (jobInp
 			current, err = loadMediaInputs(tx, job.TenantID, mediaIDs, job.RequirementKey, in.inspection.MediaKind == "VIDEO")
 		}
 		in.current = current
-		return err
+		if err != nil {
+			return err
+		}
+		if job.Kind == "CATALOG" {
+			if err := p.loadVoice(ctx, tx, job, mediaIDs, &in); err != nil {
+				return err
+			}
+			if in.voice.hasNotes() {
+				// Choose the frames before reading any bytes: the notes'
+				// intervals come first and the room overview stays.
+				extra, err := loadIntervalFrames(tx, job, in.voice.Notes)
+				if err != nil {
+					return err
+				}
+				in.current = selectCatalogImages(append(in.current, extra...), in.voice.Notes, maxRequestImages)
+			}
+		}
+		return nil
 	})
 	return in, err
 }

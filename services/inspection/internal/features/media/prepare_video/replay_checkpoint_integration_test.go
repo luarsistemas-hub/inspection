@@ -56,7 +56,12 @@ func successfulScopeGateway() llm.Gateway {
 
 func checkpointExecutor(t *testing.T, h *harness.Harness, decoder video.Decoder, now func() time.Time) *Executor {
 	t.Helper()
-	executor, err := Setup(Dependencies{DB: h.DB, ClaimDB: h.AdminDB, Store: objectstore.VideoStore{Store: h.Store}, Decoder: decoder, Detector: sensitivecontent.NewDisabledDetector(), Gateway: successfulScopeGateway(), Now: now, TempDir: os.TempDir(), Limits: video.WorkerConfig{Concurrency: 1, DecoderThreads: 1, MaxBytes: 1 << 30, ScratchBytes: 4 << 30, RequiredFreeBytes: 8 << 30, StepTimeout: time.Minute, LeaseDuration: 120 * time.Second, HeartbeatInterval: 30 * time.Second, PollInterval: 2 * time.Second, ShutdownTimeout: 30 * time.Second}})
+	return checkpointExecutorWithGateway(t, h, decoder, now, successfulScopeGateway())
+}
+
+func checkpointExecutorWithGateway(t *testing.T, h *harness.Harness, decoder video.Decoder, now func() time.Time, gateway llm.Gateway) *Executor {
+	t.Helper()
+	executor, err := Setup(Dependencies{DB: h.DB, ClaimDB: h.AdminDB, Store: objectstore.VideoStore{Store: h.Store}, Decoder: decoder, Detector: sensitivecontent.NewDisabledDetector(), Gateway: gateway, Now: now, TempDir: os.TempDir(), Limits: video.WorkerConfig{Concurrency: 1, DecoderThreads: 1, MaxBytes: 1 << 30, ScratchBytes: 4 << 30, RequiredFreeBytes: 8 << 30, StepTimeout: time.Minute, LeaseDuration: 120 * time.Second, HeartbeatInterval: 30 * time.Second, PollInterval: 2 * time.Second, ShutdownTimeout: 30 * time.Second}})
 	if err != nil {
 		t.Fatal(err)
 	}

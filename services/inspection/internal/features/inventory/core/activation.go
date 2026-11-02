@@ -138,7 +138,11 @@ func (s Service) ActivateWithin(ctx context.Context, tx *gorm.DB, in ActivateInp
 		// Rejected counts all excluded items in the draft, including items
 		// excluded with their environment. The REMOVE_ENVIRONMENT audit event
 		// retains why that group was excluded.
-		counts := ItemCounts{Included: int(included), Rejected: int(rejected), NotReviewed: int(pending)}
+		voicePending, err := VoicePendingCount(tx, in.TenantID, result.ID)
+		if err != nil {
+			return err
+		}
+		counts := ItemCounts{Included: int(included), Rejected: int(rejected), NotReviewed: int(pending), VoicePending: voicePending}
 		if err := s.audit(tx, in.TenantID, result.ID, "VERSION", result.ID, "ACTIVATE", marshal(map[string]any{"previousActiveVersionId": beforeActive}), marshal(counts), "", in.ActorMembershipID, now); err != nil {
 			return err
 		}

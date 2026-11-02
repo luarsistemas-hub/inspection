@@ -85,7 +85,7 @@ func (r *Resolver) inventoryAssetAllowed(ctx context.Context, principal requestc
 	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND id=?", meta.TenantID, assetID).First(&asset).Error
 	}); err != nil {
-		return apperror.New(apperror.NotFound, "assetId", "asset not found")
+		return apperror.New(apperror.NotFound, "assetId", "Imóvel não encontrado.")
 	}
 	if containsInventoryRole(principal.Roles, auth.TenantAdmin) {
 		return nil
@@ -93,7 +93,7 @@ func (r *Resolver) inventoryAssetAllowed(ctx context.Context, principal requestc
 	if r.inventoryAssetScopeAllowed(ctx, meta.TenantID, principal, asset) {
 		return nil
 	}
-	return apperror.New(apperror.Forbidden, "", "access denied")
+	return apperror.New(apperror.Forbidden, "", "Acesso negado.")
 }
 
 func containsInventoryRole(roles []string, role string) bool {
@@ -151,11 +151,11 @@ func (r *Resolver) inventoryVersionAsset(ctx context.Context, tenant, versionID 
 	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenant, func(tx *gorm.DB) error {
 		var version database.OriginVersion
 		if err := tx.Where("tenant_id=? AND id=? AND has_inventory", tenant, versionID).First(&version).Error; err != nil {
-			return apperror.New(apperror.NotFound, "originVersionId", "inventory version not found")
+			return apperror.New(apperror.NotFound, "originVersionId", "Versão do inventário não encontrada.")
 		}
 		var origin database.Origin
 		if err := tx.Where("tenant_id=? AND id=?", tenant, version.OriginID).First(&origin).Error; err != nil {
-			return apperror.New(apperror.NotFound, "originVersionId", "inventory version not found")
+			return apperror.New(apperror.NotFound, "originVersionId", "Versão do inventário não encontrada.")
 		}
 		assetID = origin.AssetID
 		return nil
@@ -165,7 +165,7 @@ func (r *Resolver) inventoryVersionAsset(ctx context.Context, tenant, versionID 
 
 func inventoryUserError(err error, clientMutationID string) *graphql1.UserError {
 	_ = clientMutationID
-	return userErrorFrom(err)
+	return userErrorFrom(inventorySafeUserError(err))
 }
 func businessInventoryError(err error) bool {
 	code, _, _ := apperror.Public(err)
@@ -324,7 +324,7 @@ func (r *Resolver) inventoryVersionSummaries(ctx context.Context, tenant identit
 }
 func inventoryItem(view inventorycore.ItemView) *graphql1.InventoryItem {
 	row := view.Item
-	out := &graphql1.InventoryItem{ID: row.ID.String(), IdentityID: row.IdentityID.String(), EnvironmentID: row.EnvironmentID.String(), TypeCode: row.TypeCode, Name: row.Name, Material: row.Material, Color: row.Color, Quantity: row.Quantity, Condition: row.Condition, Observation: row.Observation, Limitation: row.Limitation, ConfidenceBps: row.ConfidenceBps, Origin: row.Origin, Declared: row.Declared, Decision: row.Decision, RejectionReason: row.RejectionReason, RejectionText: row.RejectionText, Version: row.Version, Evidence: []*graphql1.InventoryEvidence{}}
+	out := &graphql1.InventoryItem{ID: row.ID.String(), IdentityID: row.IdentityID.String(), EnvironmentID: row.EnvironmentID.String(), TypeCode: row.TypeCode, Name: row.Name, Material: row.Material, Color: row.Color, Quantity: row.Quantity, Condition: row.Condition, Observation: row.Observation, Limitation: row.Limitation, ConfidenceBps: row.ConfidenceBps, Origin: row.Origin, Declared: row.Declared, Decision: row.Decision, RejectionReason: row.RejectionReason, RejectionText: row.RejectionText, Version: row.Version, Evidence: []*graphql1.InventoryEvidence{}, AttributeSources: inventoryAttributeSources(view.Sources)}
 	if len(row.Suggested) > 0 {
 		var value map[string]any
 		_ = json.Unmarshal(row.Suggested, &value)
@@ -345,6 +345,18 @@ func inventoryItem(view inventorycore.ItemView) *graphql1.InventoryItem {
 			retention = &e.RetentionAvailability
 		}
 		out.Evidence = append(out.Evidence, &graphql1.InventoryEvidence{ID: e.Evidence.ID.String(), Kind: e.Evidence.Kind, MediaID: e.Evidence.MediaID.String(), FrameID: frame, Region: region, Position: e.Evidence.Position, Availability: e.Availability, RetentionAvailability: retention})
+	}
+	return out
+}
+
+// inventoryAttributeSources projects the per-attribute provenance of an item.
+// It carries identifiers and kinds only: a cited note's text is read through
+// the note's own authorized query, never through the item.
+func inventoryAttributeSources(rows []database.InventoryItemAttributeSource) []*graphql1.InventoryAttributeSource {
+	out := make([]*graphql1.InventoryAttributeSource, 0, len(rows))
+	for _, row := range rows {
+		source := &graphql1.InventoryAttributeSource{ID: row.ID.String(), AttributeName: row.AttributeName, SourceKind: row.SourceKind, NoteID: optionalID(row.NoteID), RevisionID: optionalID(row.RevisionID), VisualEvidenceID: optionalID(row.VisualEvidenceID), ReviewedBy: optionalID(row.ReviewedBy), CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano)}
+		out = append(out, source)
 	}
 	return out
 }
@@ -459,21 +471,63 @@ func uniqueIDs(values []identity.ID) []identity.ID {
 	return unique
 }
 
-func (r *Resolver) inventorySingleItem(ctx context.Context, tenant identity.ID, row database.InventoryItem) (*graphql1.InventoryItem, error) {
+// inventoryItems projects many items with one read each for evidence,
+// availability and provenance, in the order given.
+func (r *Resolver) inventoryItems(ctx context.Context, tenant identity.ID, rows []database.InventoryItem) ([]*graphql1.InventoryItem, error) {
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	ids := make([]identity.ID, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
 	var evidence []database.InventoryItemEvidence
+	var sources map[identity.ID][]database.InventoryItemAttributeSource
 	availability := map[identity.ID]string{}
 	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenant, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND item_id=?", tenant, row.ID).Order("position,id").Find(&evidence).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND item_id IN ?", tenant, ids).Order("item_id,position,id").Find(&evidence).Error; err != nil {
 			return err
 		}
 		var err error
+		if sources, err = inventorycore.LoadAttributeSources(tx, tenant, ids); err != nil {
+			return err
+		}
 		availability, err = inventorycore.LoadEvidenceAvailability(tx, tenant, evidence)
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	view := inventorycore.ItemView{Item: row}
+	byItem := make(map[identity.ID][]inventorycore.EvidenceView, len(rows))
+	for _, e := range evidence {
+		byItem[e.ItemID] = append(byItem[e.ItemID], inventorycore.EvidenceView{Evidence: e, Availability: availability[e.ID]})
+	}
+	out := make([]*graphql1.InventoryItem, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, inventoryItem(inventorycore.ItemView{Item: row, Evidence: byItem[row.ID], Sources: sources[row.ID]}))
+	}
+	return out, nil
+}
+
+func (r *Resolver) inventorySingleItem(ctx context.Context, tenant identity.ID, row database.InventoryItem) (*graphql1.InventoryItem, error) {
+	var evidence []database.InventoryItemEvidence
+	var sources map[identity.ID][]database.InventoryItemAttributeSource
+	availability := map[identity.ID]string{}
+	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenant, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND item_id=?", tenant, row.ID).Order("position,id").Find(&evidence).Error; err != nil {
+			return err
+		}
+		var err error
+		if sources, err = inventorycore.LoadAttributeSources(tx, tenant, []identity.ID{row.ID}); err != nil {
+			return err
+		}
+		availability, err = inventorycore.LoadEvidenceAvailability(tx, tenant, evidence)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	view := inventorycore.ItemView{Item: row, Sources: sources[row.ID]}
 	for _, e := range evidence {
 		view.Evidence = append(view.Evidence, inventorycore.EvidenceView{Evidence: e, Availability: availability[e.ID]})
 	}

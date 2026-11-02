@@ -1,6 +1,7 @@
-import { appendVideoChunk, discardVideoDraft, finalizeVideoDraft, saveVideoDraft, type VideoDraft } from "./video-drafts";
+import { fixWebmDuration } from "@fix-webm-duration/fix";
+import { appendVideoChunk, discardVideoDraft, finalizeVideoDraft, replaceVideoChunks, saveVideoDraft, videoChunks, type VideoDraft } from "./video-drafts";
 
-const candidateTypes = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+const candidateTypes = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm", "video/mp4;codecs=avc1.42E01E", "video/mp4"];
 
 export function supportedVideoMime(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -59,7 +60,18 @@ export async function startVideoRecorder(
           if (recorderError) throw recorderError;
           if (writeError) throw writeError;
           if (current.chunkCount < 1) throw new Error("A gravação foi interrompida antes de salvar qualquer trecho. Grave novamente.");
-          resolve(await finalizeVideoDraft(current, hash));
+          let draft = current;
+          if (current.contentType.toLowerCase().startsWith("video/webm")) {
+            const chunks = await videoChunks(current.id, current.chunkCount);
+            const original = new Blob(chunks, { type: current.contentType });
+            const fixed = await fixWebmDuration(original, elapsed() * 1000, { logger: false });
+            if (fixed.size > current.maxBytes) throw new Error("O vídeo excedeu o limite de tamanho desta tentativa. Grave novamente.");
+            if (fixed.size !== original.size) {
+              await replaceVideoChunks(current.id, [fixed]);
+              draft = { ...current, chunkCount: 1, sizeBytes: fixed.size };
+            }
+          }
+          resolve(await finalizeVideoDraft(draft, hash));
         } catch (error) { reject(error); }
       };
       if (recorder.state === "inactive") void finish();

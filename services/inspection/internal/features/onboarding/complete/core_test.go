@@ -3,6 +3,7 @@ package complete
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -22,12 +23,78 @@ type activationInvitationRecorder struct {
 	count       int
 	destination string
 	url         string
+	err         error
 }
 
 func (r *activationInvitationRecorder) SendActivationInvitation(_ context.Context, destination, url string) error {
 	r.count++
 	r.destination, r.url = destination, url
-	return nil
+	return r.err
+}
+
+func TestInspectionInternalFailuresRemainGeneric(t *testing.T) {
+	err := mapInspectionError(apperror.Wrap(apperror.Internal, errors.New("provider secret")))
+	if code, field, message := apperror.Public(err); code != apperror.Internal || field != "" || message != "Não foi possível concluir a operação." {
+		t.Fatalf("internal inspection failure public contract = code:%s field:%q message:%q", code, field, message)
+	}
+}
+
+func TestAssetErrorsAreMappedToBrazilianPortuguese(t *testing.T) {
+	err := mapAssetError(apperror.New(apperror.InvalidInput, "address", "address exceeds limit"))
+	if code, field, message := apperror.Public(err); code != apperror.InvalidInput || field != "address" || message != "Confira os dados do imóvel antes de continuar." {
+		t.Fatalf("asset validation was not mapped to a safe Portuguese message: code=%s field=%q message=%q", code, field, message)
+	}
+}
+
+func TestCatalogErrorsAreMappedWithoutLeakingTechnicalDetails(t *testing.T) {
+	err := mapCatalogError(apperror.New(apperror.InvalidInput, "templateId", "database constraint detail"))
+	if code, field, message := apperror.Public(err); code != apperror.InvalidInput || field != "templateId" || message != "Selecione um modelo válido para o imóvel." {
+		t.Fatalf("catalog validation was not safely mapped: code=%s field=%q message=%q", code, field, message)
+	}
+}
+
+func TestParticipantErrorsAreMappedWithoutLeakingTechnicalDetails(t *testing.T) {
+	err := mapParticipantError(apperror.New(apperror.InvalidInput, "email", "provider response detail"))
+	if code, field, message := apperror.Public(err); code != apperror.InvalidInput || field != "email" || message != "Confira os dados da pessoa responsável e tente novamente." {
+		t.Fatalf("participant validation was not safely mapped: code=%s field=%q message=%q", code, field, message)
+	}
+}
+
+func TestOnboardingErrorMappersPreserveAuthorizationCodes(t *testing.T) {
+	for _, code := range []apperror.Code{apperror.Forbidden, apperror.SessionExpired} {
+		t.Run(string(code), func(t *testing.T) {
+			original := apperror.New(code, "session", "Acesso negado. Entre novamente.")
+			for _, mapped := range []error{mapInspectionError(original), mapAssetError(original)} {
+				gotCode, field, message := apperror.Public(mapped)
+				if gotCode != code || field != "session" || message != "Acesso negado. Entre novamente." {
+					t.Fatalf("authorization failure was replaced: code=%s field=%q message=%q", gotCode, field, message)
+				}
+			}
+		})
+	}
+}
+
+func TestOnboardingErrorMappersPreservePublicOperationalCodesSafely(t *testing.T) {
+	cases := []struct {
+		code    apperror.Code
+		message string
+	}{
+		{apperror.DependencyUnavailable, "Um serviço necessário está temporariamente indisponível. Tente novamente."},
+		{apperror.RateLimited, "Muitas tentativas foram realizadas. Aguarde um momento e tente novamente."},
+		{apperror.Conflict, "Os dados foram alterados. Atualize a página e tente novamente."},
+		{apperror.Unauthenticated, "Sua sessão expirou. Entre novamente para continuar."},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.code), func(t *testing.T) {
+			original := apperror.New(tc.code, "assetId", "technical provider detail")
+			for _, mapped := range []error{mapInspectionError(original), mapAssetError(original)} {
+				code, field, message := apperror.Public(mapped)
+				if code != tc.code || field != "assetId" || message != tc.message {
+					t.Fatalf("operational error mapping = code:%s field:%q message:%q", code, field, message)
+				}
+			}
+		})
+	}
 }
 
 func TestCompleteRejectsMissingDependencies(t *testing.T) {

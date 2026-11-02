@@ -1,5 +1,19 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { collectionRows, installRuntimeGuards, loginAsLocalAdmin, navigateAdmin } from "./support/auth";
+
+const waitForAccessPage = (page: Page) => page.waitForResponse((response) => response.url().endsWith("/graphql") && response.request().postData()?.includes("query AdminAccess") === true);
+
+/** The collection is paginated by id (25 per page) and the QA tenant accumulates invitations, so the new row may be on a later page. */
+async function revealPaginatedRow(page: Page, row: Locator, nextResponse: (page: Page) => Promise<unknown>): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (await row.first().waitFor({ state: "visible", timeout: 3_000 }).then(() => true, () => false)) return;
+    const next = page.getByRole("button", { name: "Próxima" });
+    if (!(await next.isVisible())) return;
+    const loaded = nextResponse(page);
+    await next.click();
+    await loaded;
+  }
+}
 
 test.describe("authenticated Admin against the local stack", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
@@ -33,8 +47,11 @@ test.describe("authenticated Admin against the local stack", () => {
     await page.getByRole("textbox", { name: "E-mail", exact: true }).fill(inviteEmail);
     await page.getByLabel("Confirme o e-mail").fill(inviteEmail);
     await page.getByLabel("Perfil de acesso").selectOption("EMPLOYEE");
+    const reloadedAccess = waitForAccessPage(page);
     await page.getByRole("button", { name: "Salvar operação" }).click();
+    await reloadedAccess;
     const employee = collectionRows(page).filter({ hasText: inviteEmail });
+    await revealPaginatedRow(page, employee, waitForAccessPage);
     await expect(employee).toContainText("Imobiliária");
     await expect(employee).toContainText("Aguardando ativação");
   });

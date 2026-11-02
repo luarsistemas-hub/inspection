@@ -177,16 +177,16 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	}
 	if in.Source != SourceScheduled {
 		roles := []string{auth.TenantAdmin, auth.Manager, auth.Employee}
-		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, nil, true); err != nil {
+		if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Product: auth.DashboardProduct, Roles: roles, Mutate: true}); err != nil {
 			return View{}, err
 		}
-		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
+		if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
 			if apperror.Is(err, apperror.Forbidden) {
 				return View{}, apperror.New(apperror.NotFound, "", "resource not found")
 			}
 			return View{}, err
 		}
-		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
+		if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
 			if apperror.Is(err, apperror.Forbidden) {
 				return View{}, apperror.New(apperror.NotFound, "", "resource not found")
 			}
@@ -275,7 +275,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		}
 		referencePayload, _ := json.Marshal(referenceDocument)
 		reference := database.ReferenceSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ReferenceVersionID: in.ReferenceVersionID, ComparisonMode: string(comparisonMode), Payload: referencePayload, CreatedAt: now}
-		requirements := createCaptureRequirements(document, comparisonMode, originReference)
+		requirements := CaptureRequirementsForCreation(document, comparisonMode, originReference)
 		requirementPayload, _ := json.Marshal(requirements)
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, Kind: "INSPECTION", MediaKind: document.MediaKind(), TemplateVersionID: template.Version.ID, ReferencePayload: referencePayload, PolicyPayload: policyPayload, Requirements: requirementPayload, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
 		for _, row := range []any{&inspection, &responsibility, &policy, &reference, &draft} {
@@ -324,7 +324,9 @@ func validateReviewerMembership(ctx context.Context, db *gorm.DB, tenantID, memb
 	})
 }
 
-func createCaptureRequirements(document catalog.TemplateDocument, comparisonMode catalog.ComparisonMode, originReference *originresolve.Result) []capturecore.Requirement {
+// CaptureRequirementsForCreation derives the initial capture requirements from
+// the pinned template document and optional origin reference.
+func CaptureRequirementsForCreation(document catalog.TemplateDocument, comparisonMode catalog.ComparisonMode, originReference *originresolve.Result) []capturecore.Requirement {
 	requirements := make([]capturecore.Requirement, 0, len(document.Requirements))
 	if originReference != nil {
 		requirements = append(requirements, originReference.Requirements...)
@@ -394,7 +396,7 @@ func (s Service) transition(ctx context.Context, tenantID, inspectionID identity
 	if err != nil {
 		return View{}, err
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.Inspection.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.Inspection.BusinessUnitID}, Mutate: true}); err != nil {
 		return View{}, err
 	}
 	if current.Inspection.Status == target {
@@ -415,7 +417,16 @@ func (s Service) transition(ctx context.Context, tenantID, inspectionID identity
 		if err := tx.Model(&database.Responsibility{}).Where("tenant_id=? AND inspection_id=? AND status NOT IN ?", tenantID, inspectionID, []string{"SUBMITTED", "EXPIRED", "REVOKED", "CANCELED"}).Updates(map[string]any{"status": map[bool]string{true: "CANCELED", false: "REVOKED"}[target == "CANCELED"], "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
 			return err
 		}
-		return createOutbox(tx, identity.NewID(), tenantID, inspectionID, "inspection.state_changed.v1", map[string]any{"inspectionId": inspectionID, "responsibilityId": current.Responsibility.ID, "from": current.Inspection.Status, "to": target, "reason": strings.TrimSpace(reason), "revokeSessions": true}, ctx, now)
+		if err := createOutbox(tx, identity.NewID(), tenantID, inspectionID, "inspection.state_changed.v1", map[string]any{"inspectionId": inspectionID, "responsibilityId": current.Responsibility.ID, "from": current.Inspection.Status, "to": target, "reason": strings.TrimSpace(reason), "revokeSessions": true}, ctx, now); err != nil {
+			return err
+		}
+		// The last open inspection of a project stage may end by cancellation or
+		// invalidation; the stage then completes (when another one was completed).
+		closed := current.Inspection
+		closed.Status = target
+		metadata, _ := requestctx.FromContext(ctx)
+		_, err := projectcore.CompleteStageOfInspection(ctx, tx, closed, now, metadata.CorrelationID)
+		return err
 	})
 	if err != nil {
 		return View{}, err
@@ -455,7 +466,7 @@ func (s Service) Get(ctx context.Context, tenantID, inspectionID identity.ID) (V
 	if err != nil {
 		return View{}, err
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: out.Inspection.BusinessUnitID}, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: out.Inspection.BusinessUnitID}}); err != nil {
 		return View{}, err
 	}
 	return out, nil
@@ -468,7 +479,7 @@ func (s Service) List(ctx context.Context, in ListInput) (ListResult, error) {
 	if in.First > 100 {
 		return ListResult{}, apperror.New(apperror.InvalidInput, "first", "page size cannot exceed 100")
 	}
-	principal, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
+	principal, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}})
 	if err != nil {
 		return ListResult{}, err
 	}

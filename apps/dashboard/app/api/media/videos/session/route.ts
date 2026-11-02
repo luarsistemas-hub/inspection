@@ -11,7 +11,7 @@ function sameOrigin(request: Request): boolean {
 
 function cookieOptions(request: Request, name: string, value: string, maxAge: number): string {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return `${name}=${encodeURIComponent(value)}; Path=/api/media/videos/; Max-Age=${maxAge}; HttpOnly; SameSite=Strict${secure}`;
+  return `${name}=${encodeURIComponent(value)}; Path=/api/media/; Max-Age=${maxAge}; HttpOnly; SameSite=Strict${secure}`;
 }
 
 export async function POST(request: Request): Promise<Response> {

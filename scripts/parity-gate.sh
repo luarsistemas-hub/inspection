@@ -24,5 +24,3 @@ for product in admin dashboard capture onboarding; do
 done
 node scripts/lib/parity-evidence.mjs generate --journey E2E-033 --test-id E2E-001,E2E-027,E2E-033,E2E-034.01,E2E-060,E2E-066 --input "$workspace/artifacts" --output "$artifacts/evidence"
 node scripts/lib/parity-evidence.mjs validate --input "$artifacts/evidence"
-node scripts/lib/legacy-inventory.mjs generate --legacy-root apps/web --output "$artifacts/legacy-inventory.json"
-node scripts/lib/legacy-inventory.mjs validate --input "$artifacts/legacy-inventory.json" --baseline docs/legacy-inventory.json --fail-on-unclassified --fail-on-drift

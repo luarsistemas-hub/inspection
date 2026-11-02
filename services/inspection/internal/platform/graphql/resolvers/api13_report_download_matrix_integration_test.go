@@ -118,7 +118,7 @@ func TestVV_IT_507ReportDownloadRequiresAuthentication(t *testing.T) {
 
 func TestVV_IT_508ReportDownloadRequiresReadCapability(t *testing.T) {
 	fx := newAPI11Fixture(t)
-	actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.OrganizationAdmin}}, CorrelationID: "vv-it-508"})
+	actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.OrganizationAdmin}, ProductEntitlements: auth.ProductsForRole(auth.OrganizationAdmin)}, CorrelationID: "vv-it-508"})
 	assertAPI11Rejected(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api13Query(fx.snapshotID), actor, "", ""), "FORBIDDEN")
 }
 
@@ -143,6 +143,35 @@ func TestVV_IT_510ReportDownloadAdapterUnavailable(t *testing.T) {
 
 func TestVV_IT_511ReportDownloadInternalErrorHidesSecret(t *testing.T) {
 	assertAPI13Failure(t, "internal", "INTERNAL")
+}
+
+// IT-512: a report whose PDF export is queued or being rendered answers with a
+// pending status the Dashboard polls (PENDING while queued, PROCESSING while
+// rendering; ADR-014) with no URL, and the download is only exposed once the
+// object is published.
+func TestVV_IT_512PendingExportReturnsPendingUntilObjectPublication(t *testing.T) {
+	fx := newAPI11Fixture(t)
+	job := database.ReportPDFJob{ID: identity.NewID(), TenantID: fx.seed.TenantID, SnapshotID: fx.snapshotID, Audience: "PDF", RendererVersion: 1, Status: "QUEUED", NextAttemptAt: time.Now().UTC(), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := fx.h.AdminDB.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	for jobStatus, polled := range map[string]string{"QUEUED": "PENDING", "PROCESSING": "PROCESSING"} {
+		if err := fx.h.AdminDB.Model(&database.ReportPDFJob{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, job.ID).Update("status", jobStatus).Error; err != nil {
+			t.Fatal(err)
+		}
+		response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api13Query(fx.snapshotID), fx.ctx, "", "")
+		if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"status":"`+polled+`"`) || !strings.Contains(response, `"url":""`) || strings.Contains(response, `"status":"READY"`) {
+			t.Fatalf("export %s must poll as %s without a download: %s", jobStatus, polled, response)
+		}
+	}
+	publishAPI13PDF(t, fx, "PDF")
+	if err := fx.h.AdminDB.Model(&database.ReportPDFJob{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, job.ID).Update("status", "READY").Error; err != nil {
+		t.Fatal(err)
+	}
+	ready := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api13Query(fx.snapshotID), fx.ctx, "", "")
+	if strings.Contains(ready, `"errors"`) || !strings.Contains(ready, `"status":"READY"`) || strings.Contains(ready, `"url":""`) {
+		t.Fatalf("download after object publication = %s", ready)
+	}
 }
 
 func TestVV_IT_513MissingStoreDependencyIsDependencyUnavailable(t *testing.T) {

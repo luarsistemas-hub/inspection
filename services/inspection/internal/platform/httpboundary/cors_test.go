@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestCORSAllowsOnlyConfiguredOrigin(t *testing.T) {
+func TestTFE_IT_221CORSAllowsOnlyConfiguredOrigin(t *testing.T) {
 	h := CORS("https://app.example", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := httptest.NewRequest(http.MethodOptions, "/graphql", nil)
 	req.Header.Set("Origin", "https://app.example")
@@ -38,7 +38,7 @@ func containsHeader(headers, wanted string) bool {
 	return false
 }
 
-func TestCORSAllowsCredentialsAndCSRFHeaderForEveryConfiguredOrigin(t *testing.T) {
+func TestTFE_IT_221CORSAllowsCredentialsAndCSRFHeaderForEveryConfiguredOrigin(t *testing.T) {
 	h := CORS([]string{"https://admin.example", "https://capture.example"}, "https://capture.example", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	admin := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/graphql", nil)
@@ -72,5 +72,33 @@ func TestCORSAllowsAuthenticatedMediaReadPreflight(t *testing.T) {
 	h.ServeHTTP(response, req)
 	if response.Code != http.StatusNoContent || !containsHeader(response.Header().Get("Access-Control-Allow-Methods"), http.MethodGet) || !containsHeader(response.Header().Get("Access-Control-Allow-Headers"), "Authorization") || !containsHeader(response.Header().Get("Access-Control-Allow-Headers"), "Range") || !containsHeader(response.Header().Get("Access-Control-Expose-Headers"), "Content-Range") {
 		t.Fatalf("media preflight denied: status=%d headers=%v", response.Code, response.Header())
+	}
+}
+
+func TestTFE_IT_221PreflightAcceptsExactProductOriginsAndRejectsLookalikes(t *testing.T) {
+	exact := []string{"https://admin.example", "https://dashboard.example", "https://capture.example"}
+	h := CORS(exact, "https://capture.example", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	preflight := func(origin string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodOptions, "/graphql", nil)
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+		recorder := httptest.NewRecorder()
+		h.ServeHTTP(recorder, req)
+		return recorder
+	}
+	for _, origin := range exact {
+		recorder := preflight(origin)
+		if recorder.Code != http.StatusNoContent || recorder.Header().Get("Access-Control-Allow-Origin") != origin {
+			t.Fatalf("exact origin %s: status=%d allow=%q", origin, recorder.Code, recorder.Header().Get("Access-Control-Allow-Origin"))
+		}
+	}
+	for _, lookalike := range []string{
+		"https://admin.example.evil.test", "https://xadmin.example", "https://admin.example:8443", "http://admin.example",
+		"https://dashboard.example/", "https://ADMIN.example", "https://capture.example.attacker.test", "null", "*",
+	} {
+		recorder := preflight(lookalike)
+		if recorder.Code != http.StatusForbidden || recorder.Header().Get("Access-Control-Allow-Origin") != "" || recorder.Header().Get("Access-Control-Allow-Credentials") != "" {
+			t.Fatalf("lookalike %q: status=%d headers=%v", lookalike, recorder.Code, recorder.Header())
+		}
 	}
 }

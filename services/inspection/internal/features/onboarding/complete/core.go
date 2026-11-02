@@ -42,6 +42,10 @@ const (
 	activationInvitationPending = "INVITATION_PENDING"
 	activationInvitationSent    = "INVITED"
 	activationInvitationTTL     = 24 * time.Hour
+	// materializationTimeout bounds the detached work that turns confirmed
+	// checkpoints into durable rows, independent of the browser request.
+	materializationTimeout = 60 * time.Second
+	maxIdempotencyKeyRunes = 200
 )
 
 // ActivationInvitationNotifier sends the verified agency owner to the Admin
@@ -72,44 +76,106 @@ type Service struct {
 	Stage              string
 	Now                func() time.Time
 	Within             func(context.Context, identity.ID, func(*gorm.DB) error) error
+	createInspection   inspectionCreator
+}
+
+type inspectionCreator interface {
+	Create(context.Context, inspectioncore.CreateInput) (inspectioncore.View, error)
+}
+
+type inspectionCreateFunc func(context.Context, inspectioncore.CreateInput) (inspectioncore.View, error)
+
+func (f inspectionCreateFunc) Create(ctx context.Context, input inspectioncore.CreateInput) (inspectioncore.View, error) {
+	return f(ctx, input)
 }
 
 // Complete is idempotent per onboarding session. Browser values are ignored;
 // only immutable checkpoints loaded through the verified cookie/CSRF pair are
 // materialized.
+//
+// Materialization is not transactional across slices, so it runs detached from
+// the request's cancellation (a browser that disconnects mid-way must not leave
+// orphaned rows with the session still open) under a per-tenant advisory lock
+// (concurrent calls observe each other's rows instead of racing on unique
+// indexes).
 func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey string) (Result, error) {
 	if s.DB == nil || s.Bus == nil || s.ActivationNotifier == nil || strings.TrimSpace(s.AdminOrigin) == "" || strings.TrimSpace(s.OwnerIssuer) == "" {
 		return Result{}, errors.New("onboarding complete: missing dependency")
 	}
-	if strings.TrimSpace(idempotencyKey) == "" {
-		return Result{}, apperror.New(apperror.InvalidInput, "clientMutationId", "idempotency key is required")
+	if strings.TrimSpace(idempotencyKey) == "" || utf8.RuneCountInString(idempotencyKey) > maxIdempotencyKeyRunes {
+		return Result{}, apperror.New(apperror.InvalidInput, "clientMutationId", "Não foi possível concluir a solicitação. Tente novamente.")
 	}
 	submission, err := s.Sessions.LoadSubmission(ctx, locator, csrf)
 	if err != nil {
 		return Result{}, err
 	}
 	if submission.Session.TenantID == nil || submission.Session.Owner.Subject == "" {
-		return Result{}, apperror.New(apperror.InvalidState, "agency", "agency setup is incomplete")
+		return Result{}, apperror.New(apperror.InvalidState, "agency", "Preencha os dados da imobiliária antes de continuar.")
 	}
 	tenantID := *submission.Session.TenantID
 	if existing, ok, err := s.existing(ctx, tenantID, submission.Session.ID); err != nil {
 		return Result{}, err
 	} else if ok && existing.InspectionID != nil {
-		current := submission.Session
-		if current.State != coordinator.StateSubmitted {
-			current, err = s.Sessions.MarkSubmitted(ctx, locator, csrf)
-			if err != nil {
-				return Result{}, err
-			}
+		return s.finishExisting(ctx, locator, csrf, submission, existing)
+	}
+	if _, err := coordinator.ValidateSubmit(coordinator.SubmitInput{Now: s.now(), Steps: submission.Steps, DeliveryState: deliveryPending, IdempotencyKey: idempotencyKey}); err != nil {
+		return Result{}, err
+	}
+
+	work, cancel := context.WithTimeout(context.WithoutCancel(ctx), materializationTimeout)
+	defer cancel()
+	var result Result
+	err = s.DB.WithContext(work).Transaction(func(lock *gorm.DB) error {
+		if err := lock.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "onboarding-complete:"+tenantID.String()).Error; err != nil {
+			return err
 		}
-		_, member, err := s.onboardingOwner(ctx, tenantID, submission.Session.Owner.Subject)
+		var runErr error
+		result, runErr = s.materialize(work, locator, csrf, idempotencyKey)
+		return runErr
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	return result, nil
+}
+
+// finishExisting returns the stored result of an already created request and
+// completes the remaining idempotent steps (session state, owner activation).
+func (s Service) finishExisting(ctx context.Context, locator, csrf string, submission onboardingsession.Submission, existing database.OnboardingRequest) (Result, error) {
+	tenantID := *submission.Session.TenantID
+	current := submission.Session
+	var err error
+	if current.State != coordinator.StateSubmitted {
+		current, err = s.Sessions.MarkSubmitted(ctx, locator, csrf)
 		if err != nil {
 			return Result{}, err
 		}
-		if err := s.ensureActivationInvitation(ctx, current, member); err != nil {
-			return Result{}, err
-		}
-		return completedResult(current, existing, *existing.InspectionID), nil
+	}
+	_, member, err := s.onboardingOwner(ctx, tenantID, submission.Session.Owner.Subject)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := s.ensureActivationInvitation(ctx, current, member); err != nil {
+		return Result{}, err
+	}
+	return completedResult(current, existing, *existing.InspectionID), nil
+}
+
+// materialize runs while holding the tenant lock. It reloads the submission so
+// a concurrent call that already finished is returned as an idempotent success.
+func (s Service) materialize(ctx context.Context, locator, csrf, idempotencyKey string) (Result, error) {
+	submission, err := s.Sessions.LoadSubmission(ctx, locator, csrf)
+	if err != nil {
+		return Result{}, err
+	}
+	if submission.Session.TenantID == nil || submission.Session.Owner.Subject == "" {
+		return Result{}, apperror.New(apperror.InvalidState, "agency", "Preencha os dados da imobiliária antes de continuar.")
+	}
+	tenantID := *submission.Session.TenantID
+	if existing, ok, err := s.existing(ctx, tenantID, submission.Session.ID); err != nil {
+		return Result{}, err
+	} else if ok && existing.InspectionID != nil {
+		return s.finishExisting(ctx, locator, csrf, submission, existing)
 	}
 
 	now := s.now()
@@ -134,11 +200,11 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 
 	segment, analysisType, template, err := s.ensureCatalog(domainCtx, tenantID)
 	if err != nil {
-		return Result{}, fmt.Errorf("prepare onboarding catalog: %w", err)
+		return Result{}, mapCatalogError(err)
 	}
 	participant, err := s.ensureParticipant(domainCtx, tenantID, unit.ID, submission)
 	if err != nil {
-		return Result{}, fmt.Errorf("prepare onboarding participant: %w", err)
+		return Result{}, mapParticipantError(err)
 	}
 	property := submission.Steps[onboardingsession.StepProperty]
 	addressText := stepString(property, "address")
@@ -159,20 +225,26 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		IdempotencyKey: "onboarding:asset:" + submission.Session.ID.String(),
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("prepare onboarding asset: %w", err)
+		return Result{}, mapAssetError(err)
 	}
 	var referenceVersionID *identity.ID
 	deadline, err := deadlineAt(property)
 	if err != nil {
 		return Result{}, err
 	}
-	inspection, err := (inspectioncore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}, Now: s.Now}).Create(domainCtx, inspectioncore.CreateInput{
+	inspectionInput := inspectioncore.CreateInput{
 		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ComparisonMode: templatecatalog.ChecklistOnly,
 		Source: inspectioncore.SourceManual, SourceKey: "onboarding:" + submission.Session.ID.String(),
 		Reason: "Primeira vistoria criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
-	})
+	}
+	var inspection inspectioncore.View
+	if s.createInspection != nil {
+		inspection, err = s.createInspection.Create(domainCtx, inspectionInput)
+	} else {
+		inspection, err = (inspectioncore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}, Now: s.Now}).Create(domainCtx, inspectionInput)
+	}
 	if err != nil {
-		return Result{}, fmt.Errorf("create onboarding inspection: %w", err)
+		return Result{}, mapInspectionError(err)
 	}
 	_ = analysisType // The global prompt is resolved and pinned by inspection creation.
 
@@ -197,6 +269,83 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		return Result{}, err
 	}
 	return completedResult(current, request, *request.InspectionID), nil
+}
+
+func mapInspectionError(err error) error {
+	code, field, _ := apperror.Public(err)
+	if code == apperror.Internal {
+		return apperror.Wrap(apperror.Internal, fmt.Errorf("create onboarding inspection: %w", err))
+	}
+	if code == apperror.Forbidden || code == apperror.SessionExpired {
+		return err
+	}
+	if message, ok := preservedDependencyMessage(code); ok {
+		return apperror.New(code, field, message)
+	}
+	message := "Confira os dados da vistoria antes de continuar."
+	if field == "templateId" {
+		message = "Selecione um modelo ativo para a vistoria."
+	} else if field == "participantId" {
+		message = "Selecione uma pessoa responsável válida para a vistoria."
+	} else if field == "assetId" {
+		message = "Selecione um imóvel válido para a vistoria."
+	}
+	return apperror.New(code, field, message)
+}
+
+func mapAssetError(err error) error {
+	code, field, _ := apperror.Public(err)
+	if code == apperror.Internal {
+		return apperror.Wrap(apperror.Internal, err)
+	}
+	if code == apperror.Forbidden || code == apperror.SessionExpired {
+		return err
+	}
+	if message, ok := preservedDependencyMessage(code); ok {
+		return apperror.New(code, field, message)
+	}
+	message := "Confira os dados do imóvel antes de continuar."
+	if field == "assignments" {
+		message = "Selecione uma pessoa responsável válida para o imóvel."
+	} else if field == "templateId" {
+		message = "Selecione um modelo válido para o imóvel."
+	} else if field == "location" {
+		message = "Confira a localização informada para o imóvel."
+	}
+	return apperror.New(code, field, message)
+}
+
+func mapCatalogError(err error) error {
+	return mapAssetError(err)
+}
+
+func mapParticipantError(err error) error {
+	code, field, _ := apperror.Public(err)
+	if code == apperror.Internal {
+		return apperror.Wrap(apperror.Internal, err)
+	}
+	if code == apperror.Forbidden || code == apperror.SessionExpired {
+		return err
+	}
+	if message, ok := preservedDependencyMessage(code); ok {
+		return apperror.New(code, field, message)
+	}
+	return apperror.New(code, field, "Confira os dados da pessoa responsável e tente novamente.")
+}
+
+func preservedDependencyMessage(code apperror.Code) (string, bool) {
+	switch code {
+	case apperror.DependencyUnavailable:
+		return "Um serviço necessário está temporariamente indisponível. Tente novamente.", true
+	case apperror.RateLimited:
+		return "Muitas tentativas foram realizadas. Aguarde um momento e tente novamente.", true
+	case apperror.Conflict:
+		return "Os dados foram alterados. Atualize a página e tente novamente.", true
+	case apperror.Unauthenticated:
+		return "Sua sessão expirou. Entre novamente para continuar.", true
+	default:
+		return "", false
+	}
 }
 
 func (s Service) ensureActivationInvitation(ctx context.Context, current onboardingsession.Session, member database.Membership) error {
@@ -391,7 +540,7 @@ func deadlineAt(payload coordinator.StepPayload) (time.Time, error) {
 	value := stepString(payload, "deadline")
 	date, err := time.Parse("2006-01-02", value)
 	if err != nil {
-		return time.Time{}, apperror.New(apperror.InvalidInput, "deadline", "invalid inspection deadline")
+		return time.Time{}, apperror.New(apperror.InvalidInput, "deadline", "Informe um prazo válido para a vistoria.")
 	}
 	return date.Add(24*time.Hour - time.Nanosecond), nil
 }

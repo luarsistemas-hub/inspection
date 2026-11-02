@@ -50,6 +50,228 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 	}
 }
 
+func TestInternalUserRecipientChannelBackfill107IsIdempotent(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 107 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "internal_user_verified_email_recipient_channel" || !step.Compatible {
+		t.Fatalf("unexpected internal recipient migration: %+v", step)
+	}
+	for _, required := range []string{
+		"DELETE FROM notifications.recipient_channels AS duplicate",
+		"PARTITION BY tenant_id, recipient_membership_id, channel, destination",
+		"ORDER BY verified_at IS NULL, NOT selected, id",
+		"ranked.rn > 1",
+		"access.user_invitations",
+		"invitation.accepted_at",
+		"membership.status='ACTIVE'",
+		"membership.role <> 'CUSTOMER_VIEWER'",
+		"lower(btrim(invitation.email, E' \\t\\r\\n'))",
+		"existing_channel.channel='EMAIL'",
+		"CREATE UNIQUE INDEX IF NOT EXISTS uq_recipient_channel",
+		"ON CONFLICT (tenant_id, recipient_membership_id, channel, destination) DO NOTHING",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration 107 missing %q", required)
+		}
+	}
+	if strings.Index(step.SQL, "DELETE FROM notifications.recipient_channels") > strings.Index(step.SQL, "CREATE UNIQUE INDEX") {
+		t.Fatal("migration must deduplicate recipient channels before creating the unique index")
+	}
+	if LatestVersion() != 116 {
+		t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+	}
+}
+
+func TestTranscriptionAudioDeletionAttempts108IsIdempotentAndDiscoversDueTenants(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 108 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "transcription_audio_deletion_attempts" || !step.Compatible {
+		t.Fatalf("unexpected audio deletion migration: %+v", step)
+	}
+	for _, required := range []string{
+		"ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0",
+		"EXCEPTION WHEN duplicate_object THEN NULL",
+		"CREATE INDEX IF NOT EXISTS idx_audio_notes_retention_due",
+		"CREATE OR REPLACE FUNCTION transcription.discover_due_tenants(p_retention interval)",
+		"SECURITY DEFINER SET search_path=pg_catalog",
+		"j.generation=1",
+		"j.status='PROCESSING' AND j.lease_deadline<=now()",
+		"d.status IN ('PENDING','FAILED')",
+		"REVOKE ALL ON FUNCTION transcription.discover_due_tenants(interval) FROM PUBLIC",
+		"GRANT EXECUTE ON FUNCTION transcription.discover_due_tenants(interval) TO inspection_runtime",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration 108 missing %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "ALTER ROLE") || strings.Contains(step.SQL, "PASSWORD") {
+		t.Fatal("migration 108 must not change database roles")
+	}
+}
+
+func TestReportPublicationInvalidatedBy110IsIdempotent(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 110 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "report_publication_invalidated_by" || !step.Compatible {
+		t.Fatalf("unexpected publication audit migration: %+v", step)
+	}
+	if !strings.Contains(step.SQL, "ADD COLUMN IF NOT EXISTS invalidated_by uuid") {
+		t.Fatalf("migration 110 must add invalidated_by idempotently: %s", step.SQL)
+	}
+	for _, required := range []string{
+		"CREATE UNIQUE INDEX IF NOT EXISTS uq_report_publication_snapshot ON reports.report_publications (tenant_id, snapshot_id)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS uq_report_publication_mutation ON reports.report_publications (tenant_id, client_mutation_id) WHERE client_mutation_id <> ''",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration 110 missing %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "ALTER ROLE") || strings.Contains(step.SQL, "PASSWORD") {
+		t.Fatal("migration 110 must not change database roles")
+	}
+}
+
+func TestTFE_IT_198CustomerAdminEntitlementGuard111IsIdempotentAndCompatible(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 111 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "customer_membership_forbids_admin_entitlement" || !step.Compatible {
+		t.Fatalf("unexpected customer guard migration: %+v", step)
+	}
+	for _, required := range []string{
+		"DELETE FROM access.product_entitlements",
+		"CREATE OR REPLACE FUNCTION access.forbid_customer_admin_entitlement()",
+		"DROP TRIGGER IF EXISTS customer_admin_entitlement_guard ON access.product_entitlements",
+		"DROP TRIGGER IF EXISTS customer_role_admin_entitlement_guard ON access.memberships",
+		"DEFERRABLE INITIALLY DEFERRED",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration 111 missing %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "ALTER ROLE") || strings.Contains(step.SQL, "PASSWORD") {
+		t.Fatal("migration 111 must not change database roles")
+	}
+}
+
+func TestTFE_AccessInvitationReceipts114IsTenantIsolatedAndIdempotent(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 114 {
+			step = candidate
+		}
+	}
+	if step.Name != "access_invitation_receipts" || !step.Compatible {
+		t.Fatalf("unexpected receipts migration: %+v", step)
+	}
+	for _, required := range []string{
+		"CREATE TABLE IF NOT EXISTS access.invitation_receipts",
+		"PRIMARY KEY (tenant_id, client_mutation_id)",
+		"ALTER TABLE access.invitation_receipts FORCE ROW LEVEL SECURITY",
+		"DROP POLICY IF EXISTS tenant_isolation ON access.invitation_receipts",
+		"GRANT SELECT, INSERT, UPDATE ON access.invitation_receipts TO inspection_runtime",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration 114 missing %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "ALTER ROLE") || strings.Contains(step.SQL, "PASSWORD") {
+		t.Fatal("migration 114 must not change database roles")
+	}
+	var guard Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 111 {
+			guard = candidate
+		}
+	}
+	if !strings.Contains(guard.SQL, "SET LOCAL row_security = off") || strings.Index(guard.SQL, "SET LOCAL row_security = off") > strings.Index(guard.SQL, "DELETE FROM access.product_entitlements") {
+		t.Fatal("migration 111 must disable row security before its normalizing DELETE")
+	}
+}
+
+func TestTranscriptionContractsUT025(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Name == "transcription_contracts" {
+			step = candidate
+			break
+		}
+	}
+	if step.Version != 99 || !step.Compatible {
+		t.Fatalf("transcription migration=%+v", step)
+	}
+	for _, required := range []string{
+		"CREATE TABLE IF NOT EXISTS transcription.tenant_policies",
+		"CREATE TABLE IF NOT EXISTS transcription.audio_notes",
+		"CREATE TABLE IF NOT EXISTS transcription.jobs",
+		"CREATE TABLE IF NOT EXISTS transcription.transcript_revisions",
+		"CREATE TABLE IF NOT EXISTS transcription.audio_deletions",
+		"CREATE TABLE IF NOT EXISTS analysis.catalog_note_manifests",
+		"CREATE TABLE IF NOT EXISTS inventory.item_attribute_sources",
+		"UNIQUE NULLS NOT DISTINCT (tenant_id,item_id,attribute_name,source_kind,note_id,revision_id,visual_evidence_id)",
+		"FOREIGN KEY(tenant_id,id,current_revision_id) REFERENCES transcription.transcript_revisions(tenant_id,note_id,id)",
+		"FOREIGN KEY(tenant_id,note_id,revision_id) REFERENCES transcription.transcript_revisions(tenant_id,note_id,id)",
+		"FORCE ROW LEVEL SECURITY",
+		"CREATE POLICY tenant_isolation",
+		"'TRANSCRIPTION'",
+		"audio_duration_ms bigint",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("transcription migration missing %q", required)
+		}
+	}
+	if LatestVersion() != 116 {
+		t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+	}
+}
+
+func TestVoiceMigrationsAddColumnsIdempotentlyUT027(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version < 99 {
+			continue
+		}
+		for _, statement := range strings.Split(step.SQL, ";") {
+			upper := strings.ToUpper(strings.Join(strings.Fields(statement), " "))
+			if strings.Contains(upper, "ADD COLUMN") && !strings.Contains(upper, "ADD COLUMN IF NOT EXISTS") {
+				t.Errorf("migration %d (%s) has non-idempotent ADD COLUMN: %s", step.Version, step.Name, strings.TrimSpace(statement))
+			}
+		}
+	}
+}
+
+func TestPlannerRejectsDuplicateTranscriptionVersionBeforeReturningStepsUT026(t *testing.T) {
+	steps := []Step{
+		{Version: 99, Name: "transcription_contracts", SQL: "SELECT 1", Compatible: true},
+		{Version: 99, Name: "duplicate_transcription_contracts", SQL: "SELECT 2", Compatible: true},
+	}
+	plan, err := Plan(steps, nil)
+	if err == nil || !strings.Contains(err.Error(), "duplicate version 99") {
+		t.Fatalf("plan=%v err=%v, want duplicate-version error", plan, err)
+	}
+	if plan != nil {
+		t.Fatalf("duplicate plan must not expose applicable steps: %v", plan)
+	}
+}
+
 func TestInspectionOriginPromotionMigrationIsTenantScopedAndNonMutating(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {
@@ -85,8 +307,8 @@ func TestInspectionOriginPromotionMigrationIsTenantScopedAndNonMutating(t *testi
 	if strings.Contains(step.SQL, "\nUPDATE ") || strings.Contains(step.SQL, "\nDELETE FROM ") {
 		t.Fatal("promotion migration must not mutate existing rows")
 	}
-	if LatestVersion() != 98 {
-		t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+	if LatestVersion() != 116 {
+		t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 	}
 }
 
@@ -236,8 +458,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 98 {
-			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+		if LatestVersion() != 116 {
+			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 		}
 		return
 	}
@@ -263,8 +485,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 98 {
-			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+		if LatestVersion() != 116 {
+			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 		}
 		return
 	}
@@ -284,8 +506,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 98 {
-			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+		if LatestVersion() != 116 {
+			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 		}
 		return
 	}
@@ -310,8 +532,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 98 {
-			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+		if LatestVersion() != 116 {
+			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 		}
 		return
 	}
@@ -350,8 +572,8 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 98 {
-			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+		if LatestVersion() != 116 {
+			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 		}
 		return
 	}
@@ -375,8 +597,8 @@ func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.
 				t.Fatalf("display-name migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 98 {
-			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
+		if LatestVersion() != 116 {
+			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
 		}
 		return
 	}

@@ -37,7 +37,7 @@ func TestIT031AndIT032OnboardingDefinitionGraphQLBoundary(t *testing.T) {
 		t.Fatalf("supported definition response: %s", supported)
 	}
 	unsupported := request("UNKNOWN")
-	if !strings.Contains(unsupported, "NOT_FOUND") || strings.Contains(unsupported, `"steps"`) {
+	if !strings.Contains(unsupported, "NOT_FOUND") || !strings.Contains(unsupported, "A definição do cadastro não foi encontrada.") || strings.Contains(unsupported, `"steps"`) {
 		t.Fatalf("unsupported definition response: %s", unsupported)
 	}
 }
@@ -49,11 +49,11 @@ func TestOnboardingValidationPayloadProjectsActivationFailures(t *testing.T) {
 		field string
 		code  apperror.Code
 	}{
-		{name: "invalid code", err: apperror.New(apperror.InvalidInput, "code", "invalid code"), field: "code", code: apperror.InvalidInput},
-		{name: "rate limited", err: apperror.New(apperror.RateLimited, "", "retry later"), code: apperror.RateLimited},
-		{name: "expired session", err: apperror.New(apperror.SessionExpired, "session", "session expired"), field: "session", code: apperror.SessionExpired},
+		{name: "invalid code", err: apperror.New(apperror.InvalidInput, "code", "O código informado é inválido."), field: "code", code: apperror.InvalidInput},
+		{name: "rate limited", err: apperror.New(apperror.RateLimited, "", "Aguarde antes de tentar novamente."), code: apperror.RateLimited},
+		{name: "expired session", err: apperror.New(apperror.SessionExpired, "session", "Sua sessão expirou. Confirme seu e-mail novamente para continuar."), field: "session", code: apperror.SessionExpired},
 		{name: "conflict", err: apperror.New(apperror.Conflict, "activation", "activation is already in progress"), field: "activation", code: apperror.Conflict},
-		{name: "password policy", err: apperror.New(apperror.InvalidInput, "password", "password does not meet policy"), field: "password", code: apperror.InvalidInput},
+		{name: "password policy", err: apperror.New(apperror.InvalidInput, "password", "A senha não atende aos requisitos informados."), field: "password", code: apperror.InvalidInput},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			payload, err := onboardingValidationPayload(tc.err, "mutation-1")

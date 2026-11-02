@@ -91,6 +91,20 @@ export async function appendVideoChunk(attemptId: string, sequence: number, blob
   } finally { db.close(); }
 }
 
+/** Replaces a draft's stored chunks after browser-side container metadata repair. */
+export async function replaceVideoChunks(attemptId: string, blobs: Blob[]): Promise<void> {
+  if (!attemptId || blobs.length === 0 || blobs.some((blob) => blob.size === 0)) throw new Error("Partes de vídeo inválidas.");
+  const data = await Promise.all(blobs.map((blob) => blob.arrayBuffer()));
+  const db = await openVideoDatabase();
+  try {
+    const tx = db.transaction(chunksStore, "readwrite");
+    const store = tx.objectStore(chunksStore);
+    store.delete(IDBKeyRange.bound([attemptId, 0], [attemptId, Number.MAX_SAFE_INTEGER]));
+    data.forEach((part, sequence) => store.put({ attemptId, sequence, data: part, type: blobs[sequence].type }));
+    await transactionDone(tx);
+  } finally { db.close(); }
+}
+
 export async function readVideoChunk(attemptId: string, sequence: number): Promise<Blob | undefined> {
   const db = await openVideoDatabase();
   try {

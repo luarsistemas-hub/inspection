@@ -45,7 +45,11 @@ func Setup(d Dependencies) error {
 		} else if err != nil {
 			return nil, err
 		}
-		if _, err := d.Authorizer.Authorize(ctx, input.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, true); err != nil {
+		roles := []string{auth.TenantAdmin, auth.Manager, auth.Employee}
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: input.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, Mutate: true}); err != nil {
+			return nil, err
+		}
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: input.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, Mutate: true, NewWork: true}); err != nil {
 			return nil, err
 		}
 		participantRaw, err := d.Bus.Ask(ctx, participantget.Query{TenantID: input.TenantID, ParticipantID: inspection.ParticipantID})

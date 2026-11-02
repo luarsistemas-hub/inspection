@@ -83,6 +83,50 @@ func TestUT151UT152EnvironmentClipPreparationUsesFixedEnvironmentAndPersistsFram
 	}
 }
 
+func TestVV_IT_050BlackVideoProducesNoPromotableScope(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	ctx := context.Background()
+	h, err := harness.NewFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	for _, tc := range []struct {
+		kind, wantStatus, wantCode string
+	}{{"ORIGIN", "FAILED", "NO_USABLE_SCOPE"}, {"CURRENT", "READY", ""}, {"SUPPLEMENT", "READY", ""}} {
+		t.Run(tc.kind, func(t *testing.T) {
+			fixture := seedPreparationFixture(t, h, staticH264Clip(t), "video/mp4", tc.kind, "CAMERA")
+			deferUnrelatedPreparationJobs(t, h, fixture, time.Now().UTC().Add(time.Hour))
+			executor := checkpointExecutor(t, h, video.FFmpeg{Threads: 1}, time.Now)
+			executor.deps.FreeScratchBytes = func(string) (uint64, error) { return 9 << 30, nil }
+			executor.deps.Gateway = scopeGatewayFunc(func(_ context.Context, request llm.StructuredRequest) (llm.StructuredResult, error) {
+				unresolved := make([]string, 0, len(request.Images))
+				for _, image := range request.Images {
+					unresolved = append(unresolved, image.EvidenceID)
+				}
+				payload, err := json.Marshal(map[string]any{"observations": []video.ScopeObservation{}, "unresolvedFrameIds": unresolved})
+				return llm.StructuredResult{JSON: payload}, err
+			})
+			if worked, err := executor.RunDue(ctx); err != nil || !worked {
+				t.Fatalf("RunDue=%t err=%v", worked, err)
+			}
+			var job database.VideoPreparationJob
+			var scopes int64
+			if err := h.AdminDB.Where("tenant_id=? AND id=?", fixture.tenantID, fixture.preparationID).Take(&job).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := h.AdminDB.Model(&database.VideoScopeItem{}).Where("tenant_id=? AND preparation_id=?", fixture.tenantID, fixture.preparationID).Count(&scopes).Error; err != nil {
+				t.Fatal(err)
+			}
+			if job.Status != tc.wantStatus || job.ErrorCode != tc.wantCode || (job.ManifestDigest == "") != (tc.wantStatus == "FAILED") || scopes != 0 {
+				t.Fatalf("black video status=%s code=%q digest=%q scopeItems=%d; want %s/%s with no scope items", job.Status, job.ErrorCode, job.ManifestDigest, scopes, tc.wantStatus, tc.wantCode)
+			}
+		})
+	}
+}
+
 type noFrameDecoderUT146 struct{}
 
 func (noFrameDecoderUT146) Probe(context.Context, string, video.Limits) (video.Probe, error) {

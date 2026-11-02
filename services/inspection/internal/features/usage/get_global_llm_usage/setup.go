@@ -32,6 +32,7 @@ type Query struct {
 	Provider          string
 	Model             string
 	ModelAlias        string
+	ComparisonMode    string
 	Mode              string
 	TechnicalOutcome  string
 	State             string
@@ -85,6 +86,7 @@ type Call struct {
 	TransportDelivered                                           *bool
 	HTTPStatus                                                   *int
 	InputTokens, OutputTokens                                    *int64
+	AudioInputTokens, AudioDurationMS                            *int64
 	CachedInputTokens, RequestBodyBytes                          *int64
 	ImageCount                                                   *int
 	ReportedCost                                                 *float64
@@ -130,8 +132,11 @@ func handle(ctx context.Context, db *gorm.DB, q Query) (Result, error) {
 	if err != nil {
 		return Result{}, apperror.New(apperror.InvalidInput, "first", "invalid page size")
 	}
-	if err := validateFilter(q.Provider, q.Model, q.ModelAlias, q.TechnicalOutcome); err != nil {
+	if err := validateFilter(q.Provider, q.Model, q.ModelAlias, q.ComparisonMode, q.TechnicalOutcome); err != nil {
 		return Result{}, err
+	}
+	if q.ComparisonMode != "" {
+		q.ComparisonMode = strings.ToUpper(strings.TrimSpace(q.ComparisonMode))
 	}
 
 	var cursorTime *time.Time
@@ -172,8 +177,8 @@ func handle(ctx context.Context, db *gorm.DB, q Query) (Result, error) {
 			CostCoverageStartedAt *time.Time `gorm:"column:cost_coverage_started_at"`
 		}
 		if err := tx.Raw(`SELECT attempted_calls, delivered_calls, incomplete_calls, input_tokens, output_tokens, cached_input_tokens, cache_hit_calls, known_cache_calls, unknown_cache_calls, known_cost_decimal, unknown_cost_calls, uncertain_cost_calls, error_without_cost_calls, unverified_cost_calls, cost_coverage_started_at
-			FROM usage.read_llm_cost_coverage_v1(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			from, to, nullableID(q.TenantID), nullableID(q.InspectionID), q.WithoutInspection, nullableString(q.Provider), nullableString(q.Model), nullableString(q.ModelAlias), mode, nullableString(q.TechnicalOutcome), nullableString(state), nullableString(costState), q.IncludeTestData).Scan(&costAggregate).Error; err != nil {
+			FROM usage.read_llm_cost_coverage_v2(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			from, to, nullableID(q.TenantID), nullableID(q.InspectionID), q.WithoutInspection, nullableString(q.Provider), nullableString(q.Model), nullableString(q.ModelAlias), mode, nullableString(q.TechnicalOutcome), nullableString(state), nullableString(costState), q.IncludeTestData, nullableString(q.ComparisonMode)).Scan(&costAggregate).Error; err != nil {
 			return fmt.Errorf("global LLM cost coverage: %w", err)
 		}
 		coverageComplete := core.WindowCoverageComplete(costAggregate.CostCoverageStartedAt, from, costAggregate.UnverifiedCostCalls)
@@ -195,11 +200,11 @@ func handle(ctx context.Context, db *gorm.DB, q Query) (Result, error) {
 			       correlation_id, attempt, replay_generation, mode, comparison_mode, model_alias,
 			       provider, model, gateway_request_id, state, technical_outcome, transport_delivered,
 			       http_status, input_tokens, output_tokens, reported_cost, duration_ms, started_at, finished_at,
-			       cached_input_tokens, image_count, request_body_bytes, gateway_call_id, cost_source, reported_cost_decimal, cost_state
-			FROM usage.read_llm_usage_calls_v3(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			       cached_input_tokens, image_count, request_body_bytes, gateway_call_id, cost_source, reported_cost_decimal, cost_state, audio_input_tokens, audio_duration_ms
+			FROM usage.read_llm_usage_calls_v4(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			from, to, nullableID(q.TenantID), nullableID(q.InspectionID), q.WithoutInspection, nullableString(q.Provider),
 			nullableString(q.Model), nullableString(q.ModelAlias), mode, nullableString(q.TechnicalOutcome),
-			nullableString(state), nullableString(costState), cursorTime, cursorID, first+1, q.IncludeTestData).Scan(&rows).Error; err != nil {
+			nullableString(state), nullableString(costState), cursorTime, cursorID, first+1, q.IncludeTestData, nullableString(q.ComparisonMode)).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("global LLM usage calls: %w", err)
 		}
 		if len(rows) > first {
@@ -230,6 +235,7 @@ type globalCallRow struct {
 	TransportDelivered                                           *bool
 	HTTPStatus                                                   *int
 	InputTokens, OutputTokens                                    *int64
+	AudioInputTokens, AudioDurationMS                            *int64
 	CachedInputTokens, RequestBodyBytes                          *int64
 	ImageCount                                                   *int
 	ReportedCost                                                 *float64
@@ -239,7 +245,7 @@ type globalCallRow struct {
 }
 
 func (r globalCallRow) call() Call {
-	return Call{CallID: r.CallID, TenantID: r.TenantID, TenantName: r.TenantName, InspectionID: r.InspectionID, JobID: r.JobID, EventID: r.EventID, ExecutionID: r.ExecutionID, CorrelationID: r.CorrelationID, Attempt: r.Attempt, ReplayGeneration: r.ReplayGeneration, Mode: r.Mode, ComparisonMode: r.ComparisonMode, ModelAlias: r.ModelAlias, Provider: r.Provider, Model: r.Model, GatewayRequestID: r.GatewayRequestID, GatewayCallID: r.GatewayCallID, ReportedCostDecimal: r.ReportedCostDecimal, CostSource: r.CostSource, CostState: r.CostState, State: r.State, TechnicalOutcome: r.TechnicalOutcome, TransportDelivered: r.TransportDelivered, HTTPStatus: r.HTTPStatus, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, CachedInputTokens: r.CachedInputTokens, ImageCount: r.ImageCount, RequestBodyBytes: r.RequestBodyBytes, ReportedCost: r.ReportedCost, DurationMS: r.DurationMS, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
+	return Call{CallID: r.CallID, TenantID: r.TenantID, TenantName: r.TenantName, InspectionID: r.InspectionID, JobID: r.JobID, EventID: r.EventID, ExecutionID: r.ExecutionID, CorrelationID: r.CorrelationID, Attempt: r.Attempt, ReplayGeneration: r.ReplayGeneration, Mode: r.Mode, ComparisonMode: r.ComparisonMode, ModelAlias: r.ModelAlias, Provider: r.Provider, Model: r.Model, GatewayRequestID: r.GatewayRequestID, GatewayCallID: r.GatewayCallID, ReportedCostDecimal: r.ReportedCostDecimal, CostSource: r.CostSource, CostState: r.CostState, State: r.State, TechnicalOutcome: r.TechnicalOutcome, TransportDelivered: r.TransportDelivered, HTTPStatus: r.HTTPStatus, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, AudioInputTokens: r.AudioInputTokens, AudioDurationMS: r.AudioDurationMS, CachedInputTokens: r.CachedInputTokens, ImageCount: r.ImageCount, RequestBodyBytes: r.RequestBodyBytes, ReportedCost: r.ReportedCost, DurationMS: r.DurationMS, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
 }
 
 func normalizeWindow(from, to time.Time) (time.Time, time.Time, error) {

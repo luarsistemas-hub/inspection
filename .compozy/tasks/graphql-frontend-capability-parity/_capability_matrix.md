@@ -66,6 +66,11 @@ Every row must end in one of these verified outcomes:
 | 43 | `baselineInventory` | Dashboard; customer Dashboard | New contract | Internal users read the full baseline while customer viewers receive only the allowlisted projection. |
 | 44 | `inventoryTrail` | Dashboard audit | New contract | Auditors inspect append-only item decisions, activation, and counterparty events. |
 | 45 | `baselinePolicy` | Policy Admin | Implemented | Read the contestation deadline under the Admin product for `TENANT_ADMIN` and `INSPECTION_CONFIG_ADMIN`. |
+| 46 | `voicePolicy` | Policy Admin; Capture | New contract | Tenant administrators configure voice availability and bounded limits; Capture reads the tenant policy within the authorized inspection context. |
+| 47 | `audioNotes` | Dashboard | New contract | Inventory operators review paginated transcript notes, revisions, media anchors, processing status, and audio availability for one inspection environment. |
+| 48 | `audioNote` | Dashboard | New contract | Inventory operators open one authorized transcript note with its revisions, media anchor, processing status, and audio availability. |
+| 49 | `effectiveAccess` | Admin | New contract | Access administrators explain one membership: explicit grants plus cursor-paginated effective descendants with `inheritedFrom`, historical labels for archived resources, and tenant-wide role authority. |
+| 50 | `scopePreview` | Admin | New contract | Access administrators preview the canonical descendants a grant on one resource would reach before confirming it; archived descendants are labelled historical and not grantable. |
 
 ## Mutations
 
@@ -158,6 +163,17 @@ Every row must end in one of these verified outcomes:
 | 81 | `resolveBaselineContestation` | Dashboard | New contract | Authorized operators accept a contestation into a new draft or decline it with a reason. |
 | 82 | `resendCounterpartyInvitation` | Dashboard | New contract | Authorized operators retry delivery after a failed counterparty invitation. |
 | 83 | `updateBaselinePolicy` | Admin | New contract | Tenant administrators configure contestation deadlines for future invitations. |
+| 84 | `configureVoicePolicy` | Policy Admin | New contract | Tenant administrators enable voice only with positive tenant and per-inspection note and audio ceilings, using the current policy version. |
+| 85 | `createAudioNoteUpload` | Capture | New contract | A scoped participant creates an intentional voice note for its selected photo or video interval, with consent and bounded media metadata. |
+| 86 | `completeAudioNoteUpload` | Capture | New contract | A scoped participant confirms the uploaded note; the service verifies the audio and returns its durable processing status. |
+| 87 | `reviseAudioNote` | Dashboard | New contract | Inventory operators correct transcript text through a versioned edit that preserves the prior immutable revision and does not decide inventory items. |
+| 88 | `discardAudioNote` | Dashboard | New contract | Inventory operators discard an eligible note with version checking while preserving its history and cleanup state. |
+| 89 | `retryAudioNote` | Capture; Dashboard | New contract | An authorized participant or operator retries eligible transcription within its bounded recovery window and sees the resulting status. |
+| 90 | `setAudioNoteHighlight` | Dashboard | New contract | Inventory operators mark or clear a note highlight with optimistic version checking, separate from item approval. |
+| 91 | `confirmAudioNoteText` | Dashboard | New contract | Inventory operators confirm reviewed transcript text without accepting or changing any suggested inventory item. |
+| 92 | `regenerateInventorySuggestions` | Dashboard | New contract | Inventory operators explicitly regenerate undecided suggestions from selected eligible transcript revisions without rewriting decisions or active versions. |
+| 93 | `inviteCustomerUser` | Admin | New contract | Access administrators invite a customer with `CUSTOMER_VIEWER`, Dashboard-only access and at least one explicit scope; duplicates return the existing outcome and a failed delivery stays retryable. |
+| 94 | `assignMembershipAccess` | Admin | New contract | Access administrators atomically replace role, product entitlements and explicit scopes with a required `expectedVersion`; stale writes return `CONFLICT`. |
 
 ## Required Backend Capabilities Not Yet Represented Adequately
 

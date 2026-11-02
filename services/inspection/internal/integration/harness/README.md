@@ -36,7 +36,7 @@ transição de ativação.
 
 O suite externo deve criar um harness por processo, declarar contratos de fila, semear via `WithinTenant`, publicar com `PublishPayload`, chamar GraphQL por `GraphQL` e aguardar com `Eventually`. Sobrescreva `INSPECTION_TEST_*` na CI; credenciais não ficam no código.
 
-`Task06AssignedCases()` expõe as oito cases atribuídas a esta tarefa como manifesto fail-fast: IT-047 a IT-049 e E2E-009/E2E-012 a E2E-015. O runner externo ainda precisa registrar implementação para cada ID.
+`Task06AssignedCases()` expõe as oito cases de outro workflow como manifesto fail-fast: IT-047 a IT-049 e E2E-009/E2E-012 a E2E-015. Os 148 casos da task_06 de autonomous-inspection-platform estão em `AutonomousTask06Cases()` (`case_manifest_autonomous_task06.go`), verificado por `TestAutonomousTask06ManifestAccountsForEveryAssignedCase`; veja `services/inspection/docs/task06-canonical-tests.md`.
 
 ## PHOTO sem o worker de vídeo
 

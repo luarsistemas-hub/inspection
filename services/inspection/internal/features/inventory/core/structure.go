@@ -206,6 +206,9 @@ func (s Service) MergeItems(ctx context.Context, in MergeItemsInput) (database.I
 				return err
 			}
 		}
+		if err := carryVoiceSources(tx, out, items[1:], in.ActorMembershipID, now); err != nil {
+			return err
+		}
 		return s.audit(tx, in.TenantID, in.OriginVersionID, "ITEM", out.ID, "MERGE", before, marshal(out), "", in.ActorMembershipID, now)
 	})
 	return out, err

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button, Dialog, Field, IconButton, Input, Recovery, Select, Status } from "@inspection/design-system";
-import { graphql, type GraphQLFailure } from "@/graphql/client";
+import { graphQLFailureText, graphql } from "@/graphql/client";
 import * as G from "@/graphql/generated";
 
 type Filters = {
@@ -14,6 +14,7 @@ type Filters = {
   provider: string;
   model: string;
   modelAlias: string;
+  category: "" | "TRANSCRIPTION";
   mode: "LIVE" | "MOCK";
   technicalOutcome: string;
   state: "" | "STARTED" | "FINISHED";
@@ -43,7 +44,7 @@ const readURLDate = (value: string | null, fallback: string) => {
 const defaultFilters = (): Filters => {
   const now = new Date();
   const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  return { from: toLocalInput(start.toISOString()), to: toLocalInput(now.toISOString()), tenantId: "", tenantSearch: "", provider: "", model: "", modelAlias: "", mode: "LIVE", technicalOutcome: "", state: "", cost: "", inspectionId: "", withoutInspection: false, includeTestData: false };
+  return { from: toLocalInput(start.toISOString()), to: toLocalInput(now.toISOString()), tenantId: "", tenantSearch: "", provider: "", model: "", modelAlias: "", category: "", mode: "LIVE", technicalOutcome: "", state: "", cost: "", inspectionId: "", withoutInspection: false, includeTestData: false };
 };
 const readFilters = (params: URLSearchParams): Filters => {
   const defaults = defaultFilters();
@@ -56,6 +57,7 @@ const readFilters = (params: URLSearchParams): Filters => {
     provider: params.get("provider") ?? "",
     model: params.get("model") ?? "",
     modelAlias: params.get("modelAlias") ?? "",
+    category: params.get("category") === "TRANSCRIPTION" ? "TRANSCRIPTION" : "",
     mode: params.get("mode") === "MOCK" ? "MOCK" : "LIVE",
     technicalOutcome: params.get("outcome") ?? "",
     state: params.get("state") === "STARTED" || params.get("state") === "FINISHED" ? params.get("state") as Filters["state"] : "",
@@ -65,7 +67,7 @@ const readFilters = (params: URLSearchParams): Filters => {
     includeTestData: params.get("includeTestData") === "true",
   };
 };
-const failureText = (failure: unknown) => failure instanceof Error ? failure.message : (failure as GraphQLFailure).message ?? "Não foi possível carregar o consumo de LLM.";
+const failureText = graphQLFailureText;
 const formatDate = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 const formatNumber = (value: number) => new Intl.NumberFormat().format(value);
 /** Keeps unavailable gateway cost distinct from a confirmed zero-cost result. */
@@ -95,6 +97,9 @@ export const costStateLabel = (state: string | null | undefined) => {
     default: return "Origem não verificada";
   }
 };
+/** Presents source clip duration separately from model-call latency. */
+export const formatAudioDuration = (durationMs: number | null | undefined) => durationMs == null ? "Não informado" : `${(durationMs / 1000).toLocaleString("pt-BR")} s`;
+export const usageCostCoverageLabel = (complete: boolean) => complete ? "custo completo" : "cobertura de custo parcial";
 /** Summarizes non-zero aggregate call states with Portuguese agreement. */
 export const aggregateCostSummary = ({ calls, confirmed, uncertain, unknown, error, unverified }: { calls: number; confirmed: number; uncertain: number; unknown: number; error: number; unverified: number }) => {
   const parts = [`${formatNumber(calls)} ${calls === 1 ? "chamada" : "chamadas"}`];
@@ -157,7 +162,7 @@ export function LLMUsagePage({ permitted }: { permitted: boolean }) {
     setLoading(true); setError(undefined);
     const filter = {
       from: toUTC(urlFilters.from), to: toUTC(urlFilters.to), tenantId: urlFilters.tenantId || undefined, inspectionId: urlFilters.inspectionId || undefined, withoutInspection: urlFilters.withoutInspection,
-      provider: urlFilters.provider || undefined, model: urlFilters.model || undefined, modelAlias: urlFilters.modelAlias || undefined,
+      provider: urlFilters.provider || undefined, model: urlFilters.model || undefined, modelAlias: urlFilters.modelAlias || undefined, comparisonMode: urlFilters.category || undefined,
       mode: urlFilters.mode, technicalOutcome: urlFilters.technicalOutcome || undefined, state: urlFilters.state || undefined, cost: urlFilters.cost || undefined, includeTestData: urlFilters.includeTestData,
     };
     void graphql<G.AdminLlmUsageQuery>(G.AdminLlmUsageDocument, { filter, first: 25, after: params.get("after") }, controller.signal).then((result) => { if (!controller.signal.aborted) setUsage(result.llmUsage); }).catch((failure) => { if (!controller.signal.aborted) setError(failureText(failure)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -169,7 +174,7 @@ export function LLMUsagePage({ permitted }: { permitted: boolean }) {
     const controller = new AbortController();
     setError(undefined);
     setTenantAggregateLoading(true);
-    const filter = { from: toUTC(urlFilters.from), to: toUTC(urlFilters.to), provider: urlFilters.provider || undefined, model: urlFilters.model || undefined, modelAlias: urlFilters.modelAlias || undefined, mode: urlFilters.mode, technicalOutcome: urlFilters.technicalOutcome || undefined, state: urlFilters.state || undefined, cost: urlFilters.cost || undefined, includeTestData: urlFilters.includeTestData };
+    const filter = { from: toUTC(urlFilters.from), to: toUTC(urlFilters.to), provider: urlFilters.provider || undefined, model: urlFilters.model || undefined, modelAlias: urlFilters.modelAlias || undefined, comparisonMode: urlFilters.category || undefined, mode: urlFilters.mode, technicalOutcome: urlFilters.technicalOutcome || undefined, state: urlFilters.state || undefined, cost: urlFilters.cost || undefined, includeTestData: urlFilters.includeTestData };
     if (!urlFilters.tenantId) {
       void graphql<G.AdminLlmUsageByTenantQuery>(G.AdminLlmUsageByTenantDocument, { filter, first: 25, after: params.get("after") }, controller.signal).then((result) => { if (controller.signal.aborted) return; setTenantAggregates((current) => params.get("after") ? [...current, ...result.llmUsageByTenant.nodes] : result.llmUsageByTenant.nodes); setTenantAggregateNext(result.llmUsageByTenant.pageInfo.hasNextPage ? result.llmUsageByTenant.pageInfo.endCursor ?? undefined : undefined); }).catch((failure) => { if (!controller.signal.aborted) setError(failureText(failure)); }).finally(() => { if (!controller.signal.aborted) setTenantAggregateLoading(false); });
       setInspectionAggregates([]); setInspectionAggregateNext(undefined);
@@ -183,7 +188,7 @@ export function LLMUsagePage({ permitted }: { permitted: boolean }) {
   const updateURL = (next: Filters, after?: string | null) => {
     const query = new URLSearchParams();
     query.set("from", toUTC(next.from)); query.set("to", toUTC(next.to)); query.set("mode", next.mode);
-    const values: Array<[string, string]> = [["tenantId", next.tenantId], ["tenantSearch", next.tenantSearch], ["provider", next.provider], ["model", next.model], ["modelAlias", next.modelAlias], ["outcome", next.technicalOutcome], ["state", next.state], ["cost", next.cost], ["inspectionId", next.inspectionId], ["withoutInspection", next.withoutInspection ? "true" : ""], ["includeTestData", next.includeTestData ? "true" : ""]];
+    const values: Array<[string, string]> = [["tenantId", next.tenantId], ["tenantSearch", next.tenantSearch], ["provider", next.provider], ["model", next.model], ["modelAlias", next.modelAlias], ["category", next.category], ["outcome", next.technicalOutcome], ["state", next.state], ["cost", next.cost], ["inspectionId", next.inspectionId], ["withoutInspection", next.withoutInspection ? "true" : ""], ["includeTestData", next.includeTestData ? "true" : ""]];
     values.forEach(([key, value]) => { if (value) query.set(key, value); });
     if (after) query.set("after", after);
     router.replace(`${pathname}?${query.toString()}`);
@@ -192,7 +197,7 @@ export function LLMUsagePage({ permitted }: { permitted: boolean }) {
   const clear = () => { const next = defaultFilters(); setSelectedTenantName(""); updateURL(next); };
   const setFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
-  const activeAdvancedFilterCount = [urlFilters.tenantId, urlFilters.provider, urlFilters.model, urlFilters.modelAlias, urlFilters.mode === "MOCK" ? urlFilters.mode : "", urlFilters.technicalOutcome, urlFilters.state, urlFilters.cost, urlFilters.inspectionId, urlFilters.withoutInspection, urlFilters.includeTestData].filter(Boolean).length;
+  const activeAdvancedFilterCount = [urlFilters.tenantId, urlFilters.provider, urlFilters.model, urlFilters.modelAlias, urlFilters.category, urlFilters.mode === "MOCK" ? urlFilters.mode : "", urlFilters.technicalOutcome, urlFilters.state, urlFilters.cost, urlFilters.inspectionId, urlFilters.withoutInspection, urlFilters.includeTestData].filter(Boolean).length;
 
   if (!permitted) return <Recovery kind="denied" title="Acesso restrito">O consumo de LLM está disponível somente para o super admin.</Recovery>;
   return <div className="llm-usage-page">
@@ -200,6 +205,7 @@ export function LLMUsagePage({ permitted }: { permitted: boolean }) {
     <form className="llm-usage-filters" onSubmit={submit} aria-label="Filtros de consumo de LLM">
       <Field label="Início" required><Input required type="datetime-local" value={draft.from} onChange={(event) => setFilter("from", event.target.value)} /></Field>
       <Field label="Fim" required error={draft.from > draft.to ? "O início deve ocorrer antes do fim." : undefined}><Input required type="datetime-local" value={draft.to} onChange={(event) => setFilter("to", event.target.value)} /></Field>
+      <Field label="Tipo de consumo"><Select aria-label="Tipo de consumo" value={draft.category} onChange={(event) => setFilter("category", event.target.value as Filters["category"])}><option value="">Todos os tipos</option><option value="TRANSCRIPTION">Transcrição</option></Select></Field>
       <details className="llm-usage-advanced-filters"><summary>Filtros avançados{activeAdvancedFilterCount > 0 ? ` · ${activeAdvancedFilterCount} aplicados` : ""}</summary><div className="llm-usage-advanced-grid">
         <Field label="Tenant"><Input value={draft.tenantSearch || selectedTenantName} onChange={(event) => { setSelectedTenantName(""); setFilter("tenantSearch", event.target.value); setFilter("tenantId", ""); }} placeholder="Nome ou ID" />{tenantLoading && <small>Pesquisando…</small>}{tenantOptions.length > 0 && <span className="llm-tenant-options">{tenantOptions.map((tenant) => <Button type="button" variant="secondary" key={tenant.id} onClick={() => { setSelectedTenantName(tenant.name); setDraft((current) => ({ ...current, tenantId: tenant.id, tenantSearch: tenant.name })); setTenantOptions([]); }}>{tenant.name} · {tenant.id}</Button>)}</span>}</Field>
         <Field label="Provedor"><Input value={draft.provider} onChange={(event) => setFilter("provider", event.target.value)} /></Field>
@@ -225,10 +231,10 @@ function UsageView({ usage, loading, onDetail, onNext }: { usage: Usage; loading
   const cacheHitRate = usage.knownCacheCalls > 0 ? `${((usage.cacheHitCalls / usage.knownCacheCalls) * 100).toFixed(1)}%` : "Não informado";
   const [focusedCallId, setFocusedCallId] = useState<string>();
   const focusedCall = usage.calls.find((call) => call.callId === focusedCallId) ?? usage.calls[0];
-  return <>
+      return <>
     <div className="llm-usage-metrics" aria-label="Resumo do consumo de LLM"><Metric label="Chamadas entregues" value={formatNumber(usage.deliveredCalls)} /><Metric label="Tokens de entrada" value={formatNumber(usage.inputTokens)} /><Metric label="Custo informado" value={formatReportedCost(usage.knownReportedCostDecimal || usage.knownReportedCost)} /></div>
     <details className="llm-usage-more"><summary>Métricas detalhadas</summary><div className="llm-usage-more-grid"><Metric label="Tentativas" value={formatNumber(usage.attemptedCalls)} /><Metric label="Incompletas" value={formatNumber(usage.incompleteCalls)} /><Metric label="Tokens em cache" value={usage.knownCacheCalls > 0 ? formatNumber(usage.cachedInputTokens) : "Não informado"} /><Metric label="Chamadas com acerto" value={formatNumber(usage.cacheHitCalls)} /><Metric label="Taxa de acerto (informadas)" value={cacheHitRate} /><Metric label="Cache não informado" value={formatNumber(usage.unknownCacheCalls)} /><Metric label="Tokens de saída" value={formatNumber(usage.outputTokens)} /><Metric label="Custo desconhecido" value={formatNumber(usage.unknownCostCalls)} /><Metric label="Custo incerto" value={formatNumber(usage.uncertainCostCalls)} /><Metric label="Erro sem custo informado" value={formatNumber(usage.errorWithoutCostCalls)} /><Metric label="Origem não verificada" value={formatNumber(usage.unverifiedCostCalls)} /></div></details>
-    {!usage.calls.length ? <Recovery kind="empty" title="Nenhuma chamada encontrada">Ajuste os filtros ou aumente o período consultado.</Recovery> : <><div className="llm-focus-workspace"><div className="llm-focus-list"><ol className="admin-focus-rows llm-focus-rows" aria-label="Chamadas de LLM">{usage.calls.map((call) => <li key={call.callId}><div className="admin-focus-row" data-focused={focusedCall?.callId === call.callId}><div className="admin-focus-row-main"><button className="admin-row-focus llm-row-focus" type="button" aria-pressed={focusedCall?.callId === call.callId} onClick={() => setFocusedCallId(call.callId)}>{call.tenantName}</button><span>{text(call.modelAlias || call.model)} · {formatDate(call.startedAt)}</span></div><div className="admin-focus-row-side"><Status>{costStateLabel(call.costState)}</Status><IconButton label={`Abrir detalhes da chamada de ${call.tenantName}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onDetail(call)} /></div></div>{call.mode === "LIVE" && call.provider !== "qa" && call.costState === "CONFIRMED" && isConfirmedZeroCost(call.reportedCostDecimal) && (call.inputTokens ?? 0) > 0 && <p role="note">Modelo com tokens e custo zero informado pelo gateway; confirme a precificação.</p>}</li>)}</ol><div className="admin-collection-foot"><span>{usage.calls.length} chamadas · {usage.costComplete ? "custo completo" : "cobertura de custo parcial"}</span><span>{loading ? "Atualizando…" : usage.pageInfo.hasNextPage ? "mais páginas disponíveis" : "fim da consulta"}</span></div>{usage.pageInfo.hasNextPage && usage.pageInfo.endCursor && <Button variant="secondary" onClick={() => onNext(usage.pageInfo.endCursor!)}>Carregar próxima página</Button>}</div>{focusedCall && <aside className="admin-focus-detail llm-focus-detail"><span className="admin-focus-eyebrow">Chamada selecionada</span><h2>{focusedCall.modelAlias}</h2><dl><div><dt>Tenant</dt><dd>{focusedCall.tenantName}</dd></div><div><dt>Resultado</dt><dd>{focusedCall.technicalOutcome}</dd></div><div><dt>Entrada / saída</dt><dd>{formatNumber(focusedCall.inputTokens ?? 0)} / {formatNumber(focusedCall.outputTokens ?? 0)} tokens</dd></div><div><dt>Cache</dt><dd>{focusedCall.cachedInputTokens == null ? "Não informado" : formatNumber(focusedCall.cachedInputTokens)}</dd></div><div><dt>Custo</dt><dd>{formatReportedCost(focusedCall.reportedCost)}</dd></div></dl><Button variant="secondary" onClick={() => onDetail(focusedCall)}>Ver detalhes <span aria-hidden="true">→</span></Button></aside>}</div></>}
+    {!usage.calls.length ? <Recovery kind="empty" title="Nenhuma chamada encontrada">Ajuste os filtros ou aumente o período consultado.</Recovery> : <><div className="llm-focus-workspace"><div className="llm-focus-list"><ol className="admin-focus-rows llm-focus-rows" aria-label="Chamadas de LLM">{usage.calls.map((call) => <li key={call.callId}><div className="admin-focus-row" data-focused={focusedCall?.callId === call.callId}><div className="admin-focus-row-main"><button className="admin-row-focus llm-row-focus" type="button" aria-pressed={focusedCall?.callId === call.callId} onClick={() => setFocusedCallId(call.callId)}>{call.tenantName}</button><span>{text(call.modelAlias || call.model)} · {formatDate(call.startedAt)}{call.comparisonMode === "TRANSCRIPTION" ? ` · Duração do áudio: ${formatAudioDuration(call.audioDurationMs)}` : ""}</span></div><div className="admin-focus-row-side"><Status>{costStateLabel(call.costState)}</Status><IconButton label={`Abrir detalhes da chamada de ${call.tenantName}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onDetail(call)} /></div></div>{call.mode === "LIVE" && call.provider !== "qa" && call.costState === "CONFIRMED" && isConfirmedZeroCost(call.reportedCostDecimal) && (call.inputTokens ?? 0) > 0 && <p role="note">Modelo com tokens e custo zero informado pelo gateway; confirme a precificação.</p>}</li>)}</ol><div className="admin-collection-foot"><span>{usage.calls.length} chamadas · {usageCostCoverageLabel(usage.costComplete)}</span><span>{loading ? "Atualizando…" : usage.pageInfo.hasNextPage ? "mais páginas disponíveis" : "fim da consulta"}</span></div>{usage.pageInfo.hasNextPage && usage.pageInfo.endCursor && <Button variant="secondary" onClick={() => onNext(usage.pageInfo.endCursor!)}>Carregar próxima página</Button>}</div>{focusedCall && <aside className="admin-focus-detail llm-focus-detail"><span className="admin-focus-eyebrow">Chamada selecionada</span><h2>{focusedCall.modelAlias}</h2><dl><div><dt>Tenant</dt><dd>{focusedCall.tenantName}</dd></div><div><dt>Resultado</dt><dd>{focusedCall.technicalOutcome}</dd></div><div><dt>Entrada / saída</dt><dd>{formatNumber(focusedCall.inputTokens ?? 0)} / {formatNumber(focusedCall.outputTokens ?? 0)} tokens</dd></div><div><dt>Cache</dt><dd>{focusedCall.cachedInputTokens == null ? "Não informado" : formatNumber(focusedCall.cachedInputTokens)}</dd></div><div><dt>Custo</dt><dd>{formatReportedCost(focusedCall.reportedCost)}</dd></div></dl><Button variant="secondary" onClick={() => onDetail(focusedCall)}>Ver detalhes <span aria-hidden="true">→</span></Button></aside>}</div></>}
   </>;
 }
 
@@ -241,6 +247,6 @@ function AggregateList({ label, items, loading, onSelect, onNext }: { label: str
 function Metric({ label, value }: { label: string; value: string }) { return <div className="llm-usage-metric"><span>{label}</span><strong>{value}</strong></div>; }
 
 function LLMCallDetail({ call, onClose }: { call: Call; onClose: () => void }) {
-  const values: Array<[string, string]> = [["Call ID", call.callId], ["Tenant", `${call.tenantName} · ${call.tenantId}`], ["Inspection ID", call.inspectionId ?? "Sem vistoria"], ["Job ID", call.jobId], ["Event ID", call.eventId], ["Execution ID", call.executionId], ["Correlation ID", call.correlationId], ["Gateway request ID", text(call.gatewayRequestId)], ["ID da chamada no LiteLLM", text(call.gatewayCallId)], ["Provedor", text(call.provider)], ["Modelo", text(call.model)], ["Alias", call.modelAlias], ["Modo", call.mode], ["Comparação", call.comparisonMode], ["Estado", call.state], ["Resultado técnico", call.technicalOutcome], ["HTTP", call.httpStatus == null ? "—" : String(call.httpStatus)], ["Tokens", `${call.inputTokens ?? "—"} entrada / ${call.outputTokens ?? "—"} saída`], ["Tokens de entrada em cache", call.cachedInputTokens == null ? "Não informado" : formatNumber(call.cachedInputTokens)], ["Imagens", call.imageCount == null ? "Não informado" : formatNumber(call.imageCount)], ["Corpo enviado", call.requestBodyBytes == null ? "Não informado" : `${formatNumber(call.requestBodyBytes)} bytes`], ["Custo informado", formatReportedCost(call.reportedCostDecimal ?? call.reportedCost)], ["Origem do custo", costStateLabel(call.costState)], ["Duração", call.durationMs == null ? "—" : `${call.durationMs} ms`], ["Início", formatDate(call.startedAt)], ["Fim", call.finishedAt ? formatDate(call.finishedAt) : "—"]];
+  const values: Array<[string, string]> = [["Call ID", call.callId], ["Tenant", `${call.tenantName} · ${call.tenantId}`], ["Inspection ID", call.inspectionId ?? "Sem vistoria"], ["Job ID", call.jobId], ["Event ID", call.eventId], ["Execution ID", call.executionId], ["Correlation ID", call.correlationId], ["Gateway request ID", text(call.gatewayRequestId)], ["ID da chamada no LiteLLM", text(call.gatewayCallId)], ["Provedor", text(call.provider)], ["Modelo", text(call.model)], ["Alias", call.modelAlias], ["Modo", call.mode], ["Categoria", call.comparisonMode === "TRANSCRIPTION" ? "Transcrição" : text(call.comparisonMode)], ["Estado", call.state], ["Resultado técnico", call.technicalOutcome], ["HTTP", call.httpStatus == null ? "—" : String(call.httpStatus)], ["Tokens", `${call.inputTokens ?? "—"} entrada / ${call.outputTokens ?? "—"} saída`], ["Tokens de áudio", call.audioInputTokens == null ? "Não informado" : `${formatNumber(call.audioInputTokens)} ${call.audioTokenUnit ?? "tokens"}`], ["Duração do áudio", formatAudioDuration(call.audioDurationMs)], ["Tokens de entrada em cache", call.cachedInputTokens == null ? "Não informado" : formatNumber(call.cachedInputTokens)], ["Imagens", call.imageCount == null ? "Não informado" : formatNumber(call.imageCount)], ["Corpo enviado", call.requestBodyBytes == null ? "Não informado" : `${formatNumber(call.requestBodyBytes)} bytes`], ["Custo reportado", formatReportedCost(call.reportedCostDecimal ?? call.reportedCost)], ["Custo estimado", call.comparisonMode === "TRANSCRIPTION" ? "Não disponível no ledger atual" : "Não aplicável"], ["Origem do custo", `${costStateLabel(call.costState)} · ${text(call.costSource)}`], ["Duração da chamada", call.durationMs == null ? "—" : `${call.durationMs} ms`], ["Início", formatDate(call.startedAt)], ["Fim", call.finishedAt ? formatDate(call.finishedAt) : "—"]];
   return <Dialog isOpen onClose={onClose} title={`Detalhes da chamada de ${call.tenantName}`} size="wide"><dl>{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><Button variant="secondary" onClick={onClose}>Fechar detalhe</Button></Dialog>;
 }

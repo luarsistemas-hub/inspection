@@ -31,20 +31,20 @@ func EffectivePolicy(policy *Policy) Policy {
 func Configure(mode string, expectedVersion, currentVersion int64) (Policy, error) {
 	mode = strings.ToUpper(strings.TrimSpace(mode))
 	if mode != Manual && mode != Automatic {
-		return Policy{}, apperror.New(apperror.InvalidInput, "mode", "publication mode is invalid")
+		return Policy{}, apperror.New(apperror.InvalidInput, "mode", "Modo de publicação inválido.")
 	}
 	if expectedVersion != currentVersion {
-		return Policy{}, apperror.New(apperror.Conflict, "expectedVersion", "stale publication policy version")
+		return Policy{}, apperror.New(apperror.Conflict, "expectedVersion", "A política de publicação foi alterada; recarregue e tente novamente.")
 	}
 	return Policy{Mode: mode, Version: currentVersion + 1}, nil
 }
 
 func CanPublish(snapshotFinal bool, currentStatus string) error {
 	if !snapshotFinal {
-		return apperror.New(apperror.InvalidState, "snapshotId", "only final snapshots can be published")
+		return apperror.New(apperror.InvalidState, "snapshotId", "Somente laudos finais podem ser publicados.")
 	}
 	if currentStatus != "" && currentStatus != Published {
-		return apperror.New(apperror.InvalidState, "publication", "publication is not publishable")
+		return apperror.New(apperror.InvalidState, "publication", "Esta publicação não pode ser publicada novamente.")
 	}
 	return nil
 }
@@ -57,18 +57,22 @@ func Publish(snapshotFinal bool, currentStatus string, now time.Time) (string, *
 	return Published, &t, nil
 }
 
+// Invalidate validates the INVALIDATED transition. It returns a nil time when
+// the publication is already invalidated, meaning no state change.
 func Invalidate(status, reason string, expectedVersion, version int64, now time.Time) (string, *time.Time, error) {
 	if strings.TrimSpace(reason) == "" {
-		return "", nil, apperror.New(apperror.InvalidInput, "reason", "reason is required")
+		return "", nil, apperror.New(apperror.InvalidInput, "reason", "Informe o motivo da invalidação.")
 	}
-	if expectedVersion != version {
-		return "", nil, apperror.New(apperror.Conflict, "expectedVersion", "stale publication version")
-	}
+	// Repeating an invalidation is idempotent: the current state is returned
+	// even when the caller still holds the pre-invalidation version.
 	if status == Invalidated {
 		return Invalidated, nil, nil
 	}
+	if expectedVersion != version {
+		return "", nil, apperror.New(apperror.Conflict, "expectedVersion", "A publicação foi alterada; recarregue e tente novamente.")
+	}
 	if status != Published {
-		return "", nil, apperror.New(apperror.InvalidState, "publication", "only published reports can be invalidated")
+		return "", nil, apperror.New(apperror.InvalidState, "publication", "Somente laudos publicados podem ser invalidados.")
 	}
 	t := now.UTC()
 	return Invalidated, &t, nil

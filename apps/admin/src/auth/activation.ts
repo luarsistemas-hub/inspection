@@ -1,11 +1,24 @@
+import { AdminLocalError, transportFailureMessage } from "@/graphql/client";
+
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
 
 type UserError = { code: string; field: string | null; message: string };
 type Payload = { userErrors: UserError[] };
-type GraphQLErrorResponse = { message: string; extensions?: Record<string, unknown> };
+type GraphQLErrorResponse = { message: string; extensions?: { code?: string; [key: string]: unknown } };
 type Response = { data?: Record<string, Payload>; errors?: GraphQLErrorResponse[] };
 
 let csrfToken: string | undefined;
+
+const activationMessages: Record<string, string> = {
+  SESSION_EXPIRED: "Este link de ativação é inválido, já foi utilizado ou expirou.",
+  CONFLICT: "Este convite já foi utilizado.",
+  RATE_LIMITED: "Muitas tentativas de ativação foram realizadas. Aguarde alguns minutos e tente novamente.",
+};
+
+/** Returns the Portuguese activation message for a userError or transport error code. */
+export function activationErrorMessage(code?: string | null): string {
+  return (code ? activationMessages[code] : undefined) ?? transportFailureMessage(code ?? undefined);
+}
 
 function logOperationErrors(operation: string, errors: GraphQLErrorResponse[]): void {
   console.error(`[GraphQL] ${operation} failed`, { errors });
@@ -28,7 +41,7 @@ async function execute(operation: string, input: Record<string, string>): Promis
   const payload = body.data?.[`${operation.charAt(0).toLowerCase()}${operation.slice(1)}`];
   if (!response.ok || body.errors?.[0] || !payload) {
     if (body.errors?.length) logOperationErrors(`mutation ${operation}`, body.errors);
-    throw new Error(body.errors?.[0]?.message ?? "Não foi possível concluir a ativação.");
+    throw new AdminLocalError(activationErrorMessage(body.errors?.[0]?.extensions?.code));
   }
   return payload;
 }
@@ -45,7 +58,7 @@ async function refreshActivationProof(): Promise<void> {
   const body = await response.json().catch(() => ({})) as { data?: { onboardingSession?: { id: string } | null }; errors?: GraphQLErrorResponse[] };
   if (!response.ok || body.errors?.[0] || !body.data?.onboardingSession || !nextCsrf) {
     if (body.errors?.length) logOperationErrors("query AdminActivationSession", body.errors);
-    throw new Error(body.errors?.[0]?.message ?? "Abra o link de ativação enviado para o seu e-mail. O link pode estar ausente, inválido ou expirado.");
+    throw new AdminLocalError(body.errors?.[0]?.extensions?.code ? activationErrorMessage(body.errors[0].extensions.code) : "Abra o link de ativação enviado para o seu e-mail. O link pode estar ausente, inválido ou expirado.");
   }
   csrfToken = nextCsrf;
 }
@@ -56,7 +69,7 @@ export async function requestActivationCode(token?: string | null): Promise<User
     if (csrfToken && typeof window !== "undefined") {
       window.history.replaceState({}, "", window.location.pathname);
     }
-    return payload.userErrors.map((error) => error.code === "SESSION_EXPIRED" ? { ...error, message: "Este link de ativação é inválido, já foi utilizado ou expirou." } : error);
+    return payload.userErrors.map((error) => error.code === "SESSION_EXPIRED" ? { ...error, message: activationErrorMessage(error.code) } : error);
   }
   await refreshActivationProof();
   return (await execute("RequestAdminActivationOtp", {})).userErrors;

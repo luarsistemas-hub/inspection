@@ -38,7 +38,7 @@ func TestVV_IT_613PreparationEvidenceCursorRemainsPinnedWhileP2IsCreated(t *test
 	if err := addTask05EvidenceEntries(ctx, h, p1.TenantID, p1.MediaID, p1.PreparationID, baseAt, 99); err != nil {
 		t.Fatal(err)
 	}
-	queryCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: p1.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: p1.TenantID, Roles: []string{auth.TenantAdmin}}})
+	queryCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: p1.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: p1.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	server := task06GraphQLServer(h.DB)
 	seen := make(map[string]string, 200)
 	after := ""

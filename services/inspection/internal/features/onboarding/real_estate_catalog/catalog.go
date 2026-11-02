@@ -90,6 +90,23 @@ func ResolveVersion(segment string, version int) (Definition, error) {
 	return Resolve(segment)
 }
 
+// FieldOptions returns a copy of the closed option list declared by the
+// current definition for a select field, or nil when the field is free-form.
+// Checkpoint validation uses it so the stored values stay inside the catalog.
+func FieldOptions(stepKey, fieldKey string) []string {
+	for _, step := range definition.Steps {
+		if step.Key != stepKey {
+			continue
+		}
+		for _, field := range step.Fields {
+			if field.Key == fieldKey {
+				return append([]string(nil), field.Options...)
+			}
+		}
+	}
+	return nil
+}
+
 // Validate rejects malformed definitions, including future schema versions.
 func Validate(value Definition) error {
 	if value.SchemaVersion != DefinitionSchema {

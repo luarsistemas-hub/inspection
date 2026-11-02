@@ -10,9 +10,11 @@ import (
 	"inspection/libs/identity"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
 	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
+	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/objectstore"
+	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
@@ -315,4 +317,77 @@ func withTask06Tenant(ctx context.Context, db *gorm.DB, tenantID identity.ID, fn
 		return (tenanttx.Runner{DB: db}).Within(ctx, tenantID, fn)
 	}
 	return fn(db.WithContext(ctx).Where("tenant_id=?", tenantID))
+}
+
+// publicationsBySnapshot loads the release ledger rows of many snapshots in a
+// single query, so report lists never issue one lookup per item.
+func (r *queryResolver) publicationsBySnapshot(ctx context.Context, tenantID identity.ID, snapshotIDs []identity.ID) (map[identity.ID]database.ReportPublication, error) {
+	result := make(map[identity.ID]database.ReportPublication, len(snapshotIDs))
+	if len(snapshotIDs) == 0 {
+		return result, nil
+	}
+	var rows []database.ReportPublication
+	if err := withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
+		return tx.Session(&gorm.Session{NewDB: true}).Where("tenant_id=? AND snapshot_id IN ?", tenantID, snapshotIDs).Find(&rows).Error
+	}); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.SnapshotID] = row
+	}
+	return result, nil
+}
+
+// validCursorID reports whether the identifier carried by a pagination cursor
+// is a UUID. A malformed value must be rejected as invalid input: PostgreSQL
+// would otherwise fail the uuid comparison and surface an internal error.
+func validCursorID(id string) bool {
+	_, err := identity.ParseID(id)
+	return err == nil
+}
+
+// inspectionScopeCondition limits rows to the inspections an actor may see.
+// It returns an empty condition for the tenant administrator, an
+// always-false condition for an actor without grants, and otherwise a
+// condition on inspectionColumn built from the granted business units, assets,
+// projects and inspections of the same tenant.
+func inspectionScopeCondition(meta requestctx.Metadata, inspectionColumn string) (string, []any) {
+	if hasRole(meta, auth.TenantAdmin) {
+		return "", nil
+	}
+	var units, assets, projects, inspections []identity.ID
+	for _, scope := range meta.Principal.Scopes {
+		switch scope.Kind {
+		case "BUSINESS_UNIT":
+			units = append(units, scope.ID)
+		case "ASSET":
+			assets = append(assets, scope.ID)
+		case "PROJECT":
+			projects = append(projects, scope.ID)
+		case "INSPECTION":
+			inspections = append(inspections, scope.ID)
+		}
+	}
+	var clauses []string
+	args := []any{meta.TenantID}
+	if len(units) > 0 {
+		clauses = append(clauses, "s.business_unit_id IN ?")
+		args = append(args, units)
+	}
+	if len(assets) > 0 {
+		clauses = append(clauses, "s.asset_id IN ?")
+		args = append(args, assets)
+	}
+	if len(projects) > 0 {
+		clauses = append(clauses, "s.project_id IN ?")
+		args = append(args, projects)
+	}
+	if len(inspections) > 0 {
+		clauses = append(clauses, "s.id IN ?")
+		args = append(args, inspections)
+	}
+	if len(clauses) == 0 {
+		return "1=0", nil
+	}
+	return inspectionColumn + " IN (SELECT s.id FROM inspections.inspections s WHERE s.tenant_id = ? AND (" + strings.Join(clauses, " OR ") + "))", args
 }

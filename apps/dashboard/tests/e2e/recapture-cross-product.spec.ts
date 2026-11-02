@@ -72,7 +72,7 @@ async function latestCaptureOTP(request: APIRequestContext): Promise<{ id: strin
 test.describe("Dashboard to Capture recapture journey", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
 
-  test("requests a replacement and records the authoritative operation outcome", async ({ page, request }) => {
+  test("requests a replacement and records the authoritative operation outcome against the local stack", async ({ page, request }) => {
     test.setTimeout(120_000);
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/inspections");

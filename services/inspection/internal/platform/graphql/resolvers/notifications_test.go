@@ -17,9 +17,10 @@ func TestNotificationsAllowTenantAdmin(t *testing.T) {
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{
 		TenantID: tenantID,
 		Principal: requestctx.Principal{
-			IdentityID: identity.NewID(),
-			TenantID:   tenantID,
-			Roles:      []string{auth.TenantAdmin},
+			IdentityID:          identity.NewID(),
+			TenantID:            tenantID,
+			Roles:               []string{auth.TenantAdmin},
+			ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin),
 		},
 	})
 
@@ -49,7 +50,7 @@ func TestNotificationDeliveriesExposeSafeOrderedChannelState(t *testing.T) {
 		}
 	}
 	server := task06GraphQLServer(db)
-	adminContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "notification-safe"})
+	adminContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "notification-safe"})
 	query := `query { notificationDeliveries(first: 1) { nodes { status aggregateStatus selectedProvider channels { channel status provider receiptId attempts createdAt updatedAt } } pageInfo { hasNextPage } } }`
 	response := executeTask06GraphQL(t, server, query, adminContext)
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"aggregateStatus":"SENT"`) || !strings.Contains(response, `"channel":"SMS"`) || !strings.Contains(response, `"channel":"WHATSAPP"`) {
@@ -58,7 +59,7 @@ func TestNotificationDeliveriesExposeSafeOrderedChannelState(t *testing.T) {
 	if strings.Contains(response, "+15550000001") || strings.Contains(response, "private provider failure") {
 		t.Fatalf("notification response leaked unsafe channel data: %s", response)
 	}
-	customerContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}}, CorrelationID: "notification-forbidden"})
+	customerContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}, CorrelationID: "notification-forbidden"})
 	if response := executeTask06GraphQL(t, server, query, customerContext); !strings.Contains(response, "FORBIDDEN") {
 		t.Fatalf("customer role received delivery state: %s", response)
 	}

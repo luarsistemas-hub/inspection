@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	accesscore "inspection/services/inspection/internal/features/access/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -45,24 +46,42 @@ func Setup(deps Dependencies) error {
 
 func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membership, error) {
 	if cmd.TenantID == (identity.ID{}) || cmd.MembershipID == (identity.ID{}) || cmd.ExpectedVersion < 1 {
-		return database.Membership{}, apperror.New(apperror.InvalidInput, "membership", "membership and expected version are required")
+		return database.Membership{}, apperror.New(apperror.InvalidInput, "membership", "Informe o acesso e a versão atual.")
 	}
-	if _, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.AccessAdmin}, nil, true); err != nil {
+	principal, err := deps.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: cmd.TenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.AccessAdmin}, Mutate: true})
+	if err != nil {
 		return database.Membership{}, err
 	}
+	if cmd.MembershipID == principal.MembershipID {
+		return database.Membership{}, apperror.New(apperror.Forbidden, "membershipId", "Você não pode desativar o próprio acesso.")
+	}
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
 	var membership database.Membership
-	err := (tenanttx.Runner{DB: deps.DB}).Within(ctx, cmd.TenantID, func(tx *gorm.DB) error {
+	err = (tenanttx.Runner{DB: deps.DB}).Within(ctx, cmd.TenantID, func(tx *gorm.DB) error {
+		if err := accesscore.LockTenantAdmins(tx, cmd.TenantID); err != nil {
+			return err
+		}
 		if err := tx.Where("tenant_id = ? AND id = ?", cmd.TenantID, cmd.MembershipID).First(&membership).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				return apperror.New(apperror.NotFound, "membershipId", "membership not found")
+				return apperror.New(apperror.NotFound, "membershipId", "Acesso não encontrado.")
 			}
 			return err
+		}
+		if !auth.CanDelegateRole(principal.Roles, membership.Role) {
+			return apperror.New(apperror.Forbidden, "membershipId", "Você não pode alterar este acesso.")
 		}
 		if membership.Status == "DISABLED" {
 			return nil
 		}
 		if membership.Version != cmd.ExpectedVersion {
-			return apperror.New(apperror.Conflict, "expectedVersion", "stale membership version")
+			return apperror.New(apperror.Conflict, "expectedVersion", "Este acesso foi alterado por outra pessoa. Atualize a página e tente novamente.")
+		}
+		if membership.Role == auth.TenantAdmin && membership.Status == "ACTIVE" {
+			if err := accesscore.RequireAnotherTenantAdmin(tx, cmd.TenantID, membership.ID); err != nil {
+				return err
+			}
 		}
 		membership.Status, membership.Version, membership.UpdatedAt = "DISABLED", membership.Version+1, deps.Now().UTC()
 		return tx.Model(&database.Membership{}).Where("tenant_id = ? AND id = ? AND version = ?", cmd.TenantID, cmd.MembershipID, cmd.ExpectedVersion).Updates(map[string]any{"status": membership.Status, "version": membership.Version, "updated_at": membership.UpdatedAt}).Error

@@ -4,11 +4,15 @@ package resolvers
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"inspection/libs/identity"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	notificationcore "inspection/services/inspection/internal/features/notifications/core"
 	"inspection/services/inspection/internal/features/origins/invalidate_version"
@@ -19,6 +23,7 @@ import (
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/requestctx"
+	"inspection/services/inspection/internal/platform/testfailure"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 )
@@ -27,7 +32,7 @@ func TestVV_IT_437InventoryOriginAuthorizationMatrix(t *testing.T) {
 	fx := newAPI06Fixture(t)
 	query := api06Query(fx, "originVersions", "", "")
 	admin := fx.ctx
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, MembershipID: fx.seed.MembershipID, TenantID: fx.seed.TenantID, Roles: []string{auth.CustomerViewer}}, CorrelationID: "vv-it-437-viewer"})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, MembershipID: fx.seed.MembershipID, TenantID: fx.seed.TenantID, Roles: []string{auth.CustomerViewer}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}, CorrelationID: "vv-it-437-viewer"})
 	if response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, context.Background(), "", ""); !strings.Contains(response, "UNAUTHENTICATED") {
 		t.Fatalf("unauthenticated inventory list: %s", response)
 	}
@@ -39,8 +44,107 @@ func TestVV_IT_437InventoryOriginAuthorizationMatrix(t *testing.T) {
 	}
 }
 
+func TestVV_IT_438CurrentOriginOperationsRequireAuthentication(t *testing.T) {
+	fx := newAPI06Fixture(t)
+	versionID := fx.originVersionID.String()
+	for _, query := range []string{
+		api06Query(fx, "originVersions", "", ""),
+		api06Query(fx, "invalidateOriginVersion", "vv-it-438", versionID),
+		api06Query(fx, "inviteOriginCapture", "vv-it-438-invite", ""),
+		api06Query(fx, "activateOriginVersion", "vv-it-438-activate", versionID),
+		api06Query(fx, "promoteInspectionVideo", "vv-it-438-promote", ""),
+	} {
+		if response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, context.Background(), "", ""); !strings.Contains(response, "UNAUTHENTICATED") {
+			t.Errorf("origin operation without credentials: %s", response)
+		}
+	}
+}
+
+func TestVV_IT_446InvalidateOriginVersionUsesRealResolverAndService(t *testing.T) {
+	fx := newAPI06Fixture(t)
+	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api06Query(fx, "invalidateOriginVersion", "vv-it-446-invalidate", fx.originVersionID.String()), fx.ctx, "", "")
+	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"status":"INVALIDATED"`) {
+		t.Fatalf("invalidateOriginVersion did not execute the real transition: %s", response)
+	}
+}
+
+func TestVV_IT_439CurrentOriginOperationsRequireCapability(t *testing.T) {
+	fx := newAPI06Fixture(t)
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, MembershipID: fx.seed.MembershipID, TenantID: fx.seed.TenantID, Roles: []string{auth.CustomerViewer}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}, CorrelationID: "vv-it-439-viewer"})
+	for _, query := range []string{
+		api06Query(fx, "originVersions", "", ""),
+		api06Query(fx, "invalidateOriginVersion", "vv-it-439", fx.originVersionID.String()),
+		api06Query(fx, "promoteInspectionVideo", "vv-it-439-promote", ""),
+	} {
+		if response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, viewer, "", ""); !strings.Contains(response, "FORBIDDEN") {
+			t.Errorf("origin operation without capability: %s", response)
+		}
+	}
+}
+
+func TestVV_IT_440ForeignOriginResourcesReturnNotFound(t *testing.T) {
+	fx := newAPI06Fixture(t)
+	foreign, err := fx.h.SeedInventoryBaseline(context.Background(), harness.Task06FixtureOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`query { originVersions(assetId:"` + foreign.Task06Fixture.AssetID.String() + `") { nodes { id } } }`,
+		api06Query(fx, "invalidateOriginVersion", "vv-it-440", foreign.OriginVersionID.String()),
+		`mutation { promoteInspectionVideo(input:{inspectionId:"` + foreign.Task06Fixture.InspectionID.String() + `",clientMutationId:"vv-it-440-promote"}) { version { id } userErrors { code } } }`,
+	} {
+		if response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, fx.ctx, "", ""); !strings.Contains(response, "NOT_FOUND") {
+			t.Errorf("foreign origin resource should be hidden: %s", response)
+		}
+	}
+}
+
+func TestVV_IT_441CurrentOriginDependencyFailureHasNoSuccessPayload(t *testing.T) {
+	fx := newAPI06Fixture(t)
+	if err := testfailure.Install(fx.h.DB); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{api06Query(fx, "invalidateOriginVersion", "vv-it-441", fx.originVersionID.String()), api06Query(fx, "promoteInspectionVideo", "vv-it-441-promote", "")} {
+		response := executeAPI06Failure(t, fx, query, "dependency")
+		if !strings.Contains(response, "DEPENDENCY_UNAVAILABLE") || strings.Contains(response, `"version":{`) {
+			t.Fatalf("dependency failure returned success or wrong error: %s", response)
+		}
+	}
+}
+
+func TestVV_IT_442CurrentOriginInternalFailureHidesDetails(t *testing.T) {
+	fx := newAPI06Fixture(t)
+	if err := testfailure.Install(fx.h.DB); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{api06Query(fx, "invalidateOriginVersion", "vv-it-442", fx.originVersionID.String()), api06Query(fx, "promoteInspectionVideo", "vv-it-442-promote", "")} {
+		response := executeAPI06Failure(t, fx, query, "internal")
+		if !strings.Contains(response, "INTERNAL") || strings.Contains(response, testfailure.Secret) || strings.Contains(response, `"version":{`) {
+			t.Fatalf("internal failure was not generic: %s", response)
+		}
+	}
+}
+
+func executeAPI06Failure(t *testing.T, fx api06Fixture, query, mode string) string {
+	t.Helper()
+	body := `{"query":` + strconv.Quote(query) + `}`
+	req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	operation := "invalidateOriginVersion"
+	if strings.Contains(query, "promoteInspectionVideo") {
+		operation = "promoteInspectionVideo"
+	}
+	req.Header.Set(testfailure.HeaderOperation, operation)
+	req.Header.Set(testfailure.HeaderFailure, mode)
+	req = testfailure.WithRequest(req.WithContext(fx.ctx), "test")
+	w := httptest.NewRecorder()
+	fx.server.ServeHTTP(w, req)
+	return w.Body.String()
+}
+
 type api06Fixture struct {
 	fixedOriginGraphQLFixture
+	originVersionID identity.ID
 }
 
 func newAPI06Fixture(t *testing.T) api06Fixture {
@@ -78,8 +182,8 @@ func newAPI06FixtureWithOptions(t *testing.T, options harness.Task06FixtureOptio
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: bus}}))
 	server.SetErrorPresenter(graph.PresentError)
-	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-api06"}
-	fx := api06Fixture{fixedOriginGraphQLFixture{ctx: requestctx.WithMetadata(ctx, meta), h: h, seed: seed, server: server, bus: bus, templateID: seed.TemplateID}}
+	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-api06"}
+	fx := api06Fixture{fixedOriginGraphQLFixture: fixedOriginGraphQLFixture{ctx: requestctx.WithMetadata(ctx, meta), h: h, seed: seed, server: server, bus: bus, templateID: seed.TemplateID}, originVersionID: baseline.OriginVersionID}
 	setHistoricalVideoAdmissionDisabled(t, fx.fixedOriginGraphQLFixture)
 	return fx
 }

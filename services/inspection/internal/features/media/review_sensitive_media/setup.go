@@ -65,7 +65,7 @@ func Setup(d Dependencies) error {
 		if !ok || !meta.Principal.Internal {
 			return nil, apperror.New(apperror.Forbidden, "", "permission denied")
 		}
-		if _, err := d.Authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Manager}, nil, false); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: q.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}}); err != nil {
 			return nil, err
 		}
 		return list(ctx, d.DB, q, d.Authorizer)
@@ -81,7 +81,7 @@ func Setup(d Dependencies) error {
 		if !ok || !meta.Principal.Internal {
 			return nil, apperror.New(apperror.Forbidden, "", "permission denied")
 		}
-		if _, err := d.Authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Manager}, nil, false); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: q.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}}); err != nil {
 			return nil, err
 		}
 		return original(ctx, d.DB, d.Store, q, d.Authorizer, d.Now())
@@ -149,7 +149,7 @@ AND NOT EXISTS (SELECT 1 FROM media.screening_runs decision WHERE decision.tenan
 		if err != nil {
 			continue
 		}
-		if _, err = authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "INSPECTION", ID: id}, false); err == nil {
+		if _, err = authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: q.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: id}}); err == nil {
 			visible = append(visible, item)
 		}
 	}
@@ -180,7 +180,7 @@ func original(ctx context.Context, db *gorm.DB, store objectstore.Store, q Origi
 		if err := tx.Table("inspections.inspections i").Select("i.*").Joins("JOIN inspections.responsibilities r ON r.tenant_id=i.tenant_id AND r.inspection_id=i.id").Where("i.tenant_id=? AND r.id=?", q.TenantID, media.ResponsibilityID).Take(&inspection).Error; err != nil {
 			return apperror.New(apperror.NotFound, "mediaId", "media not found")
 		}
-		if _, err := authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, false); err != nil {
+		if _, err := authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: q.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}}); err != nil {
 			return apperror.New(apperror.NotFound, "mediaId", "media not found")
 		}
 		if media.MediaKind == "VIDEO" {

@@ -250,7 +250,9 @@ func newMSG06Harness(t *testing.T) *harness.Harness {
 
 func makeInspectionDue(ctx context.Context, h *harness.Harness, tenantID, inspectionID identity.ID) error {
 	return h.WithinTenant(ctx, tenantID, func(tx *gorm.DB) error {
-		return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", tenantID, inspectionID).Update("updated_at", time.Now().UTC().Add(-6*365*24*time.Hour)).Error
+		// The fixture inspection belongs to an ACTIVE project, which has no
+		// retention clock; the due inspection is standalone and closed long ago.
+		return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", tenantID, inspectionID).Updates(map[string]any{"updated_at": time.Now().UTC().Add(-6 * 365 * 24 * time.Hour), "project_id": nil, "stage_id": nil}).Error
 	})
 }
 

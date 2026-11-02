@@ -3,12 +3,14 @@ package graphql
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"inspection/services/inspection/internal/platform/apperror"
-	"inspection/services/inspection/internal/platform/requestctx"
 	"log/slog"
 	"strings"
 	"testing"
+
+	"inspection/services/inspection/internal/platform/apperror"
+	"inspection/services/inspection/internal/platform/requestctx"
 )
 
 func TestPresentErrorLogsInternalCauseWithoutLeakingIt(t *testing.T) {
@@ -17,19 +19,29 @@ func TestPresentErrorLogsInternalCauseWithoutLeakingIt(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{CorrelationID: "corr-qa"})
-	public := PresentError(ctx, errors.New("postgres password=secret"))
+	cause := errors.New(`connection refused; password=secret; contact ana@example.test; otp=654321; invalid input syntax for type uuid: "postgres-secret-value"`)
+	public := PresentError(ctx, apperror.Wrap(apperror.Internal, apperror.Wrap(apperror.Internal, cause)))
 	if public.Message != "Não foi possível concluir a operação." || public.Extensions["correlationId"] != "corr-qa" || public.Extensions["code"] != string(apperror.Internal) {
 		t.Fatalf("unexpected public error: %+v", public)
 	}
 	logged := output.String()
-	if !strings.Contains(logged, "corr-qa") || !strings.Contains(logged, "errorCode=INTERNAL") {
+	if !strings.Contains(logged, "corr-qa") || !strings.Contains(logged, "errorCode=INTERNAL") || !strings.Contains(logged, "connection refused") {
 		t.Fatalf("internal error log omitted safe correlation fields: %s", logged)
 	}
-	if strings.Contains(logged, "postgres") || strings.Contains(logged, "password") || strings.Contains(logged, "secret") {
-		t.Fatalf("internal error detail leaked to logs: %s", logged)
+	for _, secret := range []string{"password=secret", "ana@example.test", "654321", "postgres-secret-value"} {
+		if strings.Contains(logged, secret) {
+			t.Fatalf("internal error log leaked %q: %s", secret, logged)
+		}
 	}
-	if strings.Contains(public.Message, "password") || strings.Contains(public.Message, "secret") {
+	if strings.Contains(public.Message, "postgres") || strings.Contains(public.Message, "password") || strings.Contains(public.Message, "secret") {
 		t.Fatalf("internal detail leaked: %s", public.Message)
+	}
+	response, err := json.Marshal(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(response), "postgres") || strings.Contains(string(response), "password") || strings.Contains(string(response), "secret") {
+		t.Fatalf("internal cause leaked in serialized GraphQL response: %s", response)
 	}
 }
 

@@ -81,6 +81,8 @@ type Call struct {
 	HTTPStatus          *int
 	InputTokens         *int64
 	OutputTokens        *int64
+	AudioInputTokens    *int64
+	AudioDurationMS     *int64
 	CachedInputTokens   *int64
 	ImageCount          *int
 	RequestBodyBytes    *int64
@@ -255,6 +257,7 @@ func handle(ctx context.Context, deps Dependencies, q Query) (Result, error) {
 				ReportedCostDecimal: row.ReportedCostDecimal, CostSource: costSource, CostState: row.CostState,
 				State: row.State, TechnicalOutcome: row.TechnicalOutcome, TransportDelivered: row.TransportDelivered,
 				HTTPStatus: row.HTTPStatus, InputTokens: row.InputTokens, OutputTokens: row.OutputTokens,
+				AudioInputTokens: row.AudioInputTokens, AudioDurationMS: row.AudioDurationMS,
 				CachedInputTokens: row.CachedInputTokens, ImageCount: row.ImageCount, RequestBodyBytes: row.RequestBodyBytes,
 				ReportedCost: row.ReportedCost, DurationMS: row.DurationMS, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt,
 			})

@@ -17,9 +17,6 @@ import (
 	reportcore "inspection/services/inspection/internal/features/reports/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/pdf"
-
-	"github.com/pdfcpu/pdfcpu/pkg/api"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 func TestVV_IT_294RPT1PDFKeepsPinnedVideoEvidenceAndBathroomGap(t *testing.T) {
@@ -122,20 +119,29 @@ func TestVV_IT_299AllInconclusivePDFListsEveryScopeLimitation(t *testing.T) {
 func TestVV_IT_300TwoHundredVideoFindingsPaginateWithReadableCaptions(t *testing.T) {
 	snapshot := task07LargeVideoSnapshot(200, true)
 	assets := make(pdf.AssetBundle, 200)
-	for index, evidence := range snapshot.Evidence {
-		assets["evidence-"+evidence.ID+".jpg"] = jpegBytes(t, 32+index, 24)
+	for _, evidence := range snapshot.Evidence {
+		assets["evidence-"+evidence.ID+".jpg"] = jpegBytes(t, 48, 36)
 	}
 	data := renderVVTask07(t, snapshot, assets)
 	if pages := PageCount(data); pages < 20 || pages > maxPDFPages {
 		t.Fatalf("200-finding PDF page count=%d, expected a paginated document within limits", pages)
 	}
-	for index := 0; index < 200; index++ {
-		evidence := snapshot.Evidence[index]
-		_, caption, _, err := evidenceComponents(evidence, assets, snapshot.Requirements[index].Label, "snapshot-large", "")
-		if err != nil || len(assets["evidence-"+evidence.ID+".jpg"]) == 0 || !strings.Contains(caption, evidence.FrameID) || !strings.Contains(caption, evidence.SourceMediaID) || !strings.Contains(analysisSummary(snapshot.Requirements[index]), fmt.Sprintf("Limitação %03d", index)) {
-			t.Errorf("paginated image/caption/limitation %d failed: %v", index, err)
-		}
+	pages := assertVVTask07PDFGeometry(t, data, 200)
+	assertTask07PDFCaptionsAndLimitations(t, pages, snapshot)
+}
+
+// TestVV_IT_614MultiPagePDFKeepsImagesCaptionsAndLimitationsInsidePages
+// extracts each page with pdfcpu and checks image transforms against its page
+// box, while ensuring image rows retain following text on the same page.
+func TestVV_IT_614MultiPagePDFKeepsImagesCaptionsAndLimitationsInsidePages(t *testing.T) {
+	snapshot := task07LargeVideoSnapshot(200, true)
+	assets := make(pdf.AssetBundle, len(snapshot.Evidence))
+	for _, evidence := range snapshot.Evidence {
+		assets["evidence-"+evidence.ID+".jpg"] = jpegBytes(t, 48, 36)
 	}
+	data := renderVVTask07(t, snapshot, assets)
+	pages := assertVVTask07PDFGeometry(t, data, 200)
+	assertTask07PDFCaptionsAndLimitations(t, pages, snapshot)
 }
 
 func TestVV_IT_307TwoHundredVideoCaptionsAndLimitationsSurvivePagination(t *testing.T) {
@@ -397,47 +403,3 @@ func storeVVTask07Snapshot(t *testing.T, env *testEnv, snapshot reportcore.Snaps
 	}
 	env.snapshot.CanonicalJSON, env.snapshot.JSONDigest = json.RawMessage(canonical), digest
 }
-
-func task07LargeVideoSnapshot(count int, limitations bool) reportcore.Snapshot {
-	snapshot := validPDFSnapshot()
-	snapshot.Requirements = make([]reportcore.Requirement, 0, count)
-	snapshot.Findings = make([]reportcore.Finding, 0, count)
-	snapshot.Evidence = make([]reportcore.Evidence, 0, count)
-	for index := 0; index < count; index++ {
-		key := fmt.Sprintf("video:finding-%03d", index)
-		evidenceID := identity.NewID().String()
-		frameID, sourceID := fmt.Sprintf("frame-%03d", index), fmt.Sprintf("source-%03d", index)
-		ms, pts := int64(index*1000), int64(index*1_000_000)
-		snapshot.Requirements = append(snapshot.Requirements, reportcore.Requirement{Key: key, Section: "Vídeo", Label: fmt.Sprintf("Componente %03d", index), AnalysisMode: "CURRENT_ONLY", AnalysisStatus: "INCONCLUSIVE", Coverage: func() string {
-			if limitations {
-				return fmt.Sprintf("Limitação %03d", index)
-			}
-			return ""
-		}()})
-		snapshot.Findings = append(snapshot.Findings, reportcore.Finding{ID: fmt.Sprintf("Finding %03d", index), Category: "CONSERVATION", Title: fmt.Sprintf("Finding %03d", index), Description: "Desgaste observado.", Severity: "LOW", Confidence: .8, EvidenceIDs: []string{evidenceID}, Quality: "ADEQUATE", RecommendedAction: "MONITOR"})
-		snapshot.Evidence = append(snapshot.Evidence, reportcore.Evidence{ID: evidenceID, RequirementKey: key, Role: "CURRENT", EvidenceKind: "VIDEO_FRAME", FrameID: evidenceID, SourceMediaID: sourceID, PreparationID: "prep-" + frameID, Description: frameID, PTSMicros: &pts, TimestampMS: &ms, FrameDigest: strings.Repeat("a", 64), Availability: "AVAILABLE"})
-	}
-	return snapshot
-}
-
-func renderVVTask07(t *testing.T, snapshot reportcore.Snapshot, assets pdf.AssetBundle) []byte {
-	t.Helper()
-	data, err := (MarotoRenderer{}).Render(context.Background(), PDFDocument{SnapshotID: "snapshot-vv-task07", Version: 1, Snapshot: snapshot, Internal: true}, assets)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
-func extractVVTask07Images(t *testing.T, data []byte) int {
-	t.Helper()
-	model.ConfigPath = "disable"
-	count := 0
-	err := api.ExtractImages(bytes.NewReader(data), nil, func(_ model.Image, _ bool, _ int) error { count++; return nil }, model.NewDefaultConfiguration())
-	if err != nil {
-		t.Fatalf("extract PDF images: %v", err)
-	}
-	return count
-}
-
-func ptrTask07Int64(value int64) *int64 { return &value }

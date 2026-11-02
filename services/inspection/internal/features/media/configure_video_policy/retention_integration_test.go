@@ -81,7 +81,7 @@ func TestIntegration_UT316_LoweringRetentionKeepsAssignedSourceExpiry(t *testing
 	if err := Setup(Dependencies{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}}); err != nil {
 		t.Fatal(err)
 	}
-	requestCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, MembershipID: fixture.MembershipID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}})
+	requestCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, MembershipID: fixture.MembershipID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	lowered := 1
 	raw, err := bus.Send(requestCtx, Command{TenantID: fixture.TenantID, MaxDurationMinutes: 15, OriginRetentionDays: 1, CurrentRetentionDays: 1, SupersededBaselineRetentionDays: &lowered, ExpectedVersion: 1, MutationID: "ut316-lower"})
 	if err != nil {

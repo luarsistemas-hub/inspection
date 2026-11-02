@@ -58,7 +58,7 @@ func TestVV_IT_499PublicationOperationsRequireCapability(t *testing.T) {
 	roles := map[string]string{"configurePublicationPolicy": auth.Manager, "publishReport": auth.Viewer, "invalidateReportPublication": auth.Viewer, "publicationPolicy": auth.OrganizationAdmin}
 	for _, operation := range api12Operations {
 		t.Run(operation, func(t *testing.T) {
-			actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{roles[operation]}}, CorrelationID: "vv-it-499"})
+			actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{roles[operation]}, ProductEntitlements: auth.ProductsForRole(roles[operation])}, CorrelationID: "vv-it-499"})
 			assertAPI11Rejected(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api12Target(t, fx, operation, "vv-it-499-"+operation), actor, "", ""), "FORBIDDEN")
 		})
 	}

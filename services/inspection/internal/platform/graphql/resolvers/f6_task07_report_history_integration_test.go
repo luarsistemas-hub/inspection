@@ -140,7 +140,9 @@ func TestVV_IT_221TwoHundredGapsAreAllExposedWithoutSatisfactorySummary(t *testi
 	base := seedTask07VideoReport(t, fx.h, fx.seed, 2)
 	requirements := make([]reportcore.Requirement, 200)
 	for i := range requirements {
-		label := "Cômodo " + strconv.Itoa(i+1) + " — Parede"
+		// Known Portuguese environment and component names are stable under the
+		// report presentation localization, so each gap keeps its own label.
+		label := "Quarto " + strconv.Itoa(i+1) + " — Parede"
 		requirements[i] = reportcore.Requirement{Key: "video:gap-" + strconv.Itoa(i), Section: "Vídeo", Label: label, Coverage: generate_snapshot.VideoUnobservedCoverage, Instructions: generate_snapshot.VideoRecaptureGuidance(label, "wide"), AnalysisMode: "CURRENT_ONLY", AnalysisStatus: "INCONCLUSIVE"}
 	}
 	now := time.Now().UTC()
@@ -175,7 +177,7 @@ func TestVV_IT_221TwoHundredGapsAreAllExposedWithoutSatisfactorySummary(t *testi
 		t.Fatalf("report exposes %d distinct gaps, want 200", len(seen))
 	}
 	html := payload.Data.Report.HTML
-	if strings.Count(html, generate_snapshot.VideoUnobservedCoverage) != 200 || !strings.Contains(html, "Cômodo 200 — Parede") || !strings.Contains(html, generate_snapshot.VideoNoComparativeConclusion) {
+	if strings.Count(html, generate_snapshot.VideoUnobservedCoverage) != 200 || !strings.Contains(html, "Quarto 200 — Parede") || !strings.Contains(html, generate_snapshot.VideoNoComparativeConclusion) {
 		t.Fatal("exported report HTML does not carry all 200 gaps and the no-conclusion statement")
 	}
 	if lower := strings.ToLower(html); strings.Contains(lower, "satisfatório") || strings.Contains(lower, "bom estado") || strings.Contains(lower, "escopo observado") {

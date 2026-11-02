@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { beginPKCE, takePKCE } from "@/auth/pkce";
 import { safeAdminPath } from "@/auth/return-path";
-import { clearProtectedContext, clearSession, getAccessToken, hasAdminAccess, hasAdminRouteAccess, hasAnalysisPromptAccess, hasDashboardAccess, restoreMembershipContext, setMembershipContext, setSession } from "@/auth/session";
+import { accessTokenForRequest, clearProtectedContext, clearSession, getAccessToken, hasAdminAccess, hasAdminRouteAccess, hasAnalysisPromptAccess, hasDashboardAccess, restoreMembershipContext, setMembershipContext, setSession } from "@/auth/session";
 
 describe("Admin authentication safety", () => {
   beforeEach(() => { sessionStorage.clear(); clearSession(); vi.stubGlobal("location", { origin: "http://localhost:3000", assign: vi.fn() }); });
@@ -56,5 +56,14 @@ describe("Admin authentication safety", () => {
     expect(restoreMembershipContext()).toEqual({ membershipId: "membership-1", scope: "BUSINESS_UNIT" });
     clearProtectedContext();
     expect(restoreMembershipContext()).toBeUndefined();
+  });
+
+  it.each([400, 401])("marks an OIDC refresh response %i as an expired session", async (status) => {
+    setSession("admin-token", undefined, undefined, "refresh-token", 1);
+    vi.stubEnv("NEXT_PUBLIC_OIDC_TOKEN_URL", "http://localhost:8081/realms/inspection/protocol/openid-connect/token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status })));
+
+    await expect(accessTokenForRequest()).rejects.toMatchObject({ code: "SESSION_EXPIRED" });
+    expect(getAccessToken()).toBeUndefined();
   });
 });

@@ -75,13 +75,13 @@ func TestVV_IT_155ViewerCannotRetryPreparationOrRecoverDeletion(t *testing.T) {
 	t.Run("retryVideoPreparation", func(t *testing.T) {
 		fx := newAPI08Fixture(t)
 		resources := seedAPI08Resources(t, fx)
-		viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-155"})
+		viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-155"})
 		assertFixedOriginTransportError(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, resources.query(fx, "retryVideoPreparation", "vv-it-155-retry"), viewer, "", ""), "FORBIDDEN")
 		resources.assertUnchanged(t, fx)
 	})
 	t.Run("deletion recovery", func(t *testing.T) {
 		fx := newAPI14RetentionFixture(t)
-		viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-155"})
+		viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-155"})
 		assertFixedOriginTransportError(t, executeAPI14Retention(t, fx, api14RetentionMutation("recordDeletionRequest", "", fx.mediaID.String(), "", "vv-it-155-delete"), viewer, "", ""), "FORBIDDEN")
 		assertAPI14RetentionNoWrites(t, fx)
 	})
@@ -90,7 +90,7 @@ func TestVV_IT_155ViewerCannotRetryPreparationOrRecoverDeletion(t *testing.T) {
 func TestVV_IT_151FailedPreparationStaysListedForCleanup(t *testing.T) {
 	fx := newAPI08Fixture(t)
 	failed := seedAPI08Preparation(t, fx, "FAILED", 2, "RETAINED")
-	manager := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Manager}}, CorrelationID: "vv-it-151"})
+	manager := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Manager}, ProductEntitlements: auth.ProductsForRole(auth.Manager)}, CorrelationID: "vv-it-151"})
 	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, `query { videoPreparations(status:["FAILED"]) { nodes { mediaId status retryable } } }`, manager, "", "")
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"mediaId":"`+failed.mediaID.String()+`"`) || !strings.Contains(response, `"status":"FAILED"`) {
 		t.Fatalf("unresolved failed C1 is not listed for cleanup: %s", response)

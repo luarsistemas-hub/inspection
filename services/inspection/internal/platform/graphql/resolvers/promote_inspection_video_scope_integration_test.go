@@ -72,7 +72,11 @@ func TestVV_IT_066PromotedKitchenScopeAndLimitedCoverageInOriginVersions(t *test
 		if err := tx.Create(&database.VideoPlan{ID: planID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: manifest, Status: "SEALED", SealedAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		return nil
+		// Promotion reads the inspection's active sealed plan and its MAIN preparation.
+		if err := tx.Create(&database.VideoPlanPreparation{TenantID: fixture.TenantID, PlanID: planID, PreparationID: preparationID, Role: "MAIN", CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.InspectionID).Update("active_video_plan_id", planID).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +93,7 @@ func TestVV_IT_066PromotedKitchenScopeAndLimitedCoverageInOriginVersions(t *test
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: bus}}))
 	server.SetErrorPresenter(graph.PresentError)
-	operator := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, MembershipID: fixture.MembershipID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "it066"})
+	operator := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, MembershipID: fixture.MembershipID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "it066"})
 	mutation := `mutation { promoteInspectionVideo(input:{inspectionId:"` + fixture.InspectionID.String() + `",clientMutationId:"it066-promote"}) { version { id limitedCoverage } userErrors { code } } }`
 	response := executeTask06GraphQL(t, server, mutation, operator)
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"limitedCoverage":true`) || !strings.Contains(response, `"userErrors":[]`) {

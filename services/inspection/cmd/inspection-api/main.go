@@ -15,9 +15,10 @@ import (
 
 	"inspection/libs/identity"
 	activateinternal "inspection/services/inspection/internal/features/access/activate_internal_user"
-	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
+	assignaccess "inspection/services/inspection/internal/features/access/assign_membership_access"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	explaineffectiveaccess "inspection/services/inspection/internal/features/access/explain_effective_access"
+	invitecustomer "inspection/services/inspection/internal/features/access/invite_customer_user"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
 	postallookup "inspection/services/inspection/internal/features/addresses/lookup_postal_code"
@@ -67,6 +68,7 @@ import (
 	inventorydiscard "inspection/services/inspection/internal/features/inventory/discard_draft"
 	inventorydraft "inspection/services/inspection/internal/features/inventory/draft"
 	inventorymerge "inspection/services/inspection/internal/features/inventory/merge_items"
+	inventoryregenerate "inspection/services/inspection/internal/features/inventory/regenerate_suggestions"
 	inventoryremoveenv "inspection/services/inspection/internal/features/inventory/remove_environment"
 	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
 	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
@@ -306,10 +308,13 @@ func run() error {
 			return updatetenant.Setup(updatetenant.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
-			return assignroles.Setup(assignroles.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+			return inviteinternal.Setup(inviteinternal.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, Issuer: cfg.OIDCIssuer, AdminOrigin: cfg.AdminOrigin, Provider: keycloakClient, Registry: channelRegistry, Limits: limits})
 		},
 		func() error {
-			return inviteinternal.Setup(inviteinternal.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, Issuer: cfg.OIDCIssuer, AdminOrigin: cfg.AdminOrigin, Provider: keycloakClient, Registry: channelRegistry})
+			return invitecustomer.Setup(invitecustomer.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, Issuer: cfg.OIDCIssuer, AdminOrigin: cfg.AdminOrigin, Provider: keycloakClient, Registry: channelRegistry, Limits: limits})
+		},
+		func() error {
+			return assignaccess.Setup(assignaccess.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
 			return disablemembership.Setup(disablemembership.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
@@ -469,6 +474,7 @@ func run() error {
 		func() error { return inventorydiscard.Setup(bus, inventoryService) },
 		func() error { return inventoryrequest.Setup(bus, inventoryService) },
 		func() error { return inventoryretry.Setup(bus, inventoryService) },
+		func() error { return inventoryregenerate.Setup(bus, inventoryService) },
 		func() error { return inventorydraft.Setup(bus, inventoryService) },
 		func() error { return inventorybaseline.Setup(bus, inventoryService) },
 		func() error { return inventorytrail.Setup(bus, inventoryService) },

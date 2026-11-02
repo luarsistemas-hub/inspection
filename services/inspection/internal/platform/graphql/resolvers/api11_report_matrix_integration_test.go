@@ -73,7 +73,7 @@ func TestVV_IT_490ReportOperationsRequireReadCapability(t *testing.T) {
 			if strings.HasPrefix(operation, "customer") {
 				role = auth.OrganizationAdmin
 			}
-			actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{role}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: fx.seed.BusinessUnitID}}}, CorrelationID: "vv-it-490"})
+			actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{role}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: fx.seed.BusinessUnitID}}, ProductEntitlements: auth.ProductsForRole(role)}, CorrelationID: "vv-it-490"})
 			assertAPI11Rejected(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api11Query(fx, operation, fx.seed.InspectionID, ""), actor, "", ""), "FORBIDDEN")
 		})
 	}
@@ -164,7 +164,7 @@ func TestVV_IT_496UnfinishedReportIsInvalidState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: pending.TenantID, Principal: requestctx.Principal{IdentityID: pending.IdentityID, TenantID: pending.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-it-496"})
+	actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: pending.TenantID, Principal: requestctx.Principal{IdentityID: pending.IdentityID, TenantID: pending.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-it-496"})
 	assertAPI11Rejected(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api11Query(fx, "report", pending.InspectionID, ""), actor, "", ""), "INVALID_STATE")
 	// An explicit version that was never produced stays unknown.
 	assertAPI11Rejected(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, `query { report(inspectionId:"`+fx.seed.InspectionID.String()+`",version:9) { id } }`, fx.ctx, "", ""), "NOT_FOUND")
@@ -228,8 +228,8 @@ func newAPI11FixtureWithHarness(t *testing.T, h *harness.Harness) api11Fixture {
 	report := seedAPI11Report(t, h, seed)
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: mediator.New(), Store: h.Store, PublicationService: publication.Service{DB: h.DB}}}))
 	server.SetErrorPresenter(graph.PresentError)
-	admin := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-api11"})
-	customer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: seed.TenantID, Roles: []string{auth.CustomerViewer}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: seed.BusinessUnitID}}}, CorrelationID: "vv-api11-customer"})
+	admin := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-api11"})
+	customer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: seed.TenantID, Roles: []string{auth.CustomerViewer}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: seed.BusinessUnitID}}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}, CorrelationID: "vv-api11-customer"})
 	return api11Fixture{fixedOriginGraphQLFixture: fixedOriginGraphQLFixture{ctx: admin, h: h, seed: seed, server: server}, customer: customer, snapshotID: report.snapshotID, planID: report.planID, frameID: report.frameID, sourceMedia: report.sourceMedia}
 }
 

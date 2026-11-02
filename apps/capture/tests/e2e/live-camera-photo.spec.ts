@@ -16,6 +16,7 @@ async function mockCapture(page: Page, external: ReturnType<typeof bootstrap>) {
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: external });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("createMediaUpload")) { sequence += 1; return respond({ createMediaUpload: { upload: { mediaId: `photo-${sequence}`, uploadId: `upload-${sequence}`, expiresAt: "2099-01-01T00:00:00Z", partSizeBytes: 1048576 }, userErrors: [] } }); }

@@ -53,7 +53,11 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			return messaging.ErrPermanent
 		}
 		var job database.ComparisonJob
-		if err := tx.Where("tenant_id=? AND id=?", tenantID, event.JobID).First(&job).Error; err != nil {
+		// The row lock serializes deliveries of the same job (for example two
+		// comparison_requested events created by a duplicate start): the later
+		// delivery waits for the first commit and then finds a terminal job, so
+		// one accepted run, one usage record and one completion event exist.
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, event.JobID).First(&job).Error; err != nil {
 			return err
 		}
 		if job.Status == "COMPLETED" || job.Status == "INCONCLUSIVE" || job.Status == "FAILED" {

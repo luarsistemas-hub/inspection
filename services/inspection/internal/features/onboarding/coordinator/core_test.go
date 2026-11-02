@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 func TestValidateSubmitTruthfulModesAndDigest(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	base := SubmitInput{Now: now, Steps: map[string]StepPayload{
-		"AGENCY": {}, "PROPERTY": {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(7 * 24 * time.Hour).Format(time.RFC3339)},
+		"AGENCY": {}, "PROPERTY": {"address": "Rua A", "propertyType": "APARTMENT", "purpose": "SALE", "deadlineAt": now.Add(7 * 24 * time.Hour).Format(time.RFC3339)},
 		"PARTICIPANT": {"self": true},
 	}, DeliveryState: "READY", IdempotencyKey: "submit-1"}
 	first, err := ValidateSubmit(base)
@@ -29,12 +30,12 @@ func TestValidateSubmitRejectsExpiredPropertyDeadline(t *testing.T) {
 		Now: now,
 		Steps: map[string]StepPayload{
 			"AGENCY":      {},
-			"PROPERTY":    {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(-time.Minute).Format(time.RFC3339)},
+			"PROPERTY":    {"address": "Rua A", "propertyType": "APARTMENT", "purpose": "SALE", "deadlineAt": now.Add(-time.Minute).Format(time.RFC3339)},
 			"PARTICIPANT": {"self": true},
 		},
 		DeliveryState: "READY", IdempotencyKey: "submit-expired",
 	}
-	if _, err := ValidateSubmit(in); err == nil || code(err) != apperror.InvalidInput {
+	if _, err := ValidateSubmit(in); err == nil || code(err) != apperror.InvalidState {
 		t.Fatalf("expired deadline accepted during submit: %v", err)
 	}
 }
@@ -56,7 +57,7 @@ func TestValidatePropertyAndDelegateBoundaries(t *testing.T) {
 
 func TestValidatePropertyRejectsInvalidPurposeAndDoesNotRequireRooms(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
-	base := StepPayload{"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(time.Hour).Format(time.RFC3339)}
+	base := StepPayload{"address": "Rua A", "propertyType": "APARTMENT", "purpose": "SALE", "deadlineAt": now.Add(time.Hour).Format(time.RFC3339)}
 	if err := ValidateProperty(base, now); err != nil {
 		t.Fatalf("property without room count rejected: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestValidatePropertyRejectsInvalidPurposeAndDoesNotRequireRooms(t *testing.
 func TestValidateSubmitAcceptsPublicSelfParticipantMode(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	in := SubmitInput{Now: now, Steps: map[string]StepPayload{
-		"AGENCY": {}, "PROPERTY": {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(time.Hour).Format(time.RFC3339)},
+		"AGENCY": {}, "PROPERTY": {"address": "Rua A", "propertyType": "APARTMENT", "purpose": "SALE", "deadlineAt": now.Add(time.Hour).Format(time.RFC3339)},
 		"PARTICIPANT": {"mode": "SELF"},
 	}, DeliveryState: "READY", IdempotencyKey: "submit-self"}
 	if _, err := ValidateSubmit(in); err != nil {
@@ -83,9 +84,27 @@ func TestValidateSubmitAcceptsPublicSelfParticipantMode(t *testing.T) {
 	}
 }
 
+func TestREO_UT024SubmitNamesFirstIncompleteRequiredStep(t *testing.T) {
+	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	steps := map[string]StepPayload{
+		"AGENCY":   {},
+		"PROPERTY": {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(time.Hour).Format(time.RFC3339)},
+	}
+	_, err := ValidateSubmit(SubmitInput{Now: now, Steps: steps, DeliveryState: "READY", IdempotencyKey: "reo-ut024"})
+	if err == nil {
+		t.Fatal("submit without participant checkpoint was accepted")
+	}
+	if code, field, message := apperror.Public(err); code != apperror.InvalidState || field != "participant" || !strings.Contains(message, "Responsável pela vistoria") || strings.Contains(message, "participant") {
+		t.Fatalf("incomplete step error = %s field=%q message=%q", code, field, message)
+	}
+	if _, ok := steps["PARTICIPANT"]; ok {
+		t.Fatalf("validation mutated checkpoints: %+v", steps)
+	}
+}
+
 func TestValidateCheckpointPayloadAcceptsCatalogPropertyDeadline(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
-	payload := StepPayload{"address": "Rua A", "purpose": "SALE", "deadline": "2026-09-12"}
+	payload := StepPayload{"address": "Rua A", "propertyType": "APARTMENT", "purpose": "SALE", "deadline": "2026-09-12"}
 	if err := ValidateCheckpointPayload("PROPERTY", payload, now); err != nil {
 		t.Fatalf("catalog property deadline rejected: %v", err)
 	}

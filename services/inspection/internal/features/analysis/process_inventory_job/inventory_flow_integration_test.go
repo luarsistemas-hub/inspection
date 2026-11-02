@@ -945,14 +945,24 @@ func TestIT021LegacyVideoOriginWithExpiredSourceCatalogsRetainedFrames(t *testin
 		t.Fatalf("cataloging result = %+v, want sourcesExpired for the expired legacy video", result)
 	}
 	f.gateway.Respond = func(request llm.StructuredRequest) (string, error) {
+		if request.Mode != "INVENTORY_CATALOG" {
+			return `{"pairs":[]}`, nil
+		}
 		evidence := userData(t, request)["evidence"].([]any)[0].(map[string]any)
 		item := map[string]any{"typeCode": "WINDOW", "name": "Janela", "material": nil, "color": nil, "quantity": 1, "condition": "GOOD", "observation": "OBSERVED", "limitation": nil, "confidenceBps": 9000, "evidence": []any{evidence}}
 		return mustJSON(t, map[string]any{"environments": []any{map[string]any{"typeCode": "LIVING_ROOM", "name": "Sala", "items": []any{item}}}}), nil
 	}
 	f.drain()
 	calls := f.gateway.Calls("INVENTORY_CATALOG")
-	if len(calls) != 1 || len(calls[0].Images) != len(frames) || calls[0].Images[0].Source != "VIDEO_FRAME" {
-		t.Fatalf("legacy video cataloging must use the retained frames: %+v", calls)
+	if len(calls) != 1 {
+		t.Fatalf("legacy video cataloging made %d catalog calls, want 1", len(calls))
+	}
+	firstSource := ""
+	if len(calls[0].Images) > 0 {
+		firstSource = calls[0].Images[0].Source
+	}
+	if len(calls[0].Images) != len(frames) || firstSource != "VIDEO_FRAME" {
+		t.Fatalf("legacy video catalog images = %d (first source %q), want %d retained video frames", len(calls[0].Images), firstSource, len(frames))
 	}
 	var evidence []database.InventoryItemEvidence
 	f.within(func(tx *gorm.DB) error {

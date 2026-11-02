@@ -7,9 +7,17 @@ test.describe("Dashboard creation forms against the local stack", () => {
   async function chooseFirst(page: Page, form: Locator, label: string) {
     const combobox = form.getByRole("combobox", { name: label });
     await expect(combobox).toBeEnabled();
-    await combobox.click();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
+    // The dialog scrolls the field into view on click, and React Aria closes an open popover when an ancestor
+    // scrolls, so the first ArrowDown/Enter can land on a popover that is already closing and select nothing.
+    // Settle the scroll, then retry the whole open -> focus first option -> confirm sequence until the field has a value.
+    await combobox.scrollIntoViewIfNeeded();
+    await expect(async () => {
+      await combobox.click();
+      await page.keyboard.press("ArrowDown");
+      await expect(combobox).toHaveAttribute("aria-activedescendant", /.+/, { timeout: 1_000 });
+      await page.keyboard.press("Enter");
+      await expect(combobox).not.toHaveValue("", { timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
   }
 
   async function chooseEligibleDependencies(page: Page, form: Locator) {

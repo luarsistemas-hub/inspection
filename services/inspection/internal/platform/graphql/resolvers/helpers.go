@@ -76,7 +76,7 @@ func internalRole(meta requestctx.Metadata, allowed ...string) error {
 			}
 		}
 	}
-	return apperror.New(apperror.Forbidden, "", "access denied")
+	return apperror.New(apperror.Forbidden, "", "Acesso negado.")
 }
 
 func hasRole(meta requestctx.Metadata, wanted string) bool {
@@ -86,6 +86,102 @@ func hasRole(meta requestctx.Metadata, wanted string) bool {
 		}
 	}
 	return false
+}
+
+// authorizeDashboardRead enforces the internal Dashboard capability at the
+// resolver boundary while legacy callers without an audience remain usable.
+func authorizeDashboardRead(ctx context.Context, authorizer auth.Authorizer, meta requestctx.Metadata) error {
+	if meta.Principal.Audience != "" && meta.Principal.Audience != "inspection-dashboard" {
+		return apperror.New(apperror.Forbidden, "", "Acesso negado.")
+	}
+	if meta.Principal.Product != "" && meta.Principal.Product != auth.DashboardProduct {
+		return apperror.New(apperror.Forbidden, "", "Acesso negado.")
+	}
+	_, err := authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}})
+	return err
+}
+
+func authorizeTenantRead(ctx context.Context, authorizer auth.Authorizer, meta requestctx.Metadata) error {
+	product := meta.Principal.Product
+	if product == "" {
+		switch meta.Principal.Audience {
+		case "inspection-admin":
+			product = auth.AdminProduct
+		case "inspection-dashboard":
+			product = auth.DashboardProduct
+		default:
+			if meta.Principal.ProductEntitled(auth.AdminProduct) {
+				product = auth.AdminProduct
+			} else if meta.Principal.ProductEntitled(auth.DashboardProduct) {
+				product = auth.DashboardProduct
+			}
+		}
+	}
+	if meta.Principal.Audience != "" && meta.Principal.Audience != "inspection-admin" && meta.Principal.Audience != "inspection-dashboard" {
+		return apperror.New(apperror.Forbidden, "", "Acesso negado.")
+	}
+	roles := []string{auth.TenantAdmin}
+	if product == auth.DashboardProduct {
+		roles = []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer}
+	} else if product == auth.AdminProduct {
+		roles = append(roles, auth.OrganizationAdmin, auth.AccessAdmin, auth.ParticipationAdmin, auth.InspectionConfigAdmin, auth.GovernanceAdmin, auth.Auditor)
+	} else {
+		return apperror.New(apperror.Forbidden, "", "Acesso negado.")
+	}
+	_, err := authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: product, Roles: roles})
+	return err
+}
+
+func dashboardScopeQuery(query *gorm.DB, meta requestctx.Metadata) *gorm.DB {
+	query = query.Joins("JOIN inspections.inspections i ON i.tenant_id=dashboard.inspections.tenant_id AND i.id=dashboard.inspections.inspection_id")
+	if hasRole(meta, auth.TenantAdmin) {
+		return query
+	}
+	var units, assets, projects, inspections []identity.ID
+	for _, scope := range meta.Principal.Scopes {
+		switch scope.Kind {
+		case "BUSINESS_UNIT":
+			units = append(units, scope.ID)
+		case "ASSET":
+			assets = append(assets, scope.ID)
+		case "PROJECT":
+			projects = append(projects, scope.ID)
+		case "INSPECTION":
+			inspections = append(inspections, scope.ID)
+		}
+	}
+	if len(units)+len(assets)+len(projects)+len(inspections) == 0 {
+		return query.Where("1=0")
+	}
+	var clauses []string
+	var args []any
+	if len(units) > 0 {
+		clauses = append(clauses, "i.business_unit_id IN ?")
+		args = append(args, units)
+	}
+	if len(assets) > 0 {
+		clauses = append(clauses, "i.asset_id IN ?")
+		args = append(args, assets)
+	}
+	if len(projects) > 0 {
+		clauses = append(clauses, "i.project_id IN ?")
+		args = append(args, projects)
+	}
+	if len(inspections) > 0 {
+		clauses = append(clauses, "i.id IN ?")
+		args = append(args, inspections)
+	}
+	return query.Where("("+strings.Join(clauses, " OR ")+")", args...)
+}
+
+func withDashboardTenant(ctx context.Context, db *gorm.DB, tenantID identity.ID, fn func(*gorm.DB) error) error {
+	if db == nil {
+		return gorm.ErrInvalidDB
+	}
+	if db.Dialector.Name() == "postgres" {
+		return (tenanttx.Runner{DB: db}).Within(ctx, tenantID, fn)
+	}
+	return fn(db.WithContext(ctx))
 }
 
 func intValue(value *int) int {
@@ -106,6 +202,9 @@ func intPointer(value int) *int { return &value }
 
 func userErrorFrom(err error) *graphql1.UserError {
 	code, field, message := apperror.Public(err)
+	if message == "" {
+		message = "Não foi possível concluir a operação."
+	}
 	var fieldValue *string
 	if field != "" {
 		fieldValue = &field
@@ -132,8 +231,14 @@ func maskEmail(value string) string {
 
 func mapMembership(ctx context.Context, db *gorm.DB, row database.Membership) (*graphql1.Membership, error) {
 	var rows []database.ResourceScope
+	var products []string
 	if err := (tenanttx.Runner{DB: db}).Within(ctx, row.TenantID, func(tx *gorm.DB) error {
-		return tx.Where("tenant_id = ? AND membership_id = ?", row.TenantID, row.ID).Order("kind, resource_id").Find(&rows).Error
+		if err := tx.Where("tenant_id = ? AND membership_id = ?", row.TenantID, row.ID).Order("kind, resource_id").Find(&rows).Error; err != nil {
+			return err
+		}
+		var err error
+		products, err = membershipProducts(tx, row.TenantID, row.ID)
+		return err
 	}); err != nil {
 		return nil, err
 	}
@@ -141,7 +246,7 @@ func mapMembership(ctx context.Context, db *gorm.DB, row database.Membership) (*
 	for _, scope := range rows {
 		scopes = append(scopes, &graphql1.Scope{Kind: scope.Kind, ResourceID: scope.ResourceID.String()})
 	}
-	return &graphql1.Membership{ID: row.ID.String(), TenantID: row.TenantID.String(), Name: row.Name, Email: row.Email, Role: row.Role, Status: row.Status, InvitationStatus: row.InvitationStatus, Version: int(row.Version), Scopes: scopes}, nil
+	return &graphql1.Membership{ID: row.ID.String(), TenantID: row.TenantID.String(), Name: row.Name, Email: row.Email, Role: row.Role, Status: row.Status, InvitationStatus: row.InvitationStatus, Version: int(row.Version), ProductEntitlements: products, Scopes: scopes}, nil
 }
 
 func pageInfo(cursor string, more bool) *graphql1.PageInfo {
@@ -157,7 +262,7 @@ func (r *mutationResolver) mutateLegalHold(ctx context.Context, input graphql1.L
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", true, auth.Manager); err != nil {
 		return nil, err
 	}
 	scope, err := parseRetentionScope(input.InspectionID, input.SourceMediaID, input.OriginVersionID)
@@ -225,7 +330,7 @@ func parseRetentionScope(inspection, source, origin *string) (retentionScope, er
 		}
 	}
 	if count != 1 {
-		return retentionScope{}, apperror.New(apperror.InvalidInput, "scope", "exactly one retention scope is required")
+		return retentionScope{}, apperror.New(apperror.InvalidInput, "scope", "Informe exatamente um escopo de retenção.")
 	}
 	return scope, nil
 }
@@ -251,10 +356,10 @@ func lockRetentionScope(tx *gorm.DB, tenantID identity.ID, scope retentionScope)
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
-			return apperror.New(apperror.NotFound, "sourceMediaId", "video source not found")
+			return apperror.New(apperror.NotFound, "sourceMediaId", "Fonte de vídeo não encontrada.")
 		}
 		if source.Status == "DELETING" {
-			return apperror.New(apperror.Conflict, "sourceMediaId", "source deletion is already in progress")
+			return apperror.New(apperror.Conflict, "sourceMediaId", "A exclusão da fonte já está em andamento.")
 		}
 		return nil
 	default:
@@ -263,7 +368,7 @@ func lockRetentionScope(tx *gorm.DB, tenantID identity.ID, scope retentionScope)
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
-			return apperror.New(apperror.NotFound, "originVersionId", "origin version not found")
+			return apperror.New(apperror.NotFound, "originVersionId", "Versão de origem não encontrada.")
 		}
 		return nil
 	}
@@ -277,7 +382,7 @@ func rejectKnownDeletionBlock(tx *gorm.DB, tenantID identity.ID, scope retention
 			return err
 		}
 		if held {
-			return apperror.New(apperror.InvalidState, "sourceMediaId", "legal hold prevents source deletion")
+			return apperror.New(apperror.InvalidState, "sourceMediaId", "Retenção legal impede a exclusão da fonte.")
 		}
 	case scope.originVersionID != nil:
 		var version database.OriginVersion
@@ -285,14 +390,14 @@ func rejectKnownDeletionBlock(tx *gorm.DB, tenantID identity.ID, scope retention
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
-			return apperror.New(apperror.NotFound, "originVersionId", "origin version not found")
+			return apperror.New(apperror.NotFound, "originVersionId", "Versão de origem não encontrada.")
 		}
 		var holds int64
 		if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND origin_version_id=? AND active=true", tenantID, *scope.originVersionID).Count(&holds).Error; err != nil {
 			return err
 		}
 		if holds > 0 || version.Status == "ACTIVE" {
-			return apperror.New(apperror.InvalidState, "originVersionId", "active hold or origin use prevents deletion")
+			return apperror.New(apperror.InvalidState, "originVersionId", "Retenção legal ou uso ativo da origem impede a exclusão.")
 		}
 	case scope.inspectionID != nil:
 		var holds int64
@@ -300,7 +405,7 @@ func rejectKnownDeletionBlock(tx *gorm.DB, tenantID identity.ID, scope retention
 			return err
 		}
 		if holds > 0 {
-			return apperror.New(apperror.InvalidState, "inspectionId", "legal hold prevents inspection purge")
+			return apperror.New(apperror.InvalidState, "inspectionId", "Retenção legal impede a exclusão da vistoria.")
 		}
 		var livePlanFrames int64
 		if err := tx.Session(&gorm.Session{NewDB: true}).Table("media.video_evidence_references AS refs").
@@ -310,7 +415,7 @@ func rejectKnownDeletionBlock(tx *gorm.DB, tenantID identity.ID, scope retention
 			return err
 		}
 		if livePlanFrames > 0 {
-			return apperror.New(apperror.InvalidState, "inspectionId", "live video frame dependencies prevent inspection purge")
+			return apperror.New(apperror.InvalidState, "inspectionId", "Quadros de vídeo ainda referenciados impedem a exclusão da vistoria.")
 		}
 	}
 	return nil
@@ -320,7 +425,7 @@ func lockInspectionForLegalHold(tx *gorm.DB, tenantID, inspectionID identity.ID)
 	var inspection database.Inspection
 	err := tx.Session(&gorm.Session{}).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, inspectionID).First(&inspection).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
+		return apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 	}
 	return err
 }
@@ -796,7 +901,7 @@ func (r *Resolver) externalCounterparty(ctx context.Context) (identity.ID, ident
 
 func externalOperationAuthError(ctx context.Context) error {
 	if meta, ok := requestctx.FromContext(ctx); ok && meta.Principal.IdentityID != (identity.ID{}) {
-		return apperror.New(apperror.Forbidden, "", "access denied")
+		return apperror.New(apperror.Forbidden, "", "Acesso negado.")
 	}
 	return unauthenticated()
 }
@@ -815,4 +920,23 @@ func (r *Resolver) externalCaptureReadResponsibility(ctx context.Context) (ident
 		return identity.ID{}, identity.ID{}, unauthenticated()
 	}
 	return tenantID, responsibilityID, nil
+}
+
+// nonNilStrings keeps non-null GraphQL lists serializable when no value exists.
+func nonNilStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
+}
+
+// authorizeOperation authorizes a data resolver through the shared Authorizer:
+// product, audience, current membership, entitlement and role are reloaded for
+// every request, so a revoked entitlement or a token minted for the other
+// product is denied on the next call. TENANT_ADMIN is always an allowed role.
+// An empty product binds the call to the product of the verified audience.
+// Resource-scope filters stay with the resolver and are applied on top.
+func (r *Resolver) authorizeOperation(ctx context.Context, meta requestctx.Metadata, product string, mutate bool, roles ...string) (requestctx.Principal, error) {
+	allowed := append([]string{auth.TenantAdmin}, roles...)
+	return r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: product, Roles: allowed, Mutate: mutate})
 }

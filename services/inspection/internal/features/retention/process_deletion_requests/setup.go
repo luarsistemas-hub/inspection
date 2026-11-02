@@ -85,7 +85,7 @@ func (e *Executor) process(ctx context.Context, tenantID identity.ID, request da
 	case request.SourceMediaID != nil:
 		if err := e.deleteRequestedSource(ctx, tenantID, *request.SourceMediaID); err != nil {
 			if errors.Is(err, expiresources.ErrDeletionBlocked) {
-				return e.setStatus(ctx, tenantID, request.ID, "BLOCKED", "source hold or active baseline prevents source deletion", nil)
+				return e.setStatus(ctx, tenantID, request.ID, "BLOCKED", "Retenção legal ou referência ativa impede a exclusão da fonte.", nil)
 			}
 			return err
 		}
@@ -95,8 +95,8 @@ func (e *Executor) process(ctx context.Context, tenantID identity.ID, request da
 		}
 	case request.InspectionID != nil:
 		if err := e.purgeInspection(ctx, tenantID, *request.InspectionID); err != nil {
-			if err == gorm.ErrInvalidData {
-				return e.setStatus(ctx, tenantID, request.ID, "BLOCKED", "retention period has not elapsed", nil)
+			if errors.Is(err, gorm.ErrInvalidData) {
+				return e.setStatus(ctx, tenantID, request.ID, "BLOCKED", "O prazo de retenção ainda não terminou.", nil)
 			}
 			return err
 		}
@@ -116,7 +116,7 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 			if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND inspection_id=? AND active=true", tenantID, *request.InspectionID).Count(&blocked).Error; err != nil {
 				return err
 			}
-			reason = "legal hold prevents inspection purge"
+			reason = "Retenção legal impede a exclusão da vistoria."
 		case request.SourceMediaID != nil:
 			held, err := core.EffectiveSourceHeld(tx, tenantID, *request.SourceMediaID)
 			if err != nil {
@@ -129,16 +129,16 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 					return err
 				}
 				if legal {
-					reason = "legal hold prevents source deletion"
+					reason = "Retenção legal impede a exclusão da fonte."
 				} else {
 					contested, err := core.OpenContestationSourceHeld(tx, tenantID, *request.SourceMediaID)
 					if err != nil {
 						return err
 					}
 					if contested {
-						reason = "open counterparty contestation prevents source deletion"
+						reason = "Contestação em aberto da outra parte impede a exclusão da fonte."
 					} else {
-						reason = "inherited legal hold prevents source deletion"
+						reason = "Retenção legal herdada impede a exclusão da fonte."
 					}
 				}
 				break
@@ -149,13 +149,13 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 				return err
 			}
 			if source.Status == "DELETING" && source.DeleteLeaseUntil != nil && source.DeleteLeaseUntil.After(now) {
-				blocked, reason = 1, "source deletion lease is still active"
+				blocked, reason = 1, "A exclusão da fonte ainda está em andamento."
 				break
 			}
 			if active, err := core.ActiveBaselineReferences(tx, tenantID, *request.SourceMediaID); err != nil {
 				return err
 			} else if active || source.RetentionAnchor == "ACTIVE_BASELINE" {
-				blocked, reason = 1, "active baseline prevents source deletion"
+				blocked, reason = 1, "Referência ativa impede a exclusão da fonte."
 				break
 			}
 			var active int64
@@ -168,20 +168,20 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 				}
 			}
 			if active > 0 {
-				blocked, reason = 1, "active source work prevents deletion"
+				blocked, reason = 1, "Processamento ativo da fonte impede a exclusão."
 			}
 		case request.OriginVersionID != nil:
 			if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND origin_version_id=? AND active=true", tenantID, *request.OriginVersionID).Count(&blocked).Error; err != nil {
 				return err
 			}
-			reason = "legal hold prevents origin invalidation"
+			reason = "Retenção legal impede a invalidação da origem."
 			if blocked == 0 {
 				var version database.OriginVersion
 				if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, *request.OriginVersionID).First(&version).Error; err != nil {
 					return err
 				}
 				if version.Status == "ACTIVE" {
-					reason = "active origin version must be invalidated before deletion"
+					reason = "A versão de origem ativa precisa ser invalidada antes da exclusão."
 					blocked = 1
 				}
 			}
@@ -198,7 +198,7 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 				var source database.VideoSource
 				if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=?", tenantID, mediaID).First(&source).Error; err == nil {
 					if source.Status == "DELETING" {
-						reason, blocked = "source deletion in progress prevents inspection purge", 1
+						reason, blocked = "A exclusão de fonte em andamento impede a exclusão da vistoria.", 1
 						break
 					}
 					held, err := core.EffectiveSourceHeld(tx, tenantID, mediaID)
@@ -206,7 +206,7 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 						return err
 					}
 					if held {
-						reason, blocked = "source hold prevents inspection purge", 1
+						reason, blocked = "Retenção legal da fonte impede a exclusão da vistoria.", 1
 						break
 					}
 				} else if err != gorm.ErrRecordNotFound {
@@ -254,33 +254,36 @@ func (e *Executor) invalidateOrigin(ctx context.Context, tenantID, originID iden
 }
 
 func (e *Executor) purgeInspection(ctx context.Context, tenantID, inspectionID identity.ID) error {
-	var inspection database.Inspection
-	policy := core.DefaultPolicy()
-	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, inspectionID).First(&inspection).Error; err != nil {
+	// The closure is read after the inspection (FOR UPDATE) and its project (FOR
+	// SHARE) are locked, in the same transaction as the purge, so a concurrent
+	// project Reopen cannot slip in between the eligibility check and the purge.
+	// The shared closure rule applies: a non-terminal inspection, or one of a
+	// project that is not CLOSED, has no clock.
+	return (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		if err := core.LockForRetention(ctx, tx, tenantID, inspectionID); err != nil {
 			return err
 		}
-		var configured database.RetentionPolicy
-		if err := tx.WithContext(ctx).Where("tenant_id=?", tenantID).Order("version DESC").First(&configured).Error; err == nil {
-			policy.EvidenceReports = time.Duration(configured.EvidenceDays) * 24 * time.Hour
-			policy.Operational = time.Duration(configured.OperationalDays) * 24 * time.Hour
-		} else if err != gorm.ErrRecordNotFound {
+		policy, err := core.LoadPolicy(ctx, tx, tenantID)
+		if err != nil {
 			return err
 		}
-		return nil
+		closure, inRetention, err := core.Closure(ctx, tx, tenantID, inspectionID)
+		if err != nil {
+			return err
+		}
+		if !inRetention {
+			return gorm.ErrInvalidData
+		}
+		clock, err := core.NewClock(core.EvidenceReports, closure, time.Time{}, policy)
+		if err != nil {
+			return err
+		}
+		if !clock.Eligible(e.deps.Now().UTC()) {
+			return gorm.ErrInvalidData
+		}
+		_, purgeErr := purgedata.PurgeWithStore(ctx, tx, e.deps.Store, tenantID, inspectionID, clock)
+		return purgeErr
 	})
-	if err != nil {
-		return err
-	}
-	clock, err := core.NewClock(core.EvidenceReports, inspection.UpdatedAt, time.Time{}, policy)
-	if err != nil {
-		return err
-	}
-	if !clock.Eligible(e.deps.Now().UTC()) {
-		return gorm.ErrInvalidData
-	}
-	_, err = purgedata.PurgeWithStore(ctx, e.deps.DB, e.deps.Store, tenantID, inspectionID, clock)
-	return err
 }
 
 func (e *Executor) setStatus(ctx context.Context, tenantID, requestID identity.ID, status, reason string, processedAt *time.Time) error {

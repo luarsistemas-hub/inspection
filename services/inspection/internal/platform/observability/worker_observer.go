@@ -27,11 +27,11 @@ type ConsumerObserver interface {
 }
 
 type DeliveryObservation struct {
-	ExecutionID, Queue, CorrelationID string
-	Action, Result, Reason            string
-	Attempt                           int
-	Duration                          time.Duration
-	Err                               error
+	ExecutionID, Queue, CorrelationID, EventType string
+	Action, Result, Reason                       string
+	Attempt                                      int
+	Duration                                     time.Duration
+	Err                                          error
 }
 
 type DeliveryObserver interface {
@@ -120,6 +120,18 @@ func (o WorkerObserver) AfterTransaction(ctx context.Context, envelope events.Ra
 }
 
 func (o WorkerObserver) AfterDelivery(ctx context.Context, observation DeliveryObservation) {
+	if observation.Action == "dlq" || observation.Result == "publish_failed" {
+		slog.LogAttrs(ctx, slog.LevelError, "messaging delivery sent to dead letter queue",
+			slog.String("queue", observation.Queue),
+			slog.String("eventType", observation.EventType),
+			slog.String("action", observation.Action),
+			slog.String("result", observation.Result),
+			slog.String("reason", observation.Reason),
+			slog.String("errorCode", errorCode(observation.Err)),
+			slog.Int("attempt", observation.Attempt),
+			slog.Int64("durationMs", observation.Duration.Milliseconds()),
+		)
+	}
 	if isInvitationPipelineQueue(observation.Queue) {
 		level := slog.LevelWarn
 		if observation.Action == "dlq" || observation.Result == "publish_failed" {

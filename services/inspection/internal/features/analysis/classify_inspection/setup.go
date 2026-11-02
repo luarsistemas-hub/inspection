@@ -13,6 +13,7 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	analysis "inspection/services/inspection/internal/features/analysis/core"
 	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
+	projectcore "inspection/services/inspection/internal/features/projects/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 
@@ -240,6 +241,11 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return nil
 		}
 		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).Updates(map[string]any{"status": "COMPLETED", "updated_at": now, "version": gorm.Expr("version + 1")}).Error; err != nil {
+			return err
+		}
+		// The project stage of a completed inspection completes in the same
+		// transaction, so the project can be closed (and its retention started).
+		if _, err := projectcore.CompleteStageOfInspection(ctx, tx, inspection, now, envelope.CorrelationID); err != nil {
 			return err
 		}
 		eventID := identity.NewID()

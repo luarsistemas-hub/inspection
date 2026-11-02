@@ -61,7 +61,7 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (Claim, erro
 	}
 	token = strings.TrimSpace(token)
 	if len(token) != 43 {
-		return Claim{}, apperror.New(apperror.SessionExpired, "token", "invitation is invalid or expired")
+		return Claim{}, apperror.New(apperror.SessionExpired, "token", "O link do convite é inválido ou expirou.")
 	}
 	locator, err := security.NewOpaqueToken()
 	if err != nil {
@@ -86,12 +86,12 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (Claim, erro
 		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_digest=?", tokenDigest[:]).First(&invitation).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.SessionExpired, "token", "invitation is invalid or expired")
+				return apperror.New(apperror.SessionExpired, "token", "O link do convite é inválido ou expirou.")
 			}
 			return err
 		}
 		if invitation.Status != "SENT" || !now.Before(invitation.ExpiresAt) {
-			return apperror.New(apperror.SessionExpired, "token", "invitation is invalid or expired")
+			return apperror.New(apperror.SessionExpired, "token", "O link do convite é inválido ou expirou.")
 		}
 		if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", invitation.TenantID.String()).Error; err != nil {
 			return err
@@ -104,7 +104,7 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (Claim, erro
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "invitation", "invitation was already used")
+			return apperror.New(apperror.Conflict, "invitation", "Este convite já foi utilizado.")
 		}
 		invitation.Status = "CLAIMED"
 		return nil
@@ -124,12 +124,12 @@ func (s Service) RequestOTP(ctx context.Context, locator, csrf string) (Activati
 		return Activation{}, err
 	}
 	if invitation.Status != "CLAIMED" && invitation.Status != "OTP_SENT" {
-		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "invitation cannot request a code")
+		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "Este convite não permite solicitar um código agora.")
 	}
 	if limit, err := s.Limits.AllowSend(ctx, invitation.Email+":user-invitation"); err != nil {
 		return Activation{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 	} else if !limit.Allowed {
-		return Activation{}, apperror.New(apperror.RateLimited, "", "retry later")
+		return Activation{}, apperror.New(apperror.RateLimited, "", "Muitas tentativas. Aguarde alguns minutos e tente novamente.")
 	}
 	code, err := newCode()
 	if err != nil {
@@ -143,7 +143,7 @@ func (s Service) RequestOTP(ctx context.Context, locator, csrf string) (Activati
 	now := s.now()
 	err = s.withSession(ctx, locator, csrf, func(tx *gorm.DB, current database.UserInvitation) error {
 		if current.Status != "CLAIMED" && current.Status != "OTP_SENT" {
-			return apperror.New(apperror.InvalidState, "invitation", "invitation cannot request a code")
+			return apperror.New(apperror.InvalidState, "invitation", "Este convite não permite solicitar um código agora.")
 		}
 		if err := tx.Model(&database.UserInvitationOTP{}).Where("tenant_id=? AND invitation_id=? AND verified_at IS NULL", current.TenantID, current.ID).Update("expires_at", now).Error; err != nil {
 			return err
@@ -171,12 +171,12 @@ func (s Service) VerifyOTP(ctx context.Context, locator, csrf, code string) (Act
 		return Activation{}, err
 	}
 	if invitation.Status != "OTP_SENT" {
-		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "request an activation code first")
+		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "Solicite um código de ativação antes de continuar.")
 	}
 	if limit, err := s.Limits.AllowAttempt(ctx, invitation.Email+":user-invitation"); err != nil {
 		return Activation{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 	} else if !limit.Allowed {
-		return Activation{}, apperror.New(apperror.RateLimited, "", "retry later")
+		return Activation{}, apperror.New(apperror.RateLimited, "", "Muitas tentativas. Aguarde alguns minutos e tente novamente.")
 	}
 	now := s.now()
 	var result Activation
@@ -184,7 +184,7 @@ func (s Service) VerifyOTP(ctx context.Context, locator, csrf, code string) (Act
 	err = s.withSession(ctx, locator, csrf, func(tx *gorm.DB, current database.UserInvitation) error {
 		var challenge database.UserInvitationOTP
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND invitation_id=? AND verified_at IS NULL", current.TenantID, current.ID).Order("created_at DESC").First(&challenge).Error; err != nil || !security.Active(now, challenge.ExpiresAt, nil) || challenge.Attempts >= 5 {
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 		}
 		actual, hashErr := security.HashOTP(code, s.Pepper)
 		accepted := hashErr == nil && len(challenge.CodeHMAC) == 32 && security.Equal(actual, bytes32(challenge.CodeHMAC))
@@ -192,7 +192,7 @@ func (s Service) VerifyOTP(ctx context.Context, locator, csrf, code string) (Act
 			if err := tx.Model(&challenge).UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error; err != nil {
 				return err
 			}
-			rejection = apperror.New(apperror.InvalidInput, "code", "invalid code")
+			rejection = apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 			return nil
 		}
 		if err := tx.Model(&challenge).Update("verified_at", now).Error; err != nil {
@@ -223,16 +223,16 @@ func (s Service) Complete(ctx context.Context, locator, csrf, password string) (
 		return activationOf(invitation), nil
 	}
 	if invitation.Status != "VERIFIED" {
-		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "email verification is required")
+		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "Confirme seu e-mail para continuar.")
 	}
 	if invitation.NewIdentity && !s.passwordAllowed(password) {
-		return Activation{}, apperror.New(apperror.InvalidInput, "password", "password does not meet policy")
+		return Activation{}, apperror.New(apperror.InvalidInput, "password", "A senha não atende aos requisitos informados.")
 	}
 	var membership database.Membership
 	if err := s.withSession(ctx, locator, csrf, func(tx *gorm.DB, current database.UserInvitation) error {
 		return tx.Where("tenant_id=? AND id=? AND status='INVITED'", current.TenantID, current.MembershipID).First(&membership).Error
 	}); err != nil {
-		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "membership is unavailable")
+		return Activation{}, apperror.New(apperror.InvalidState, "invitation", "O acesso não está disponível para ativação.")
 	}
 	if err := s.Provider.VerifyEmail(ctx, membership.Subject); err != nil {
 		return Activation{}, apperror.Wrap(apperror.DependencyUnavailable, err)
@@ -250,15 +250,24 @@ func (s Service) Complete(ctx context.Context, locator, csrf, password string) (
 			return nil
 		}
 		if current.Status != "VERIFIED" {
-			return apperror.New(apperror.Conflict, "invitation", "invitation is no longer active")
+			return apperror.New(apperror.Conflict, "invitation", "Este convite não está mais ativo.")
 		}
 		if current.NewIdentity {
 			if err := tx.Model(&current).Update("password_set_at", now).Error; err != nil {
 				return err
 			}
 		}
-		if err := tx.Model(&database.Membership{}).Where("tenant_id=? AND id=? AND status='INVITED'", current.TenantID, current.MembershipID).Updates(map[string]any{"status": "ACTIVE", "invitation_status": "ACCEPTED", "updated_at": now}).Error; err != nil {
-			return err
+		membershipUpdate := tx.Model(&database.Membership{}).Where("tenant_id=? AND id=? AND status='INVITED'", current.TenantID, current.MembershipID).Updates(map[string]any{"status": "ACTIVE", "invitation_status": "ACCEPTED", "updated_at": now})
+		if membershipUpdate.Error != nil {
+			return membershipUpdate.Error
+		}
+		if membershipUpdate.RowsAffected != 1 {
+			return apperror.New(apperror.Conflict, "membership", "O acesso não está mais disponível para ativação.")
+		}
+		if receivesEmailAlerts(membership.Role) {
+			if err := ensureEmailChannel(tx, current, now); err != nil {
+				return err
+			}
 		}
 		if err := tx.Model(&current).Updates(map[string]any{"status": "ACCEPTED", "accepted_at": now, "updated_at": now}).Error; err != nil {
 			return err
@@ -278,10 +287,10 @@ func (s Service) loadSession(ctx context.Context, locator, csrf string) (databas
 			return err
 		}
 		if err := tx.Where("session_digest=?", digest[:]).First(&invitation).Error; err != nil {
-			return apperror.New(apperror.SessionExpired, "session", "invitation session expired")
+			return apperror.New(apperror.SessionExpired, "session", "A sessão do convite expirou. Abra o link novamente.")
 		}
 		if invitation.SessionExpiresAt == nil || !s.now().Before(*invitation.SessionExpiresAt) || invitation.AcceptedAt != nil {
-			return apperror.New(apperror.SessionExpired, "session", "invitation session expired")
+			return apperror.New(apperror.SessionExpired, "session", "A sessão do convite expirou. Abra o link novamente.")
 		}
 		if err := validateCSRF(locator, csrf, invitation.CSRFDigest, s.Pepper); err != nil {
 			return err
@@ -299,10 +308,10 @@ func (s Service) withSession(ctx context.Context, locator, csrf string, work fun
 		}
 		var invitation database.UserInvitation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_digest=?", digest[:]).First(&invitation).Error; err != nil {
-			return apperror.New(apperror.SessionExpired, "session", "invitation session expired")
+			return apperror.New(apperror.SessionExpired, "session", "A sessão do convite expirou. Abra o link novamente.")
 		}
 		if invitation.SessionExpiresAt == nil || !s.now().Before(*invitation.SessionExpiresAt) {
-			return apperror.New(apperror.SessionExpired, "session", "invitation session expired")
+			return apperror.New(apperror.SessionExpired, "session", "A sessão do convite expirou. Abra o link novamente.")
 		}
 		if err := validateCSRF(locator, csrf, invitation.CSRFDigest, s.Pepper); err != nil {
 			return err
@@ -347,9 +356,44 @@ func activationOf(invitation database.UserInvitation) Activation {
 func validateCSRF(locator, csrf string, digest []byte, pepper []byte) error {
 	proof, err := security.CSRFProof(security.HashToken(locator), csrf, pepper)
 	if err != nil || len(digest) != 32 || !security.Equal(proof, bytes32(digest)) {
-		return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+		return apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar a solicitação. Atualize a página e tente novamente.")
 	}
 	return nil
+}
+
+// ensureEmailChannel records the activated e-mail as a verified, selected
+// EMAIL recipient channel unless the membership already has another one.
+func ensureEmailChannel(tx *gorm.DB, current database.UserInvitation, now time.Time) error {
+	destination := normalizeEmail(current.Email)
+	if destination == "" {
+		return nil
+	}
+	var emailChannelCount int64
+	if err := tx.Model(&database.RecipientChannel{}).Where("tenant_id=? AND recipient_membership_id=? AND channel='EMAIL'", current.TenantID, current.MembershipID).Count(&emailChannelCount).Error; err != nil {
+		return err
+	}
+	if emailChannelCount > 0 {
+		return tx.Model(&database.RecipientChannel{}).Where("tenant_id=? AND recipient_membership_id=? AND channel='EMAIL' AND destination=?", current.TenantID, current.MembershipID, destination).Updates(map[string]any{"verified_at": now, "selected": true, "updated_at": now}).Error
+	}
+	// Dívida conhecida: alterações de e-mail no Keycloak não sincronizam este canal.
+	channel := database.RecipientChannel{ID: identity.NewID(), TenantID: current.TenantID, RecipientMembershipID: current.MembershipID, Channel: "EMAIL", Destination: destination, VerifiedAt: &now, Selected: true, Version: 1, CreatedAt: now, UpdatedAt: now}
+	return tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "recipient_membership_id"}, {Name: "channel"}, {Name: "destination"}},
+		DoUpdates: clause.Assignments(map[string]any{"verified_at": now, "selected": true, "updated_at": now}),
+	}).Create(&channel).Error
+}
+
+// normalizeEmail applies the same rule as migration 107:
+// lower(btrim(email, E' \t\r\n')).
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.Trim(email, " \t\r\n"))
+}
+
+// receivesEmailAlerts reports whether an activated membership gets an
+// operational EMAIL recipient channel. CUSTOMER_VIEWER is excluded, matching
+// the migration 107 backfill.
+func receivesEmailAlerts(role string) bool {
+	return role != "CUSTOMER_VIEWER"
 }
 
 func bytes32(value []byte) [32]byte { var result [32]byte; copy(result[:], value); return result }

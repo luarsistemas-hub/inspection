@@ -13,6 +13,7 @@ import {
   validateMigrationInventory,
   validatePackageShells,
   validateUsageGuidance,
+  discoverPageRoutes,
 } from "./design-system-migration.mjs";
 
 const route = (overrides = {}) => ({
@@ -111,6 +112,7 @@ test("UT-083 rejects an undocumented second reusable modal and app-owned React A
 
 const guidance = readFileSync(new URL("../../docs/design-system/usage.md", import.meta.url), "utf8");
 const inventory = JSON.parse(readFileSync(new URL("../../docs/design-system/migration-inventory.json", import.meta.url), "utf8"));
+const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 
 test("IT-182 rejects migration guidance when the Combobox pattern is absent", () => {
   const errors = validateUsageGuidance(guidance.replace(/Combobox/gi, "SearchField"), inventory);
@@ -158,8 +160,11 @@ test("IT-198 audits all four app shells for retired control imports and duplicat
 });
 
 test("E2E-037 traces the actual inventory, guidance and retirement audit together", () => {
-  const inventoryErrors = validateMigrationInventory(inventory, [], [], process.cwd());
+  const discovered = discoverPageRoutes(repositoryRoot);
+  if (discovered.length === 0) throw new Error("page route discovery found no app routes");
+  const inventoryErrors = validateMigrationInventory(inventory, discovered, [], repositoryRoot);
   if (inventoryErrors.length) throw new Error(inventoryErrors.join("; "));
+  if (!validateMigrationInventory(inventory, [], [], repositoryRoot).some((error) => error.includes("discovery returned no routes"))) throw new Error("empty discovery was accepted in a repository with apps");
   const guidanceErrors = validateUsageGuidance(guidance, inventory);
   if (guidanceErrors.length) throw new Error(guidanceErrors.join("; "));
 });

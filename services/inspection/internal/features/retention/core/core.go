@@ -12,7 +12,9 @@ const (
 	Secrets         = "SECURITY_SECRETS"
 )
 
-type Policy struct{ EvidenceReports, Operational time.Duration }
+// Policy holds the effective retention periods of a tenant. Security is the
+// grace period after a secret's own expiry and may be zero.
+type Policy struct{ EvidenceReports, Operational, Security time.Duration }
 type Clock struct {
 	Class           string
 	StartsAt, DueAt time.Time
@@ -30,9 +32,9 @@ func RequestDeletion(clock Clock, now time.Time) DeletionRequest {
 	if clock.Eligible(now) {
 		return DeletionRequest{RequestedAt: now}
 	}
-	restriction := "retention period has not elapsed"
+	restriction := "O prazo de retenção ainda não terminou."
 	if clock.LegalHold {
-		restriction = "legal hold prevents deletion"
+		restriction = "Retenção legal impede a exclusão."
 	}
 	return DeletionRequest{RequestedAt: now, Refused: true, Restriction: restriction}
 }
@@ -50,7 +52,7 @@ func DefaultPolicy() Policy {
 }
 
 func (p Policy) Validate() error {
-	if p.EvidenceReports <= 0 || p.Operational <= 0 {
+	if p.EvidenceReports <= 0 || p.Operational <= 0 || p.Security < 0 {
 		return fmt.Errorf("retention periods must be positive")
 	}
 	return nil

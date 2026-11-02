@@ -7,6 +7,9 @@ test.describe("authenticated Dashboard against the local stack", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
 
   test("shows unread notifications first, allows all notifications, and opens delivery status", async ({ page }) => {
+    // The QA seed rebuilds/runs its Docker image (~75s measured) inside this test and execFileSync blocks the
+    // event loop, so the default 30s budget expired before the first assertion ever ran.
+    test.setTimeout(240_000);
     const assertRuntimeClean = installRuntimeGuards(page);
     execFileSync("./scripts/local.sh", ["seed"], { cwd: resolve(process.cwd(), "../.."), encoding: "utf8" });
     await loginAsLocalAdmin(page, "/triage");

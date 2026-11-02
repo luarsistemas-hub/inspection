@@ -47,9 +47,7 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 	if len([]rune(name)) > 200 || len(contacts) > MaxContacts {
 		return ParticipantView{}, apperror.New(apperror.InvalidInput, "contacts", "participant limit exceeded")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: businessUnitID}, true); err != nil {
-		return ParticipantView{}, err
-	}
+	newWork := participantUpsertNewWork(participantID, businessUnitID, businessUnitID)
 	if participantID != nil {
 		var current database.Participant
 		if err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -59,9 +57,13 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 		} else if err != nil {
 			return ParticipantView{}, err
 		}
+		newWork = participantUpsertNewWork(participantID, current.BusinessUnitID, businessUnitID)
 		if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
 			return ParticipantView{}, err
 		}
+	}
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Roles: []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: businessUnitID}, Mutate: true, NewWork: newWork}); err != nil {
+		return ParticipantView{}, err
 	}
 	normalized := make([]ContactInput, 0, len(contacts))
 	for _, c := range contacts {
@@ -140,6 +142,10 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 		return s.load(tx, &result)
 	})
 	return result, err
+}
+
+func participantUpsertNewWork(participantID *identity.ID, currentBusinessUnitID, targetBusinessUnitID identity.ID) bool {
+	return participantID == nil || currentBusinessUnitID != targetBusinessUnitID
 }
 
 func ensureDefaultEmailSelection(tx *gorm.DB, tenantID, participantID identity.ID, contacts []ContactInput, now time.Time) error {

@@ -20,8 +20,8 @@ Comandos:
   down [-v]         para a stack; -v também remove os volumes
   help             mostra esta ajuda
 
-Variáveis úteis: INSPECTION_ENV_FILE, INSPECTION_STARTUP_TIMEOUT (segundos)
-e INSPECTION_VIDEO_WORKER=0 para subir sem o worker de vídeo.
+Variáveis úteis: INSPECTION_ENV_FILE, INSPECTION_STARTUP_TIMEOUT (segundos),
+INSPECTION_VIDEO_WORKER=0 e INSPECTION_TRANSCRIPTION_WORKER=1.
 EOF
 }
 
@@ -57,6 +57,11 @@ compose() {
     1) profiles+=(--profile video) ;;
     0) ;;
     *) die "INSPECTION_VIDEO_WORKER deve ser 0 ou 1" ;;
+  esac
+  case "${INSPECTION_TRANSCRIPTION_WORKER:-0}" in
+    1) profiles+=(--profile transcription) ;;
+    0) ;;
+    *) die "INSPECTION_TRANSCRIPTION_WORKER deve ser 0 ou 1" ;;
   esac
   if [[ -z "$llm_url" ]]; then
     if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
@@ -165,6 +170,9 @@ case "${1:-help}" in
       if [[ "${INSPECTION_VIDEO_WORKER:-1}" != 0 ]]; then
         check_port "${INSPECTION_VIDEO_WORKER_PORT:-8091}" "worker de vídeo"
       fi
+      if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-0}" != 0 ]]; then
+        check_port "${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}" "worker de transcrição"
+      fi
     fi
     compose up -d --build --remove-orphans
     reload_live_gateway
@@ -176,6 +184,9 @@ case "${1:-help}" in
     wait_http "http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}/" "Onboarding"
     if [[ "${INSPECTION_VIDEO_WORKER:-1}" != 0 ]]; then
       wait_http "http://localhost:${INSPECTION_VIDEO_WORKER_PORT:-8091}/health" "Worker de vídeo"
+    fi
+    if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-0}" != 0 ]]; then
+      wait_http "http://localhost:${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}/readyz" "Worker de transcrição"
     fi
     ;;
   infra)
@@ -213,7 +224,7 @@ case "${1:-help}" in
     trap cleanup_seed_api EXIT
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API de seed"
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/readyz" "API de seed pronta"
-    compose run --rm --no-deps --build inspection-seed
+    compose run --rm --no-deps --build -e INSPECTION_QA_VOICE="${INSPECTION_QA_VOICE:-0}" inspection-seed
     trap - EXIT
     cleanup_seed_api
     ;;
@@ -228,6 +239,7 @@ URLs locais:
   Capture        http://localhost:${INSPECTION_CAPTURE_PORT:-3003}
   Onboarding     http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}
   Video worker   http://localhost:${INSPECTION_VIDEO_WORKER_PORT:-8091}/health
+  Transcription  http://localhost:${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}/healthz (opcional: INSPECTION_TRANSCRIPTION_WORKER=1)
   GraphQL        http://localhost:${INSPECTION_API_PORT:-8080}/graphql
   Health/ready   http://localhost:${INSPECTION_API_PORT:-8080}/healthz | /readyz
   Keycloak       http://localhost:8081 (credenciais em .env.inspection)
@@ -243,6 +255,7 @@ EOF
     ;;
   down)
     require_base; [[ -f "$env_file" ]] || init; load_env
+    compose stop inspection-transcription-worker >/dev/null 2>&1 || true
     case "${2:-}" in
       "") [[ $# -eq 1 ]] || die "uso: ./scripts/local.sh down [-v]"; compose down ;;
       -v|--volumes) [[ $# -eq 2 ]] || die "uso: ./scripts/local.sh down [-v]"; compose down -v ;;

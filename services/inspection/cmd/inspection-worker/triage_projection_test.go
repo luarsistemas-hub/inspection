@@ -21,6 +21,12 @@ func TestTriageReviewProjectionCreatesAndRefreshesCaseIdempotently(t *testing.T)
 	if err := db.Exec("ATTACH DATABASE ':memory:' AS dashboard").Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS inspections").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE inspections.inspections (id text PRIMARY KEY, tenant_id text NOT NULL, status text NOT NULL)").Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Exec(`CREATE TABLE dashboard.triage_cases (
 		id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, status text NOT NULL,
 		assignee_id text, classification text NOT NULL, reason_codes blob NOT NULL,
@@ -39,6 +45,9 @@ func TestTriageReviewProjectionCreatesAndRefreshesCaseIdempotently(t *testing.T)
 	}
 
 	tenantID, inspectionID := identity.NewID(), identity.NewID()
+	if err := db.Exec("INSERT INTO inspections.inspections (id, tenant_id, status) VALUES (?, ?, 'COMPLETED')", inspectionID, tenantID).Error; err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now().UTC()
 	classification := database.ClassificationRun{Classification: "ATTENTION", ReasonCodes: []byte(`["MISSING_EVIDENCE"]`)}
 	if err := handleclassified.UpsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 1, now); err != nil {

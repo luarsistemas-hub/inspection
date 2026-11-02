@@ -310,7 +310,8 @@ func TestVV_IT_002VideoTemplateV1AdmitsOnlyVideoForMainAndRC1Supplement(t *testi
 }
 
 func TestVV_IT_080GuidanceListsAllTwoHundredOriginComponentsWithOneVideoMain(t *testing.T) {
-	fx := newInspectionModeGraphQLFixture(t, false, catalog.FixedOrigin)
+	// Guidance over video:main belongs to the legacy (schema 1) video template.
+	fx := newLegacyVideoGraphQLFixture(t, catalog.FixedOrigin)
 	scopes := make([]guidanceScope, 200)
 	for i := range scopes {
 		scopes[i] = guidanceScope{environment: "room-" + strconv.Itoa(i/10), component: "component-" + strconv.Itoa(i), view: "wide", identityStatus: "RESOLVED"}
@@ -337,7 +338,8 @@ func TestVV_IT_080GuidanceListsAllTwoHundredOriginComponentsWithOneVideoMain(t *
 }
 
 func TestVV_IT_087IdenticalBedroomsAreTwoAmbiguousContextualCandidates(t *testing.T) {
-	fx := newInspectionModeGraphQLFixture(t, false, catalog.FixedOrigin)
+	// Guidance over video:main belongs to the legacy (schema 1) video template.
+	fx := newLegacyVideoGraphQLFixture(t, catalog.FixedOrigin)
 	seedGuidanceOrigin(t, fx, identity.NewID(), 1, []guidanceScope{
 		{"kitchen", "sink", "wide", "RESOLVED"},
 		{"bedroom", "wardrobe", "wide", "AMBIGUOUS"},
@@ -362,7 +364,8 @@ func TestVV_IT_087IdenticalBedroomsAreTwoAmbiguousContextualCandidates(t *testin
 }
 
 func TestVV_IT_083ReloadAfterO2ActivationKeepsPinnedO1Scope(t *testing.T) {
-	fx := newInspectionModeGraphQLFixture(t, false, catalog.FixedOrigin)
+	// Guidance over video:main belongs to the legacy (schema 1) video template.
+	fx := newLegacyVideoGraphQLFixture(t, catalog.FixedOrigin)
 	originID := identity.NewID()
 	o1 := seedGuidanceOrigin(t, fx, originID, 1, []guidanceScope{{"kitchen", "sink", "wide", "RESOLVED"}, {"bathroom", "basin", "wide", "RESOLVED"}})
 	v1 := createGuidanceInspection(t, fx, "FIXED_ORIGIN", "vv-it-083")
@@ -380,7 +383,8 @@ func TestVV_IT_083ReloadAfterO2ActivationKeepsPinnedO1Scope(t *testing.T) {
 }
 
 func TestVV_IT_090CurrentOnlyGuidanceHasNoFabricatedReferenceImage(t *testing.T) {
-	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
+	// Guidance over video:main belongs to the legacy (schema 1) video template.
+	fx := newLegacyVideoGraphQLFixture(t, catalog.ChecklistOnly)
 	capture := openGuidance(t, fx, createGuidanceInspection(t, fx, "CHECKLIST_ONLY", "vv-it-090"))
 	assertSingleVideoMain(t, capture, "CHECKLIST_ONLY")
 	if len(capture.ReferenceItems) != 0 {
@@ -389,7 +393,8 @@ func TestVV_IT_090CurrentOnlyGuidanceHasNoFabricatedReferenceImage(t *testing.T)
 }
 
 func TestVV_IT_077LostO1BankShowsUnavailableBaselineWithoutSwitchingMode(t *testing.T) {
-	fx := newInspectionModeGraphQLFixture(t, false, catalog.FixedOrigin)
+	// Guidance over video:main belongs to the legacy (schema 1) video template.
+	fx := newLegacyVideoGraphQLFixture(t, catalog.FixedOrigin)
 	origin := seedGuidanceOrigin(t, fx, identity.NewID(), 1, []guidanceScope{{"kitchen", "sink", "wide", "RESOLVED"}, {"bathroom", "basin", "wide", "RESOLVED"}})
 	v1 := createGuidanceInspection(t, fx, "FIXED_ORIGIN", "vv-it-077")
 	// O1's usable bank is lost before the comparative capture starts.

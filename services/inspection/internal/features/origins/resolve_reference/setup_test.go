@@ -180,19 +180,21 @@ func TestVideoOriginUsesOneMediaRequirementAndKeepsScopeProjection(t *testing.T)
 
 func TestInventoryReferenceRulesAndCrossModalityRequirements(t *testing.T) {
 	for _, tc := range []struct {
-		name, status, mediaKind string
-		wantCode                apperror.Code
-		wantRequirements        int
+		name, status, versionKind, mediaKind string
+		wantCode                             apperror.Code
+		wantRequirements                     int
 	}{
-		{"photo inventory", "ACTIVE", "PHOTO", "", 2},
-		{"video inventory", "ACTIVE", "VIDEO", "", 2},
-		{"superseded inventory", "SUPERSEDED", "VIDEO", "", 2},
-		{"invalidated inventory", "INVALIDATED", "VIDEO", apperror.InvalidState, 0},
-		{"draft inventory", "DRAFT", "VIDEO", apperror.InvalidState, 0},
-		{"discarded inventory", "DISCARDED", "VIDEO", apperror.InvalidState, 0},
+		{"photo inventory", "ACTIVE", "PHOTO", "PHOTO", "", 2},
+		{"video inventory", "ACTIVE", "VIDEO", "VIDEO", "", 2},
+		{"superseded inventory", "SUPERSEDED", "VIDEO", "VIDEO", "", 2},
+		{"invalidated inventory", "INVALIDATED", "VIDEO", "VIDEO", apperror.InvalidState, 0},
+		{"draft inventory", "DRAFT", "VIDEO", "VIDEO", apperror.InvalidState, 0},
+		{"discarded inventory", "DISCARDED", "VIDEO", "VIDEO", apperror.InvalidState, 0},
+		{"photo inventory for video inspection", "ACTIVE", "PHOTO", "VIDEO", "", 2},
+		{"video inventory for photo inspection", "ACTIVE", "VIDEO", "PHOTO", "", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			db, query, versionID := inventoryReferenceFixture(t, tc.status)
+			db, query, versionID := inventoryReferenceFixture(t, tc.status, tc.versionKind)
 			result, err := resolve(db, Query{TenantID: query.TenantID, AssetID: query.AssetID, VersionID: &versionID, MediaKind: tc.mediaKind})
 			if tc.wantCode != "" {
 				if code(err) != tc.wantCode {
@@ -270,7 +272,7 @@ func TestUT235LegacySameModalityStillResolves(t *testing.T) {
 	}
 }
 
-func inventoryReferenceFixture(t *testing.T, status string) (*gorm.DB, Query, identity.ID) {
+func inventoryReferenceFixture(t *testing.T, status string, mediaKind ...string) (*gorm.DB, Query, identity.ID) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
@@ -293,14 +295,18 @@ func inventoryReferenceFixture(t *testing.T, status string) (*gorm.DB, Query, id
 		activeID = identity.NewID()
 	}
 	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &activeID, Version: 2, CreatedAt: now, UpdatedAt: now}
-	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 2, HasInventory: true, Status: status, MediaKind: "PHOTO", IdempotencyKey: "inventory-reference", CreatedAt: now, ActivatedAt: &now}
+	kind := "PHOTO"
+	if len(mediaKind) > 0 && mediaKind[0] != "" {
+		kind = mediaKind[0]
+	}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 2, HasInventory: true, Status: status, MediaKind: kind, IdempotencyKey: "inventory-reference", CreatedAt: now, ActivatedAt: &now}
 	for _, row := range []any{&origin, &version} {
 		if err := db.Create(row).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
 	if status == "SUPERSEDED" {
-		active := database.OriginVersion{ID: activeID, TenantID: tenantID, OriginID: originID, VersionNumber: 3, HasInventory: true, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "inventory-reference-active", CreatedAt: now, ActivatedAt: &now}
+		active := database.OriginVersion{ID: activeID, TenantID: tenantID, OriginID: originID, VersionNumber: 3, HasInventory: true, Status: "ACTIVE", MediaKind: kind, IdempotencyKey: "inventory-reference-active", CreatedAt: now, ActivatedAt: &now}
 		if err := db.Create(&active).Error; err != nil {
 			t.Fatal(err)
 		}

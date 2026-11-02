@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { graphql } from "@/graphql/client";
 import { TemplateEditorPage } from "@/features/admin/admin-shell";
 
-vi.mock("@/graphql/client", () => ({ graphql: vi.fn() }));
+vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql: vi.fn(), graphqlOptionalPermission: vi.fn() }));
 vi.mock("@inspection/address", () => ({ AddressFieldStyles: () => null, AddressForm: () => null, emptyPostalAddress: {} }));
 vi.mock("@inspection/design-system", async () => {
   const React = await import("react");

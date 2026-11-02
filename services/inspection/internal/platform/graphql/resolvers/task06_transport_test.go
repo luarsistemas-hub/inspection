@@ -14,6 +14,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/mediator"
+	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/requestctx"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -48,28 +49,40 @@ func TestTask06GraphQLReadsAndStableAuth(t *testing.T) {
 	}
 
 	server := task06GraphQLServer(db)
-	validContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "task06"})
-	query := `query { report(inspectionId:"` + inspectionID.String() + `") { id classification version canonicalJSON html } reports(first:1) { nodes { id inspectionId assetName assetAddress assetExternalKey participantName classification version } pageInfo { hasNextPage } } reportDownload(snapshotId:"` + snapshotID.String() + `") { snapshotId kind objectKey url status sha256 } dashboardSummary { total normal attention critical pending invalidated } triageInspections(first:1) { nodes { inspectionId classification status } pageInfo { hasNextPage } } notificationDeliveries(first:1) { nodes { id status } pageInfo { hasNextPage } } retentionPolicies { nodes { evidenceDays operationalDays securityDays version } pageInfo { hasNextPage } } usageSummary { requests inputTokens outputTokens cost } }`
+	validContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, Product: auth.DashboardProduct, ProductEntitlements: []string{auth.DashboardProduct}}, CorrelationID: "task06"})
+	query := `query { report(inspectionId:"` + inspectionID.String() + `") { id classification version canonicalJSON html } reports(first:1) { nodes { id inspectionId assetName assetAddress assetExternalKey participantName classification version } pageInfo { hasNextPage } } reportDownload(snapshotId:"` + snapshotID.String() + `") { snapshotId kind objectKey url status sha256 } dashboardSummary { total normal attention critical pending invalidated } triageInspections(first:1) { nodes { inspectionId classification status } pageInfo { hasNextPage } } notificationDeliveries(first:1) { nodes { id status } pageInfo { hasNextPage } } usageSummary { requests inputTokens outputTokens cost } }`
+	// Retention policies belong to the Admin product (ADR-003).
+	adminContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, Audience: "inspection-admin", Product: auth.AdminProduct, ProductEntitlements: []string{auth.AdminProduct}}, CorrelationID: "task06-admin"})
+	if response := executeTask06GraphQL(t, server, `query { retentionPolicies { nodes { evidenceDays operationalDays securityDays version } pageInfo { hasNextPage } } }`, adminContext); strings.Contains(response, `"errors"`) || !strings.Contains(response, `"evidenceDays":1825`) {
+		t.Fatalf("the Admin product could not read the retention policy: %s", response)
+	}
+	if response := executeTask06GraphQL(t, server, `query { retentionPolicies { nodes { version } } }`, validContext); !strings.Contains(response, "FORBIDDEN") {
+		t.Fatalf("the Dashboard product read the retention policy: %s", response)
+	}
 	if response := executeTask06GraphQL(t, server, query, validContext); strings.Contains(response, `"errors"`) || !strings.Contains(response, `"CRITICAL"`) || !strings.Contains(response, `"pdf-digest"`) || !strings.Contains(response, `"requests":1`) || !strings.Contains(response, `"assetName":"Imóvel QA"`) {
 		t.Fatalf("unexpected authorized Task 06 response: %s", response)
 	}
 
-	viewerContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{"VIEWER"}}, CorrelationID: "task06-forbidden"})
+	viewerContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{"VIEWER"}, ProductEntitlements: auth.ProductsForRole("VIEWER")}, CorrelationID: "task06-forbidden"})
 	if response := executeTask06GraphQL(t, server, `query { retentionPolicies { nodes { version } } usageSummary { requests } }`, viewerContext); !strings.Contains(response, "FORBIDDEN") {
 		t.Fatalf("role-restricted Task 06 reads disclosed data: %s", response)
 	}
-	unscopedContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}}, CorrelationID: "report-scope-forbidden"})
-	if response := executeTask06GraphQL(t, server, `query { report(inspectionId:"`+inspectionID.String()+`") { id } }`, unscopedContext); !strings.Contains(response, "FORBIDDEN") {
+	unscopedContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}, ProductEntitlements: auth.ProductsForRole(auth.Manager)}, CorrelationID: "report-scope-forbidden"})
+	if response := executeTask06GraphQL(t, server, `query { report(inspectionId:"`+inspectionID.String()+`") { id } }`, unscopedContext); !strings.Contains(response, "NOT_FOUND") {
 		t.Fatalf("unscoped report link exposed a report: %s", response)
 	}
-	if response := executeTask06GraphQL(t, server, `query { reportDownload(snapshotId:"`+snapshotID.String()+`") { snapshotId } }`, unscopedContext); !strings.Contains(response, "FORBIDDEN") {
-		t.Fatalf("unscoped report download exposed an artifact: %s", response)
+	if response := executeTask06GraphQL(t, server, `query { reportDownload(snapshotId:"`+snapshotID.String()+`") { snapshotId } }`, unscopedContext); !strings.Contains(response, "NOT_FOUND") || !strings.Contains(response, "Relatório não encontrado.") || !strings.Contains(response, "snapshotId") {
+		t.Fatalf("unscoped report download did not use the stable hidden-resource error: %s", response)
 	}
-	scopedContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}, Scopes: []requestctx.Scope{{Kind: "ASSET", ID: assetID}}}, CorrelationID: "report-asset-scope"})
+	missing := executeTask06GraphQL(t, server, `query { reportDownload(snapshotId:"`+identity.NewID().String()+`") { snapshotId } }`, validContext)
+	if !strings.Contains(missing, "NOT_FOUND") || !strings.Contains(missing, "Relatório não encontrado.") || !strings.Contains(missing, "snapshotId") {
+		t.Fatalf("missing report download did not use the same hidden-resource error: %s", missing)
+	}
+	scopedContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}, ProductEntitlements: auth.ProductsForRole(auth.Manager), Scopes: []requestctx.Scope{{Kind: "ASSET", ID: assetID}}}, CorrelationID: "report-asset-scope"})
 	if response := executeTask06GraphQL(t, server, `query { reportDownload(snapshotId:"`+snapshotID.String()+`") { snapshotId } }`, scopedContext); strings.Contains(response, `"errors"`) {
 		t.Fatalf("asset-scoped report download was denied: %s", response)
 	}
-	mutationContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "task06-mutations"})
+	mutationContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "task06-mutations"})
 	mutations := []struct {
 		name, query, expected string
 	}{
@@ -153,6 +166,11 @@ func task06ResolverDB(t *testing.T) *gorm.DB {
 			t.Fatal(err)
 		}
 	}
+	for _, schema := range []string{"tenancy", "projects"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, model := range []any{&database.ReportSnapshot{}, &database.ReportArtifact{}, &database.RetentionPolicy{}, &database.UsageRecord{}} {
 		if err := db.AutoMigrate(model); err != nil {
 			t.Fatal(err)
@@ -161,8 +179,15 @@ func task06ResolverDB(t *testing.T) *gorm.DB {
 	for _, statement := range []string{
 		`CREATE TABLE media.video_evidence_references (id blob primary key, tenant_id blob not null, preparation_id blob not null, owner_type text not null, owner_id blob not null, created_at datetime, unique(tenant_id, preparation_id, owner_type, owner_id))`,
 		`CREATE TABLE media.video_sources (id blob primary key, tenant_id blob not null, media_id blob not null, screening_status text not null, status text not null)`,
+		`CREATE TABLE reports.report_publications (id blob PRIMARY KEY, tenant_id blob NOT NULL, snapshot_id blob NOT NULL, inspection_id blob NOT NULL, policy_version integer, client_mutation_id text, status text NOT NULL, actor_id blob NOT NULL, reason text, version integer NOT NULL, published_at datetime, invalidated_at datetime, invalidated_by blob, superseded_by blob, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE analysis.video_plans (id blob primary key, tenant_id blob not null, inspection_id blob not null)`,
 		`CREATE TABLE inspections.inspections (id blob primary key, tenant_id blob not null, business_unit_id blob, asset_id blob, project_id blob)`,
+		`CREATE TABLE IF NOT EXISTS inspections.responsibilities (id blob primary key, tenant_id blob not null, inspection_id blob not null, participant_id blob, status text, version integer, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE dashboard.triage_cases (id blob primary key, tenant_id blob not null, inspection_id blob not null, status text not null, classification text not null, reason_codes blob, report_version integer not null, version integer not null, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE dashboard.triage_case_events (id blob primary key, tenant_id blob not null, case_id blob not null, actor_id blob not null, kind text not null, body text not null, created_at datetime)`,
+		`CREATE TABLE projects.projects (id blob primary key, tenant_id blob not null, business_unit_id blob not null, asset_id blob not null, name text not null, status text not null)`,
+		`CREATE TABLE projects.project_stages (id blob primary key, tenant_id blob not null, project_id blob not null, label text not null, status text not null, position integer not null)`,
+		`CREATE TABLE tenancy.tenants (id blob primary key, tenant_id blob not null, name text not null, status text not null, language text not null, default_timezone text not null, version integer not null)`,
 		`CREATE TABLE dashboard.inspections (id blob primary key, tenant_id blob not null, inspection_id blob not null, project_id blob, asset_id blob not null, classification text not null, status text not null, invalidated numeric not null default 0, sequence integer not null, updated_at datetime)`,
 		`CREATE TABLE notifications.deliveries (id blob primary key, tenant_id blob not null, intent_id blob not null, inspection_id blob, invitation_id blob, status text not null, logical_template text, template_version text, correlation_id text, idempotency_key text, request_digest text, recipient_id text, selected_provider text, scheduled_at datetime, lease_expires_at datetime, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE notifications.channel_attempts (id blob primary key, tenant_id blob not null, delivery_id blob not null, channel text not null, destination text not null, status text not null, provider text, provider_account text, receipt_id text, attempts integer not null default 0, last_error text, template_variables blob, next_attempt_at datetime, lease_expires_at datetime, last_attempt_at datetime, created_at datetime, updated_at datetime)`,
@@ -176,8 +201,23 @@ func task06ResolverDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+// task06SigningClient is the object-store client of the Task 06 transport
+// fixture: it only signs downloads, every other Client method would panic on
+// the embedded nil interface and is never called.
+type task06SigningClient struct{ objectstore.Client }
+
+func (task06SigningClient) PresignGet(_ context.Context, _, key string, _ time.Duration) (string, error) {
+	return "https://signed.invalid/" + key, nil
+}
+
 func task06GraphQLServer(db *gorm.DB) *handler.Server {
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: db, Bus: mediator.New()}}))
+	return task06GraphQLServerWithStore(db, objectstore.Store{Bucket: "private", Client: task06SigningClient{}})
+}
+
+// task06GraphQLServerWithStore builds the transport with an explicit object
+// store; a zero Store models a deployment without object storage.
+func task06GraphQLServerWithStore(db *gorm.DB, store objectstore.Store) *handler.Server {
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: db, Bus: mediator.New(), Store: store}}))
 	server.SetErrorPresenter(graph.PresentError)
 	return server
 }

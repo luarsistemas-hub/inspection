@@ -3,6 +3,7 @@ package resolvers
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -31,7 +32,7 @@ func (r *queryResolver) videoPreparationEvidence(ctx context.Context, preparatio
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	prepID, err := identity.ParseID(preparationID)
@@ -84,8 +85,8 @@ func (r *queryResolver) videoPreparationEvidence(ctx context.Context, preparatio
 		return scopeQuery.Order("created_at ASC, id ASC").Limit(limit + 1).Find(&scopes).Error
 	})
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, apperror.New(apperror.NotFound, "preparationId", "preparation not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) || apperror.Is(err, apperror.Forbidden) || apperror.Is(err, apperror.NotFound) {
+			return nil, apperror.New(apperror.NotFound, "preparationId", "Preparação não encontrada.")
 		}
 		return nil, err
 	}
@@ -137,7 +138,7 @@ func authorizePreparationRead(ctx context.Context, tx *gorm.DB, meta requestctx.
 	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", meta.TenantID, media.ResponsibilityID).Take(&responsibility).Error; err != nil {
 		return err
 	}
-	return authorizeReportInspection(ctx, tx, meta, responsibility.InspectionID)
+	return authorizeReportResource(ctx, tx, meta, responsibility.InspectionID, "preparationId", "Preparação não encontrada.")
 }
 
 func encodePreparationCursor(tenantID, prepID identity.ID, kind, key, id string) string {

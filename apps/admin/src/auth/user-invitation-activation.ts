@@ -1,9 +1,12 @@
+import { activationErrorMessage } from "@/auth/activation";
+import { AdminLocalError } from "@/graphql/client";
+
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
 
 type Activation = { membershipId: string; email: string; name: string; newIdentity: boolean; status: string };
 type UserError = { code: string; field: string | null; message: string };
 type Result = { activation: Activation | null; userErrors: UserError[] };
-type Body = { data?: Record<string, Result>; errors?: Array<{ message: string }> };
+type Body = { data?: Record<string, Result>; errors?: Array<{ message: string; extensions?: { code?: string } }> };
 const storageKey = "inspection.user-invitation.csrf";
 
 function mutationID(): string { return globalThis.crypto?.randomUUID?.() ?? `invite-${Date.now()}`; }
@@ -19,7 +22,7 @@ async function execute(field: string, input: Record<string, string | null>): Pro
   if (nextCsrf) sessionStorage.setItem(storageKey, nextCsrf);
   const body = await response.json().catch(() => ({})) as Body;
   const result = body.data?.[field];
-  if (!response.ok || body.errors?.length || !result) throw new Error(body.errors?.[0]?.message ?? "Não foi possível concluir a ativação.");
+  if (!response.ok || body.errors?.length || !result) throw new AdminLocalError(activationErrorMessage(body.errors?.[0]?.extensions?.code));
   return result;
 }
 

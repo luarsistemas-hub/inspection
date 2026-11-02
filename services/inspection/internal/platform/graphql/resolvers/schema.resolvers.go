@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"inspection/libs/identity"
-	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
@@ -47,6 +46,9 @@ import (
 	counterpartyverifyotp "inspection/services/inspection/internal/features/counterparty/verify_otp"
 	counterpartyviewbaseline "inspection/services/inspection/internal/features/counterparty/view_baseline"
 	dashboardcore "inspection/services/inspection/internal/features/dashboard/core"
+	dashboardlist "inspection/services/inspection/internal/features/dashboard/list_triage"
+	projecttimeline "inspection/services/inspection/internal/features/dashboard/project_timeline"
+	dashboardsummary "inspection/services/inspection/internal/features/dashboard/summary"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
@@ -82,6 +84,7 @@ import (
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
 	listreports "inspection/services/inspection/internal/features/reports/list_reports"
 	"inspection/services/inspection/internal/features/reports/publication"
+	configurepolicy "inspection/services/inspection/internal/features/retention/configure_policy"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
 	segmentactivate "inspection/services/inspection/internal/features/segments/activate_definition"
@@ -148,22 +151,25 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 		return nil, unauthenticated()
 	}
 	if strings.EqualFold(input.Step, onboardingsession.StepAgency) {
-		if err := r.Onboarding.ValidateCheckpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload); err != nil {
+		canonicalPayload, err := r.Onboarding.ValidateCheckpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload)
+		if err != nil {
 			return onboardingValidationPayload(err, input.ClientMutationID)
 		}
+		// Provisioning and the stored checkpoint must act on the same canonical values.
+		input.Payload = canonicalPayload
 		ownerSession, err := r.Onboarding.Load(ctx, credentials.SessionToken)
 		if err != nil {
 			return onboardingValidationPayload(err, input.ClientMutationID)
 		}
 		if ownerSession.ExistingAgency == nil && (r.OwnerProvider == nil || r.OnboardingBootstrap.DB == nil) {
-			return nil, apperror.New(apperror.DependencyUnavailable, "agency", "owner provisioning unavailable")
+			return nil, apperror.New(apperror.DependencyUnavailable, "agency", "Não foi possível preparar a imobiliária agora. Tente novamente.")
 		}
 		agencyName := onboardingPayloadString(input.Payload, "agencyName")
 		if agencyName == "" {
 			agencyName = onboardingPayloadString(input.Payload, "name")
 		}
 		if ownerSession.ExistingAgency != nil && agencyName != ownerSession.ExistingAgency.Name {
-			return onboardingValidationPayload(apperror.New(apperror.InvalidInput, "agencyName", "the existing agency cannot be changed"), input.ClientMutationID)
+			return onboardingValidationPayload(apperror.New(apperror.InvalidInput, "agencyName", "A imobiliária vinculada a este e-mail não pode ser alterada."), input.ClientMutationID)
 		}
 		unitCode := onboardingPayloadString(input.Payload, "businessUnitCode")
 		if unitCode == "" {
@@ -191,7 +197,7 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 				return nil, err
 			}
 		} else if onboardingPayloadString(input.Payload, "existingAgencyId") != ownerSession.ExistingAgency.TenantID.String() {
-			return onboardingValidationPayload(apperror.New(apperror.InvalidInput, "existingAgencyId", "confirm the existing agency"), input.ClientMutationID)
+			return onboardingValidationPayload(apperror.New(apperror.InvalidInput, "existingAgencyId", "Confirme a imobiliária vinculada a este e-mail."), input.ClientMutationID)
 		}
 	}
 	result, err := r.Onboarding.Checkpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload)
@@ -234,7 +240,7 @@ func (r *mutationResolver) CorrectOnboardingResponsibleEmail(ctx context.Context
 	session, err := r.Onboarding.ValidateCSRF(ctx, credentials.SessionToken, credentials.CSRFToken)
 	if err != nil || session.TenantID == nil {
 		if err == nil {
-			err = apperror.New(apperror.Unauthenticated, "session", "onboarding session required")
+			err = apperror.New(apperror.Unauthenticated, "session", "Confirme seu e-mail para continuar o cadastro.")
 		}
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
@@ -242,7 +248,7 @@ func (r *mutationResolver) CorrectOnboardingResponsibleEmail(ctx context.Context
 	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, *session.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND inspection_id IN (SELECT inspection_id FROM onboarding.requests WHERE tenant_id=? AND session_id=?)", *session.TenantID, *session.TenantID, session.ID).First(&responsibility).Error
 	}); err == gorm.ErrRecordNotFound {
-		return onboardingValidationPayload(apperror.New(apperror.NotFound, "inspectionId", "inspection not found"), input.ClientMutationID)
+		return onboardingValidationPayload(apperror.New(apperror.NotFound, "inspectionId", "A vistoria não foi encontrada."), input.ClientMutationID)
 	} else if err != nil {
 		return nil, err
 	}
@@ -399,7 +405,7 @@ func (r *mutationResolver) CreateBusinessUnit(ctx context.Context, input graphql
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.AdminProduct, true); err != nil {
 		return nil, err
 	}
 	raw, err := r.Bus.Send(ctx, createunit.Command{TenantID: meta.TenantID, Code: input.Code, Name: input.Name, IdempotencyKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), ExpectedTenantVersion: int64(input.ExpectedTenantVersion)})
@@ -473,7 +479,7 @@ func (r *mutationResolver) InviteInternalUser(ctx context.Context, input graphql
 		}
 		scopes = append(scopes, inviteinternal.Scope{Kind: scope.Kind, ResourceID: id})
 	}
-	raw, err := r.Bus.Send(ctx, inviteinternal.Command{TenantID: meta.TenantID, Name: input.Name, Email: input.Email, Role: input.Role, Scopes: scopes, ClientID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	raw, err := r.Bus.Send(ctx, inviteinternal.Command{TenantID: meta.TenantID, Name: input.Name, Email: input.Email, Role: input.Role, Scopes: scopes, ProductEntitlements: input.ProductEntitlements, ClientID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
 		return nil, err
 	}
@@ -486,11 +492,21 @@ func (r *mutationResolver) InviteInternalUser(ctx context.Context, input graphql
 	return &graphql1.MembershipPayload{Membership: membership, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// InviteCustomerUser is the resolver for the inviteCustomerUser field.
+func (r *mutationResolver) InviteCustomerUser(ctx context.Context, input graphql1.InviteCustomerUserInput) (*graphql1.MembershipPayload, error) {
+	return r.inviteCustomerUser(ctx, input)
+}
+
 // ResendInternalUserInvitation is the resolver for the resendInternalUserInvitation field.
 func (r *mutationResolver) ResendInternalUserInvitation(ctx context.Context, input graphql1.ResendInternalUserInvitationInput) (*graphql1.MembershipPayload, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
+	}
+	// Admin product, entitlement and role come first: a caller without access
+	// must not learn whether a membership exists.
+	if _, err := r.authorizeOperation(ctx, meta, auth.AdminProduct, true, auth.AccessAdmin); err != nil {
+		return nil, err
 	}
 	membershipID, err := identity.ParseID(input.MembershipID)
 	if err != nil {
@@ -500,7 +516,7 @@ func (r *mutationResolver) ResendInternalUserInvitation(ctx context.Context, inp
 	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND id=?", meta.TenantID, membershipID).First(&row).Error
 	}); err != nil {
-		return nil, err
+		return nil, apperror.New(apperror.NotFound, "membershipId", "Acesso não encontrado.")
 	}
 	raw, err := r.Bus.Send(ctx, inviteinternal.Command{TenantID: meta.TenantID, Name: row.Name, Email: row.Email, Role: row.Role, ClientID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
@@ -517,43 +533,19 @@ func (r *mutationResolver) ResendInternalUserInvitation(ctx context.Context, inp
 
 // AssignRoleScopes is the resolver for the assignRoleScopes field.
 func (r *mutationResolver) AssignRoleScopes(ctx context.Context, input graphql1.AssignRoleScopesInput) (*graphql1.MembershipPayload, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	membershipID, err := identity.ParseID(input.MembershipID)
-	if err != nil {
-		return nil, invalidID("membershipId")
-	}
-	assignments := make([]assignroles.Assignment, 0, len(input.Scopes))
-	for _, scope := range input.Scopes {
-		if scope == nil {
-			return nil, graphql1Error("scopes")
-		}
-		id, parseErr := identity.ParseID(scope.ResourceID)
-		if parseErr != nil {
-			return nil, invalidID("scopes")
-		}
-		assignments = append(assignments, assignroles.Assignment{Kind: scope.Kind, ResourceID: id})
-	}
-	var expected int64
+	// The legacy mutation is a thin alias of assignMembershipAccess: it replaces
+	// role and scopes under the same Admin-product, delegation, self-change,
+	// last-administrator and mandatory expectedVersion rules.
+	expected := 0
 	if input.ExpectedVersion != nil {
-		expected = int64(*input.ExpectedVersion)
+		expected = *input.ExpectedVersion
 	}
-	if _, err := r.Bus.Send(ctx, assignroles.Command{TenantID: meta.TenantID, MembershipID: membershipID, Role: input.Role, Assignments: assignments, ExpectedVersion: expected}); err != nil {
-		return nil, err
-	}
-	var membership database.Membership
-	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
-		return tx.Where("tenant_id = ? AND id = ?", meta.TenantID, membershipID).First(&membership).Error
-	}); err != nil {
-		return nil, err
-	}
-	mapped, err := mapMembership(ctx, r.DB, membership)
-	if err != nil {
-		return nil, err
-	}
-	return &graphql1.MembershipPayload{Membership: mapped, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return r.assignMembershipAccess(ctx, graphql1.AssignMembershipAccessInput{MembershipID: input.MembershipID, Role: input.Role, Scopes: input.Scopes, ExpectedVersion: expected, ClientMutationID: input.ClientMutationID})
+}
+
+// AssignMembershipAccess is the resolver for the assignMembershipAccess field.
+func (r *mutationResolver) AssignMembershipAccess(ctx context.Context, input graphql1.AssignMembershipAccessInput) (*graphql1.MembershipPayload, error) {
+	return r.assignMembershipAccess(ctx, input)
 }
 
 // DisableMembership is the resolver for the disableMembership field.
@@ -662,6 +654,11 @@ func (r *mutationResolver) CorrectInspectionResponsibleEmail(ctx context.Context
 	inspectionID, err := identity.ParseID(input.InspectionID)
 	if err != nil {
 		return nil, invalidID("inspectionId")
+	}
+	// Authorize product, entitlement and role before reading the entity so a
+	// caller without access cannot probe which inspections exist.
+	if _, err := r.authorizeOperation(ctx, meta, "", true, auth.ParticipationAdmin, auth.Manager); err != nil {
+		return nil, err
 	}
 	var inspection database.Inspection
 	if err := r.DB.WithContext(ctx).Where("tenant_id=? AND id=?", meta.TenantID, inspectionID).First(&inspection).Error; err != nil {
@@ -973,11 +970,17 @@ func (r *mutationResolver) RevokeInvitation(ctx context.Context, input graphql1.
 
 // InviteOriginCapture is the resolver for the inviteOriginCapture field.
 func (r *mutationResolver) InviteOriginCapture(ctx context.Context, input graphql1.InviteOriginCaptureInput) (*graphql1.OriginInvitationPayload, error) {
+	if _, ok := requestctx.FromContext(ctx); !ok {
+		return nil, unauthenticated()
+	}
 	return &graphql1.OriginInvitationPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // ActivateOriginVersion is the resolver for the activateOriginVersion field.
 func (r *mutationResolver) ActivateOriginVersion(ctx context.Context, input graphql1.OriginVersionInput) (*graphql1.OriginVersionPayload, error) {
+	if _, ok := requestctx.FromContext(ctx); !ok {
+		return nil, unauthenticated()
+	}
 	return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -1429,6 +1432,12 @@ func (r *mutationResolver) ResendInspectionInvitation(ctx context.Context, input
 	if err != nil {
 		return nil, invalidID("inspectionId")
 	}
+	if _, err := r.authorizeOperation(ctx, meta, "", true, auth.ParticipationAdmin, auth.Manager); err != nil {
+		if apperror.Is(err, apperror.Forbidden) {
+			return nil, apperror.New(apperror.Forbidden, "", "Você não tem permissão para reenviar este convite.")
+		}
+		return nil, err
+	}
 	var inspection database.Inspection
 	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND id=?", meta.TenantID, inspectionID).First(&inspection).Error
@@ -1588,7 +1597,12 @@ func (r *mutationResolver) AcceptProcessing(ctx context.Context, input graphql1.
 		return nil, err
 	}
 	videoConsent := input.VideoProcessing != nil && *input.VideoProcessing
-	_, err := r.Bus.Send(ctx, acceptprocessing.Command{SessionToken: credentials.SessionToken, CSRFToken: credentials.CSRFToken, Consent: invitationcore.ProcessingConsent{DisclosureVersion: input.DisclosureVersion, PhotoProcessing: input.PhotoProcessing, VideoProcessing: videoConsent, AIAnalysis: input.AiAnalysis, GPSUse: input.GpsUse}})
+	voiceConsent := input.VoiceProcessing != nil && *input.VoiceProcessing
+	voiceConsentVersion := ""
+	if input.VoiceConsentVersion != nil {
+		voiceConsentVersion = *input.VoiceConsentVersion
+	}
+	_, err := r.Bus.Send(ctx, acceptprocessing.Command{SessionToken: credentials.SessionToken, CSRFToken: credentials.CSRFToken, Consent: invitationcore.ProcessingConsent{DisclosureVersion: input.DisclosureVersion, PhotoProcessing: input.PhotoProcessing, VideoProcessing: videoConsent, VoiceProcessing: voiceConsent, VoiceConsentVersion: voiceConsentVersion, AIAnalysis: input.AiAnalysis, GPSUse: input.GpsUse}})
 	if err != nil {
 		return nil, err
 	}
@@ -1632,6 +1646,51 @@ func (r *mutationResolver) ConfigureVideoPolicy(ctx context.Context, input graph
 		return nil, err
 	}
 	return &graphql1.VideoPolicyPayload{Policy: mapVideoPolicy(raw.(database.VideoPolicy)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ConfigureVoicePolicy is the resolver for the configureVoicePolicy field.
+func (r *mutationResolver) ConfigureVoicePolicy(ctx context.Context, input graphql1.ConfigureVoicePolicyInput) (*graphql1.VoicePolicyPayload, error) {
+	return configureVoicePolicy(ctx, r.Resolver, input)
+}
+
+// CreateAudioNoteUpload is the resolver for the createAudioNoteUpload field.
+func (r *mutationResolver) CreateAudioNoteUpload(ctx context.Context, input graphql1.CreateAudioNoteUploadInput) (*graphql1.AudioNoteUploadPayload, error) {
+	return createAudioNoteUpload(ctx, r.Resolver, input)
+}
+
+// CompleteAudioNoteUpload is the resolver for the completeAudioNoteUpload field.
+func (r *mutationResolver) CompleteAudioNoteUpload(ctx context.Context, input graphql1.CompleteAudioNoteUploadInput) (*graphql1.AudioNotePayload, error) {
+	return completeAudioNoteUpload(ctx, r.Resolver, input)
+}
+
+// ReviseAudioNote is the resolver for the reviseAudioNote field.
+func (r *mutationResolver) ReviseAudioNote(ctx context.Context, input graphql1.ReviseAudioNoteInput) (*graphql1.AudioNotePayload, error) {
+	return reviseAudioNote(ctx, r.Resolver, input)
+}
+
+// DiscardAudioNote is the resolver for the discardAudioNote field.
+func (r *mutationResolver) DiscardAudioNote(ctx context.Context, input graphql1.DiscardAudioNoteInput) (*graphql1.AudioNotePayload, error) {
+	return mutateAudioNote(ctx, r.Resolver, input.NoteID, input.ClientMutationID, "DISCARD", "", false, input.ExpectedVersion)
+}
+
+// RetryAudioNote is the resolver for the retryAudioNote field.
+func (r *mutationResolver) RetryAudioNote(ctx context.Context, input graphql1.RetryAudioNoteInput) (*graphql1.AudioNotePayload, error) {
+	return mutateAudioNote(ctx, r.Resolver, input.NoteID, input.ClientMutationID, "RETRY", "", false, input.ExpectedVersion)
+}
+
+// SetAudioNoteHighlight is the resolver for the setAudioNoteHighlight field.
+func (r *mutationResolver) SetAudioNoteHighlight(ctx context.Context, input graphql1.SetAudioNoteHighlightInput) (*graphql1.AudioNotePayload, error) {
+	return mutateAudioNote(ctx, r.Resolver, input.NoteID, input.ClientMutationID, "HIGHLIGHT", "", input.Highlighted, input.ExpectedVersion)
+}
+
+// ConfirmAudioNoteText is the resolver for the confirmAudioNoteText field.
+func (r *mutationResolver) ConfirmAudioNoteText(ctx context.Context, input graphql1.ConfirmAudioNoteTextInput) (*graphql1.AudioNotePayload, error) {
+	return mutateAudioNote(ctx, r.Resolver, input.NoteID, input.ClientMutationID, "CONFIRM", "", false, input.ExpectedVersion)
+}
+
+// RegenerateInventorySuggestions is the resolver for the regenerateInventorySuggestions field.
+func (r *mutationResolver) RegenerateInventorySuggestions(ctx context.Context, input graphql1.RegenerateInventorySuggestionsInput) (*graphql1.InventoryRegenerationPayload, error) {
+	return r.regenerateInventorySuggestions(ctx, input)
 }
 
 // RetryVideoPreparation is the resolver for the retryVideoPreparation field.
@@ -2039,7 +2098,7 @@ func (r *mutationResolver) SubmitRecapture(ctx context.Context, input graphql1.S
 // DeclareSensitiveDetectionFalsePositive is the resolver for the declareSensitiveDetectionFalsePositive field.
 func (r *mutationResolver) DeclareSensitiveDetectionFalsePositive(ctx context.Context, input graphql1.SensitiveFalsePositiveInput) (*graphql1.MediaPayload, error) {
 	if meta, ok := requestctx.FromContext(ctx); ok && meta.Principal.Internal {
-		if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+		if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, true, auth.Manager); err != nil {
 			return nil, err
 		}
 		mediaID, err := identity.ParseID(input.MediaID)
@@ -2068,7 +2127,7 @@ func (r *mutationResolver) DeclareSensitiveDetectionFalsePositive(ctx context.Co
 				return nil, apperror.New(apperror.NotFound, "mediaId", "media not found")
 			}
 			if r.Authorizer.Store != nil || r.Authorizer.Scopes != nil {
-				if _, authErr := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, true); authErr != nil {
+				if _, authErr := r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, Mutate: true}); authErr != nil {
 					return nil, apperror.New(apperror.NotFound, "mediaId", "media not found")
 				}
 			} else if !inPrincipalScope(meta.Principal, inspection.BusinessUnitID) {
@@ -2125,17 +2184,10 @@ func (r *mutationResolver) ConfigureRetentionPolicy(ctx context.Context, input g
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee); err != nil {
+	// The tenant administrator and the governance administrator change
+	// retention periods in the Admin product (US-031, ADR-003).
+	if _, err := r.authorizeRetention(ctx, meta, true); err != nil {
 		return nil, err
-	}
-	if input.EvidenceDays <= 0 || input.OperationalDays <= 0 || (input.SecurityDays != nil && *input.SecurityDays < 0) {
-		field := "evidenceDays"
-		if input.OperationalDays <= 0 {
-			field = "operationalDays"
-		} else if input.SecurityDays != nil && *input.SecurityDays < 0 {
-			field = "securityDays"
-		}
-		return nil, graphql1Error(field)
 	}
 	securityDays := 0
 	if input.SecurityDays != nil {
@@ -2143,16 +2195,9 @@ func (r *mutationResolver) ConfigureRetentionPolicy(ctx context.Context, input g
 	}
 	var row database.RetentionPolicy
 	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		var previous database.RetentionPolicy
-		version := int64(1)
-		if err := tx.Session(&gorm.Session{}).Order("version DESC").First(&previous).Error; err == nil {
-			version = previous.Version + 1
-		} else if err != gorm.ErrRecordNotFound {
-			return err
-		}
-		now := time.Now().UTC()
-		row = database.RetentionPolicy{ID: identity.NewID(), TenantID: meta.TenantID, EvidenceDays: input.EvidenceDays, OperationalDays: input.OperationalDays, SecurityDays: securityDays, Version: version, CreatedAt: now, UpdatedAt: now}
-		return tx.Session(&gorm.Session{}).Create(&row).Error
+		saved, err := configurepolicy.Save(ctx, tx, configurepolicy.Input{TenantID: meta.TenantID, ActorID: meta.Principal.IdentityID, EvidenceDays: input.EvidenceDays, OperationalDays: input.OperationalDays, SecurityDays: securityDays})
+		row = saved
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -2166,7 +2211,7 @@ func (r *mutationResolver) RecordDeletionRequest(ctx context.Context, input grap
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", true, auth.Manager); err != nil {
 		return nil, err
 	}
 	scope, err := parseRetentionScope(input.InspectionID, input.SourceMediaID, input.OriginVersionID)
@@ -2218,33 +2263,10 @@ func (r *mutationResolver) ConfigurePublicationPolicy(ctx context.Context, input
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.AdminProduct, true); err != nil {
 		return nil, err
 	}
-	mode := input.Mode
-	if mode != "MANUAL" && mode != "AUTOMATIC" {
-		return nil, graphql1Error("mode")
-	}
-	var policy database.PublicationPolicy
-	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id = ?", meta.TenantID).First(&policy).Error; err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
-		current := int64(0)
-		if policy.ID != (identity.ID{}) {
-			current = policy.Version
-		}
-		if int64(input.ExpectedVersion) != current {
-			return apperror.New(apperror.Conflict, "expectedVersion", "stale publication policy version")
-		}
-		if policy.ID == (identity.ID{}) {
-			policy = database.PublicationPolicy{ID: identity.NewID(), TenantID: meta.TenantID, Version: 1}
-		} else {
-			policy.Version++
-		}
-		policy.Mode = mode
-		return tx.Save(&policy).Error
-	})
+	policy, err := r.PublicationService.Configure(ctx, publication.ConfigureInput{TenantID: meta.TenantID, Mode: input.Mode, ExpectedVersion: int64(input.ExpectedVersion)})
 	if err != nil {
 		return nil, err
 	}
@@ -2257,7 +2279,7 @@ func (r *mutationResolver) PublishReport(ctx context.Context, input graphql1.Pub
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, true, auth.Manager); err != nil {
 		return nil, err
 	}
 	inspectionID, err := identity.ParseID(input.InspectionID)
@@ -2268,7 +2290,11 @@ func (r *mutationResolver) PublishReport(ctx context.Context, input graphql1.Pub
 	if err != nil {
 		return nil, invalidID("snapshotId")
 	}
-	publicationRow, err := r.PublicationService.Publish(ctx, publication.PublishInput{TenantID: meta.TenantID, InspectionID: inspectionID, SnapshotID: snapshotID, ActorID: meta.Principal.IdentityID, ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Final: true})
+	// A manager publishes only inside their scope; out-of-scope is NOT_FOUND.
+	if err := authorizeReportResource(ctx, r.DB, meta, inspectionID, "inspectionId", "Vistoria não encontrada."); err != nil {
+		return nil, err
+	}
+	publicationRow, err := r.PublicationService.Publish(ctx, publication.PublishInput{TenantID: meta.TenantID, InspectionID: inspectionID, SnapshotID: snapshotID, ActorID: meta.Principal.IdentityID, ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID), CorrelationID: meta.CorrelationID, Final: true})
 	if err != nil {
 		return nil, err
 	}
@@ -2281,14 +2307,17 @@ func (r *mutationResolver) InvalidateReportPublication(ctx context.Context, inpu
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, true, auth.Manager); err != nil {
 		return nil, err
 	}
 	publicationID, err := identity.ParseID(input.PublicationID)
 	if err != nil {
 		return nil, invalidID("publicationId")
 	}
-	publicationRow, err := r.PublicationService.Invalidate(ctx, publication.InvalidateInput{TenantID: meta.TenantID, PublicationID: publicationID, ActorID: meta.Principal.IdentityID, Reason: input.Reason, ExpectedVersion: int64(input.ExpectedVersion)})
+	if err := authorizePublicationInspection(ctx, r.DB, meta, publicationID); err != nil {
+		return nil, err
+	}
+	publicationRow, err := r.PublicationService.Invalidate(ctx, publication.InvalidateInput{TenantID: meta.TenantID, PublicationID: publicationID, ActorID: meta.Principal.IdentityID, Reason: input.Reason, ExpectedVersion: int64(input.ExpectedVersion), CorrelationID: meta.CorrelationID})
 	if err != nil {
 		return nil, err
 	}
@@ -2301,7 +2330,7 @@ func (r *mutationResolver) MarkNotificationRead(ctx context.Context, input graph
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
 	if input.All != nil && *input.All {
@@ -2348,7 +2377,7 @@ func (r *mutationResolver) ConfigureMyNotificationPreferences(ctx context.Contex
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
 	selected := make(map[identity.ID]bool, len(input.Channels))
@@ -2388,7 +2417,7 @@ func (r *originVersionResolver) CounterpartyInvitations(ctx context.Context, obj
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, nil, false); err != nil {
+	if _, err := r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee}}); err != nil {
 		return nil, err
 	}
 	versionID, err := identity.ParseID(obj.ID)
@@ -2471,9 +2500,9 @@ func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string
 	value, err := onboardingcatalog.Resolve(segment)
 	if err != nil {
 		if err == onboardingcatalog.ErrUnsupportedSchemaVersion {
-			return nil, apperror.New(apperror.UnsupportedSchemaVersion, "segment", "unsupported schema version")
+			return nil, apperror.New(apperror.UnsupportedSchemaVersion, "segment", "Esta versão do cadastro não é compatível.")
 		}
-		return nil, apperror.New(apperror.NotFound, "segment", "onboarding definition not found")
+		return nil, apperror.New(apperror.NotFound, "segment", "A definição do cadastro não foi encontrada.")
 	}
 	steps := make([]*graphql1.OnboardingStep, 0, len(value.Steps))
 	for _, step := range value.Steps {
@@ -2553,9 +2582,15 @@ func (r *queryResolver) OnboardingStatus(ctx context.Context) (*graphql1.Onboard
 
 // Me is the resolver for the me field.
 func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
+	if _, external := requestctx.ExternalCredentialsFromContext(ctx); external {
+		return nil, apperror.New(apperror.Forbidden, "", "Acesso negado.")
+	}
 	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, nil
+	// The HTTP boundary installs zeroed metadata for anonymous requests; only a
+	// verified identity (a member, or a verified subject yet to pick a tenant)
+	// may read its own access context.
+	if !ok || (meta.Principal.IdentityID == (identity.ID{}) && (meta.Principal.Issuer == "" || meta.Principal.Subject == "")) {
+		return nil, unauthenticated()
 	}
 	principal := meta.Principal
 	if r.Authorizer.Store != nil && meta.TenantID != (identity.ID{}) && principal.IdentityID != (identity.ID{}) {
@@ -2574,7 +2609,7 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 	}
 	memberships := []*graphql1.Membership{}
 	if principal.MembershipID != (identity.ID{}) {
-		memberships = append(memberships, &graphql1.Membership{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Name: principal.Name, Email: principal.Email, Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), InvitationStatus: principal.InvitationStatus, Version: int(principal.MembershipVersion), Scopes: scopes})
+		memberships = append(memberships, &graphql1.Membership{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Name: principal.Name, Email: principal.Email, Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), InvitationStatus: principal.InvitationStatus, Version: int(principal.MembershipVersion), ProductEntitlements: nonNilStrings(principal.ProductEntitlements), Scopes: scopes})
 	} else if principal.Issuer != "" && principal.Subject != "" {
 		raw, err := r.Bus.Ask(ctx, listidentitymemberships.Query{Issuer: principal.Issuer, Subject: principal.Subject, First: 100})
 		if err != nil {
@@ -2585,7 +2620,7 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 			if summary.TenantStatus != "ACTIVE" {
 				status = "INACTIVE"
 			}
-			memberships = append(memberships, &graphql1.Membership{ID: summary.MembershipID.String(), TenantID: summary.TenantID.String(), Name: summary.Name, Email: summary.Email, Role: summary.Role, Status: status, InvitationStatus: summary.InvitationStatus, Version: int(summary.MembershipVersion), Scopes: []*graphql1.Scope{}})
+			memberships = append(memberships, &graphql1.Membership{ID: summary.MembershipID.String(), TenantID: summary.TenantID.String(), Name: summary.Name, Email: summary.Email, Role: summary.Role, Status: status, InvitationStatus: summary.InvitationStatus, Version: int(summary.MembershipVersion), ProductEntitlements: nonNilStrings(summary.ProductEntitlements), Scopes: []*graphql1.Scope{}})
 		}
 	}
 	canViewLLMCosts := auth.IsConfiguredSuperAdmin(ctx, r.SuperAdminIssuer, r.SuperAdminSubject) && principal.Product == auth.AdminProduct && principal.ProductEntitled(auth.AdminProduct)
@@ -2612,13 +2647,22 @@ func (r *queryResolver) Tenant(ctx context.Context) (*graphql1.Tenant, error) {
 	if !ok {
 		return nil, unauthenticated()
 	}
+	if _, external := requestctx.ExternalCredentialsFromContext(ctx); external {
+		return nil, apperror.New(apperror.Forbidden, "", "Acesso negado.")
+	}
 	if meta.TenantID == (identity.ID{}) {
 		return nil, nil
 	}
+	if err := authorizeTenantRead(ctx, r.Authorizer, meta); err != nil {
+		return nil, err
+	}
 	var row database.Tenant
-	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("tenant_id=?", meta.TenantID).First(&row).Error })
+	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("tenant_id=?", meta.TenantID).First(&row).Error })
 	if err != nil {
 		return nil, err
+	}
+	if hasRole(meta, auth.CustomerViewer) {
+		return &graphql1.Tenant{ID: row.ID.String(), Name: row.Name, Status: row.Status}, nil
 	}
 	return &graphql1.Tenant{ID: row.ID.String(), Name: row.Name, Language: row.Language, DefaultTimezone: row.DefaultTimezone, Status: row.Status, Version: int(row.Version)}, nil
 }
@@ -2629,7 +2673,7 @@ func (r *queryResolver) Memberships(ctx context.Context, first *int, after *stri
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager); err != nil {
 		return nil, err
 	}
 	limit := intValue(first)
@@ -2670,13 +2714,23 @@ func (r *queryResolver) Memberships(ctx context.Context, first *int, after *stri
 	return &graphql1.MembershipConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
 }
 
+// EffectiveAccess is the resolver for the effectiveAccess field.
+func (r *queryResolver) EffectiveAccess(ctx context.Context, membershipID string, first *int, after *string) (*graphql1.EffectiveAccess, error) {
+	return r.effectiveAccess(ctx, membershipID, first, after)
+}
+
+// ScopePreview is the resolver for the scopePreview field.
+func (r *queryResolver) ScopePreview(ctx context.Context, kind string, resourceID string, first *int, after *string) (*graphql1.ScopePreview, error) {
+	return r.scopePreview(ctx, kind, resourceID, first, after)
+}
+
 // BusinessUnits is the resolver for the businessUnits field.
 func (r *queryResolver) BusinessUnits(ctx context.Context, first *int, after *string) (*graphql1.BusinessUnitConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	limit := intValue(first)
@@ -2865,11 +2919,19 @@ func (r *queryResolver) Assets(ctx context.Context, businessUnitID *string, sear
 func (r *queryResolver) LookupPostalCode(ctx context.Context, postalCode string) (*graphql1.PostalAddressLookup, error) {
 	clientIP, ok := requestctx.ClientIP(ctx)
 	if !ok {
-		return nil, apperror.New(apperror.Unauthenticated, "", "trusted client context required")
+		return nil, apperror.New(apperror.Unauthenticated, "", "Não foi possível validar o contexto da solicitação.")
+	}
+	digits := strings.TrimSpace(postalCode)
+	if len(digits) != 8 || strings.Trim(digits, "0123456789") != "" {
+		return nil, apperror.New(apperror.InvalidInput, "postalCode", "CEP inválido.")
 	}
 	raw, err := r.Bus.Ask(ctx, postallookup.Query{PostalCode: postalCode, ClientKey: clientIP})
 	if err != nil {
-		return nil, apperror.New(apperror.DependencyUnavailable, "postalCode", "consulta de CEP indisponível")
+		// The lookup slice reports its per-client throttle only through this message.
+		if strings.Contains(err.Error(), "limite de consultas") {
+			return nil, apperror.New(apperror.RateLimited, "postalCode", "Muitas consultas de CEP em sequência. Aguarde alguns instantes e tente novamente.")
+		}
+		return nil, apperror.New(apperror.DependencyUnavailable, "postalCode", "A consulta de CEP está indisponível no momento.")
 	}
 	result := raw.(postallookup.Result)
 	return &graphql1.PostalAddressLookup{Found: result.Found, PostalCode: result.PostalCode, Street: result.Street, District: result.District, City: result.City, State: result.State, MunicipalityCode: result.MunicipalityCode}, nil
@@ -3167,7 +3229,7 @@ func (r *queryResolver) SensitiveContentScreeningBypassed(ctx context.Context) (
 	if !meta.Principal.Internal {
 		return false, apperror.New(apperror.Forbidden, "", "permission denied")
 	}
-	if err := internalRole(meta, auth.TenantAdmin); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.AdminProduct, false); err != nil {
 		return false, err
 	}
 	if r.DB == nil {
@@ -3186,14 +3248,14 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	id, err := identity.ParseID(inspectionID)
 	if err != nil {
 		return nil, invalidID("inspectionId")
 	}
-	if err := authorizeReportInspection(ctx, r.DB, meta, id); err != nil {
+	if err := authorizeReportResource(ctx, r.DB, meta, id, "inspectionId", "Relatório não encontrado."); err != nil {
 		return nil, err
 	}
 	var row database.ReportSnapshot
@@ -3207,13 +3269,20 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 		// The inspection is authorized; without a snapshot its report is
 		// still being produced, while a missing explicit version is unknown.
 		if version != nil {
-			return nil, apperror.New(apperror.NotFound, "version", "report version not found")
+			return nil, apperror.New(apperror.NotFound, "version", "A versão do relatório não foi encontrada.")
 		}
-		return nil, apperror.New(apperror.InvalidState, "inspectionId", "report is not ready")
+		return nil, apperror.New(apperror.InvalidState, "inspectionId", "O relatório ainda não está pronto.")
 	} else if err != nil {
 		return nil, err
 	}
 	view := mapReport(row)
+	publications, err := r.publicationsBySnapshot(ctx, meta.TenantID, []identity.ID{row.ID})
+	if err != nil {
+		return nil, err
+	}
+	if value, ok := publications[row.ID]; ok {
+		view.Publication = mapReportPublication(value)
+	}
 	var artifact database.ReportArtifact
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("snapshot_id=? AND kind='PDF'", row.ID).First(&artifact).Error
@@ -3241,7 +3310,7 @@ func (r *queryResolver) VideoPreparations(ctx context.Context, status []string, 
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.Manager, auth.Employee); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager, auth.Employee); err != nil {
 		return nil, err
 	}
 	for _, value := range status {
@@ -3342,7 +3411,7 @@ func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, 
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	if _, err := pageLimit(first); err != nil {
@@ -3398,9 +3467,21 @@ func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, 
 		}
 		return nil, err
 	}
+	snapshotIDs := make([]identity.ID, 0, len(result.Items))
+	for _, item := range result.Items {
+		snapshotIDs = append(snapshotIDs, item.ID)
+	}
+	publications, err := r.publicationsBySnapshot(ctx, meta.TenantID, snapshotIDs)
+	if err != nil {
+		return nil, err
+	}
 	nodes := make([]*graphql1.ReportSummary, 0, len(result.Items))
 	for _, item := range result.Items {
-		nodes = append(nodes, &graphql1.ReportSummary{ID: item.ID.String(), InspectionID: item.InspectionID.String(), AssetName: item.AssetName, AssetAddress: item.AssetAddress, AssetExternalKey: item.AssetExternalKey, ParticipantName: item.ParticipantName, GeneratedAt: item.GeneratedAt.UTC().Format(time.RFC3339Nano), Classification: item.Classification, Version: item.Version})
+		var released *graphql1.ReportPublication
+		if value, ok := publications[item.ID]; ok {
+			released = mapReportPublication(value)
+		}
+		nodes = append(nodes, &graphql1.ReportSummary{Publication: released, ID: item.ID.String(), InspectionID: item.InspectionID.String(), AssetName: item.AssetName, AssetAddress: item.AssetAddress, AssetExternalKey: item.AssetExternalKey, ParticipantName: item.ParticipantName, GeneratedAt: item.GeneratedAt.UTC().Format(time.RFC3339Nano), Classification: item.Classification, Version: item.Version})
 	}
 	return &graphql1.ReportConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
@@ -3422,7 +3503,7 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	isCustomer := hasRole(meta, auth.CustomerViewer)
 	if isCustomer {
 		value = "PDF_CUSTOMER"
-	} else if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	} else if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	} else if value != "PDF" && value != "PDF_CUSTOMER" && value != "HTML" {
 		return nil, graphql1Error("kind")
@@ -3431,11 +3512,11 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("id=?", id).Take(&snapshot).Error
 	}); errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, apperror.New(apperror.NotFound, "snapshotId", "report not found")
+		return nil, apperror.New(apperror.NotFound, "snapshotId", "Relatório não encontrado.")
 	} else if err != nil {
 		return nil, err
 	}
-	if err := authorizeReportInspection(ctx, r.DB, meta, snapshot.InspectionID); err != nil {
+	if err := authorizeReportResource(ctx, r.DB, meta, snapshot.InspectionID, "snapshotId", "Relatório não encontrado."); err != nil {
 		return nil, err
 	}
 	var row database.ReportArtifact
@@ -3449,7 +3530,7 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 			var publication database.ReportPublication
 			if err := tx.Where("tenant_id=? AND snapshot_id=? AND status='PUBLISHED'", meta.TenantID, id).First(&publication).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 				// Unpublished or revoked releases are undisclosed to customers.
-				return apperror.New(apperror.NotFound, "snapshotId", "report not found")
+				return apperror.New(apperror.NotFound, "snapshotId", "Relatório não encontrado.")
 			} else if err != nil {
 				return err
 			}
@@ -3481,14 +3562,16 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	if status != "" {
 		return &graphql1.ReportDownload{SnapshotID: id.String(), Kind: kindOut, ObjectKey: "", Status: status, URL: ""}, nil
 	}
-	url := ""
-	if r.Store.Client != nil {
-		signed, signErr := r.Store.PresignGet(ctx, row.ObjectKey, 5*time.Minute)
-		if signErr != nil {
-			return nil, apperror.New(apperror.DependencyUnavailable, "store", "report download is unavailable")
-		}
-		url = signed
+	// Without a configured object store there is nothing to sign: answering OK
+	// with an empty URL would show a ready download that cannot work.
+	if r.Store.Client == nil {
+		return nil, apperror.New(apperror.DependencyUnavailable, "store", "O download do relatório está indisponível.")
 	}
+	signed, signErr := r.Store.PresignGet(ctx, row.ObjectKey, 5*time.Minute)
+	if signErr != nil {
+		return nil, apperror.New(apperror.DependencyUnavailable, "store", "O download do relatório está indisponível.")
+	}
+	url := signed
 	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: kindOut, ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
 }
 
@@ -3498,48 +3581,35 @@ func (r *queryResolver) DashboardSummary(ctx context.Context, projectID *string,
 	if !ok {
 		return nil, unauthenticated()
 	}
-	var rows []database.DashboardInspection
-	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		query := tx
+	if err := authorizeDashboardRead(ctx, r.Authorizer, meta); err != nil {
+		return nil, err
+	}
+	var summary dashboardcore.Summary
+	err := withDashboardTenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		query := dashboardScopeQuery(tx, meta).Where("dashboard.inspections.tenant_id=?", meta.TenantID)
+		input := dashboardsummary.Input{TenantID: meta.TenantID}
 		if projectID != nil {
 			id, err := identity.ParseID(*projectID)
 			if err != nil {
 				return invalidID("projectId")
 			}
-			query = query.Where("project_id=?", id)
+			input.ProjectID = &id
 		}
 		if businessUnitID != nil {
 			id, err := identity.ParseID(*businessUnitID)
 			if err != nil {
 				return invalidID("businessUnitId")
 			}
-			query = query.Joins("JOIN inspections.inspections i ON i.id=dashboard.inspections.inspection_id AND i.tenant_id=dashboard.inspections.tenant_id").Where("i.business_unit_id=?", id)
+			input.BusinessUnitID = &id
 		}
-		return query.Find(&rows).Error
+		var err error
+		summary, err = dashboardsummary.Query(ctx, query, input)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	result := &graphql1.DashboardSummary{}
-	for _, row := range rows {
-		result.Total++
-		if row.Invalidated {
-			result.Invalidated++
-			continue
-		}
-		switch row.Classification {
-		case "NORMAL":
-			result.Normal++
-		case "CRITICAL":
-			result.Critical++
-		case "ATTENTION":
-			result.Attention++
-		}
-		if row.Status != "COMPLETED" {
-			result.Pending++
-		}
-	}
-	return result, nil
+	return &graphql1.DashboardSummary{Total: summary.Total, Critical: summary.Critical, Attention: summary.Attention, Normal: summary.Normal, Pending: summary.Pending, Invalidated: summary.Invalidated}, nil
 }
 
 // TriageInspections is the resolver for the triageInspections field.
@@ -3547,6 +3617,9 @@ func (r *queryResolver) TriageInspections(ctx context.Context, first *int, after
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
+	}
+	if err := authorizeDashboardRead(ctx, r.Authorizer, meta); err != nil {
+		return nil, err
 	}
 	limit := intValue(first)
 	if limit <= 0 {
@@ -3559,29 +3632,21 @@ func (r *queryResolver) TriageInspections(ctx context.Context, first *int, after
 		return nil, graphql1Error("classification")
 	}
 	var rows []database.DashboardInspection
-	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		query := tx.Where("invalidated=false")
+	err := withDashboardTenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		var cursor string
 		if after != nil && *after != "" {
-			cursorBucket, cursorTime, cursorID, err := dashboardcore.DecodeTriageCursor(*after)
-			if err != nil {
-				// Accept the original timestamp/id cursor format for clients that
-				// started paging before risk-priority cursors were introduced.
-				legacyTime, legacyID, legacyErr := dashboardcore.DecodeCursor(*after)
-				if legacyErr != nil {
+			if _, _, cursorID, err := dashboardcore.DecodeTriageCursor(*after); err != nil {
+				if _, legacyID, legacyErr := dashboardcore.DecodeCursor(*after); legacyErr != nil || !validCursorID(legacyID) {
 					return invalidID("after")
 				}
-				cursorBucket, cursorTime, cursorID = 0, legacyTime, legacyID
+			} else if !validCursorID(cursorID) {
+				return invalidID("after")
 			}
-			prioritySQL := "CASE classification WHEN 'CRITICAL' THEN 0 WHEN 'ATTENTION' THEN 1 ELSE 2 END"
-			query = query.Where("("+prioritySQL+" > ?) OR ("+prioritySQL+" = ? AND ((updated_at < ?) OR (updated_at = ? AND inspection_id < ?)))", cursorBucket, cursorBucket, cursorTime, cursorTime, cursorID)
+			cursor = *after
 		}
-		if classification != nil && *classification != "" {
-			query = query.Where("classification=?", *classification)
-		}
-		if status != nil && *status != "" {
-			query = query.Where("status=?", *status)
-		}
-		return query.Order("CASE classification WHEN 'CRITICAL' THEN 0 WHEN 'ATTENTION' THEN 1 ELSE 2 END ASC, updated_at DESC, inspection_id DESC").Limit(limit + 1).Find(&rows).Error
+		var err error
+		rows, err = dashboardlist.Query(ctx, dashboardScopeQuery(tx, meta), dashboardlist.Input{TenantID: meta.TenantID, After: cursor, Classification: stringValue(classification), Status: stringValue(status), Limit: limit})
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -3623,13 +3688,45 @@ func (r *queryResolver) ProjectTimeline(ctx context.Context, projectID string) (
 	if !ok {
 		return nil, unauthenticated()
 	}
+	if err := authorizeDashboardRead(ctx, r.Authorizer, meta); err != nil {
+		return nil, err
+	}
 	id, err := identity.ParseID(projectID)
 	if err != nil {
 		return nil, invalidID("projectId")
 	}
 	var rows []database.ProjectStage
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		return tx.Where("project_id=?", id).Order("position ASC").Find(&rows).Error
+		// A project that does not exist in the tenant is NOT_FOUND for every
+		// role, so a tenant administrator cannot probe foreign identifiers.
+		var project database.Project
+		if err := tx.Where("tenant_id=? AND id=?", meta.TenantID, id).Take(&project).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "projectId", "Projeto não encontrado.")
+			}
+			// Any other failure is internal and reaches the client as the
+			// generic Portuguese failure, never as a missing project.
+			return err
+		}
+		if !hasRole(meta, auth.TenantAdmin) {
+			allowed := false
+			for _, scope := range meta.Principal.Scopes {
+				switch scope.Kind {
+				case "PROJECT":
+					allowed = allowed || scope.ID == id
+				case "ASSET":
+					allowed = allowed || scope.ID == project.AssetID
+				case "BUSINESS_UNIT":
+					allowed = allowed || scope.ID == project.BusinessUnitID
+				}
+			}
+			if !allowed {
+				return apperror.New(apperror.NotFound, "projectId", "Projeto não encontrado.")
+			}
+		}
+		var queryErr error
+		rows, queryErr = projecttimeline.Query(ctx, tx, meta.TenantID, id)
+		return queryErr
 	}); err != nil {
 		return nil, err
 	}
@@ -3656,7 +3753,7 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	limit := intValue(first)
@@ -3666,40 +3763,73 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 	if limit > 100 {
 		limit = 100
 	}
+	var cursorTime time.Time
+	var cursorID string
+	hasCursor := after != nil && *after != ""
+	if hasCursor {
+		var err error
+		cursorTime, cursorID, err = dashboardcore.DecodeCursor(*after)
+		if err != nil || !validCursorID(cursorID) {
+			return nil, invalidID("after")
+		}
+	}
 	var rows []database.Delivery
+	var channels []database.ChannelAttempt
+	hasNext := false
+	responsibilities := map[identity.ID]database.Responsibility{}
+	// Every read below happens inside one tenant transaction: forced RLS hides
+	// rows fetched outside it, which would silently drop recipient, failure
+	// and responsibility data from an otherwise authorized listing.
 	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		query := tx.Where("tenant_id=?", meta.TenantID)
-		if after != nil && *after != "" {
-			cursorTime, cursorID, err := dashboardcore.DecodeCursor(*after)
-			if err != nil {
-				return invalidID("after")
-			}
+		if condition, args := inspectionScopeCondition(meta, "inspection_id"); condition != "" {
+			query = query.Where(condition, args...)
+		}
+		if hasCursor {
 			query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", cursorTime, cursorTime, cursorID)
 		}
-		return query.Order("created_at DESC, id DESC").Limit(limit + 1).Find(&rows).Error
+		if err := query.Order("created_at DESC, id DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
+			return err
+		}
+		if hasNext = len(rows) > limit; hasNext {
+			rows = rows[:limit]
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		deliveryIDs := make([]identity.ID, 0, len(rows))
+		var inspectionIDs []identity.ID
+		for _, row := range rows {
+			deliveryIDs = append(deliveryIDs, row.ID)
+			if row.InspectionID != nil {
+				inspectionIDs = append(inspectionIDs, *row.InspectionID)
+			}
+		}
+		if err := tx.Session(&gorm.Session{NewDB: true}).Where("tenant_id=? AND delivery_id IN ?", meta.TenantID, deliveryIDs).Order("delivery_id ASC, channel ASC, created_at ASC, id ASC").Find(&channels).Error; err != nil {
+			return err
+		}
+		if len(inspectionIDs) == 0 {
+			return nil
+		}
+		var found []database.Responsibility
+		if err := tx.Session(&gorm.Session{NewDB: true}).Where("tenant_id=? AND inspection_id IN ?", meta.TenantID, inspectionIDs).Order("id ASC").Find(&found).Error; err != nil {
+			return err
+		}
+		for _, responsibility := range found {
+			if _, exists := responsibilities[responsibility.InspectionID]; !exists {
+				responsibilities[responsibility.InspectionID] = responsibility
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	hasNext := len(rows) > limit
-	if hasNext {
-		rows = rows[:limit]
-	}
+	attemptsByDelivery := make(map[identity.ID][]database.ChannelAttempt, len(rows))
 	channelsByDelivery := make(map[identity.ID][]*graphql1.NotificationChannelDelivery, len(rows))
-	if len(rows) > 0 {
-		deliveryIDs := make([]identity.ID, 0, len(rows))
-		for _, row := range rows {
-			deliveryIDs = append(deliveryIDs, row.ID)
-		}
-		var channels []database.ChannelAttempt
-		if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-			return tx.Where("tenant_id=? AND delivery_id IN ?", meta.TenantID, deliveryIDs).Order("delivery_id ASC, channel ASC, created_at ASC, id ASC").Find(&channels).Error
-		}); err != nil {
-			return nil, err
-		}
-		for _, channel := range channels {
-			channelsByDelivery[channel.DeliveryID] = append(channelsByDelivery[channel.DeliveryID], mapNotificationChannelDelivery(channel))
-		}
+	for _, channel := range channels {
+		attemptsByDelivery[channel.DeliveryID] = append(attemptsByDelivery[channel.DeliveryID], channel)
+		channelsByDelivery[channel.DeliveryID] = append(channelsByDelivery[channel.DeliveryID], mapNotificationChannelDelivery(channel))
 	}
 	nodes := make([]*graphql1.NotificationDelivery, 0, len(rows))
 	for _, row := range rows {
@@ -3709,8 +3839,7 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 		if row.InspectionID != nil {
 			value := row.InspectionID.String()
 			inspectionID = &value
-			var responsibility database.Responsibility
-			if lookupErr := r.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", meta.TenantID, *row.InspectionID).First(&responsibility).Error; lookupErr == nil {
+			if responsibility, found := responsibilities[*row.InspectionID]; found {
 				version := int(responsibility.Version)
 				responsibilityVersion = &version
 				canCorrect = responsibility.Status == "PENDING" && row.LogicalTemplate == "capture-link"
@@ -3721,18 +3850,26 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 			invitationID = &value
 		}
 		var failureCode, recipientMasked *string
-		if channelRows := channelsByDelivery[row.ID]; len(channelRows) > 0 {
+		if attempts := attemptsByDelivery[row.ID]; len(attempts) > 0 {
 			if row.Status == "FAILED" || row.Status == "UNKNOWN" {
-				var attempt database.ChannelAttempt
-				if lookupErr := r.DB.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", meta.TenantID, row.ID).Order("updated_at desc").First(&attempt).Error; lookupErr == nil && attempt.LastError != "" {
-					failureCode = strptr(attempt.LastError)
+				latest := attempts[0]
+				for _, attempt := range attempts[1:] {
+					if attempt.UpdatedAt.After(latest.UpdatedAt) {
+						latest = attempt
+					}
+				}
+				if latest.LastError != "" {
+					failureCode = strptr(latest.LastError)
 				}
 			}
-			var attempt database.ChannelAttempt
-			if lookupErr := r.DB.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", meta.TenantID, row.ID).Order("created_at asc").First(&attempt).Error; lookupErr == nil {
-				masked := maskEmail(attempt.Destination)
-				recipientMasked = &masked
+			earliest := attempts[0]
+			for _, attempt := range attempts[1:] {
+				if attempt.CreatedAt.Before(earliest.CreatedAt) {
+					earliest = attempt
+				}
 			}
+			masked := maskEmail(earliest.Destination)
+			recipientMasked = &masked
 		}
 		nodes = append(nodes, &graphql1.NotificationDelivery{ID: row.ID.String(), IntentID: row.IntentID.String(), Status: row.Status, AggregateStatus: row.Status, SelectedProvider: row.SelectedProvider, InspectionID: inspectionID, InvitationID: invitationID, LogicalTemplate: row.LogicalTemplate, FailureCode: failureCode, RecipientMasked: recipientMasked, ResponsibilityVersion: responsibilityVersion, CanCorrectResponsibleEmail: canCorrect, Channels: channelsByDelivery[row.ID], CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 	}
@@ -3750,7 +3887,7 @@ func (r *queryResolver) PublicationPolicy(ctx context.Context) (*graphql1.Public
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
 	var policy database.PublicationPolicy
@@ -3771,110 +3908,17 @@ func (r *queryResolver) CustomerPortfolio(ctx context.Context, filter *graphql1.
 
 // CustomerTimeline is the resolver for the customerTimeline field.
 func (r *queryResolver) CustomerTimeline(ctx context.Context, assetID *string, projectID *string, first *int, after *string) (*graphql1.CustomerTimelineConnection, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
-		return nil, err
-	}
-	return &graphql1.CustomerTimelineConnection{Nodes: []*graphql1.CustomerTimelineEntry{}, PageInfo: pageInfo("", false)}, nil
+	return r.customerTimeline(ctx, assetID, projectID, first, after)
 }
 
 // CustomerReport is the resolver for the customerReport field.
 func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string, version *int) (*graphql1.CustomerReport, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
-		return nil, err
-	}
-	id, err := identity.ParseID(inspectionID)
-	if err != nil {
-		return nil, invalidID("inspectionId")
-	}
-	// Published visibility does not replace business-unit/asset scope checks;
-	// customer views answer NOT_FOUND so out-of-scope reports stay undisclosed.
-	if err := authorizeReportInspection(ctx, r.DB, meta, id); err != nil {
-		if apperror.Is(err, apperror.Forbidden) {
-			return nil, apperror.New(apperror.NotFound, "", "not found")
-		}
-		return nil, err
-	}
-	row, err := r.publishedSnapshot(ctx, meta.TenantID, inspectionID, version)
-	if err == gorm.ErrRecordNotFound {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	view := mapReport(row)
-	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, Advisory: view.Advisory, Status: "PUBLISHED", Historical: false, Context: view.Context, Requirements: view.Requirements, Inventory: customerInventoryFromSnapshot(row.CanonicalJSON)}, nil
+	return r.customerReport(ctx, inspectionID, version)
 }
 
 // CustomerEvidence is the resolver for the customerEvidence field.
 func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID string, mode *graphql1.EvidenceMode, first *int, after *string) (*graphql1.CustomerEvidenceConnection, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
-		return nil, err
-	}
-	id, err := identity.ParseID(inspectionID)
-	if err != nil {
-		return nil, invalidID("inspectionId")
-	}
-	// Published visibility does not replace business-unit/asset scope checks;
-	// customer views answer NOT_FOUND so out-of-scope reports stay undisclosed.
-	if err := authorizeReportInspection(ctx, r.DB, meta, id); err != nil {
-		if apperror.Is(err, apperror.Forbidden) {
-			return nil, apperror.New(apperror.NotFound, "", "not found")
-		}
-		return nil, err
-	}
-	row, err := r.publishedSnapshot(ctx, meta.TenantID, inspectionID, nil)
-	if err == gorm.ErrRecordNotFound {
-		return &graphql1.CustomerEvidenceConnection{Nodes: []*graphql1.CustomerEvidenceItem{}, PageInfo: pageInfo("", false)}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	view := mapReport(row)
-	labels := make(map[string]*graphql1.ReportRequirement, len(view.Requirements))
-	for _, requirement := range view.Requirements {
-		labels[requirement.Key] = requirement
-	}
-	limit, err := pageLimit(first)
-	if err != nil {
-		return nil, err
-	}
-	start, err := decodeEvidenceCursor(stringValue(after), meta.TenantID, row.ID)
-	if err != nil {
-		return nil, graphql1Error("after")
-	}
-	page, hasNext, err := sliceEvidencePage(view.Evidence.Nodes, limit, start)
-	if err != nil {
-		return nil, graphql1Error("after")
-	}
-	view.Evidence.Nodes = page
-	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
-		return nil, err
-	}
-	nodes := make([]*graphql1.CustomerEvidenceItem, 0, limit)
-	for _, item := range page {
-		var section, label *string
-		if requirement := labels[item.RequirementKey]; requirement != nil {
-			section, label = optional(requirement.Section), optional(requirement.Label)
-		}
-		nodes = append(nodes, &graphql1.CustomerEvidenceItem{ID: item.ID, RequirementKey: item.RequirementKey, Section: section, Label: label, Role: item.Role, Description: item.Description, CaptureSource: item.CaptureSource, CapturedAt: item.CapturedAt, State: "CURRENT", LineageID: item.ID, MediaAvailability: item.Availability, SourceAvailability: item.SourceAvailability, EvidenceKind: item.EvidenceKind, FrameID: item.FrameID, TimestampMs: item.TimestampMs, PtsMicros: item.PtsMicros, PreparationID: item.PreparationID, PlanID: item.PlanID, SourceMediaID: item.SourceMediaID, Component: item.Component, Flags: item.Flags, URL: item.URL})
-	}
-	end := ""
-	if len(nodes) > 0 {
-		end = encodeEvidenceCursor(meta.TenantID, row.ID, nodes[len(nodes)-1].ID)
-	}
-	return &graphql1.CustomerEvidenceConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
+	return r.customerEvidence(ctx, inspectionID, mode, first, after)
 }
 
 // MyNotifications is the resolver for the myNotifications field.
@@ -3883,7 +3927,7 @@ func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, k
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
 	if r.DB == nil {
@@ -4015,12 +4059,12 @@ func (r *queryResolver) RetentionPolicies(ctx context.Context) (*graphql1.Retent
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeRetention(ctx, meta, false); err != nil {
 		return nil, err
 	}
 	var rows []database.RetentionPolicy
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		return tx.Order("created_at DESC").Find(&rows).Error
+		return tx.Order("created_at DESC, version DESC").Find(&rows).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -4041,7 +4085,7 @@ func (r *queryResolver) UsageSummary(ctx context.Context, from *string, to *stri
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, "", false, auth.Manager); err != nil {
 		return nil, err
 	}
 	start := time.Now().UTC().AddDate(0, 0, -30)
@@ -4177,6 +4221,14 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 			value := int(*call.OutputTokens)
 			mapped.OutputTokens = &value
 		}
+		if call.AudioInputTokens != nil {
+			value := int(*call.AudioInputTokens)
+			mapped.AudioInputTokens = &value
+		}
+		if call.AudioDurationMS != nil {
+			value := int(*call.AudioDurationMS)
+			mapped.AudioDurationMs = &value
+		}
 		if call.CachedInputTokens != nil {
 			value := int(*call.CachedInputTokens)
 			mapped.CachedInputTokens = &value
@@ -4229,6 +4281,7 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 			return nil, err
 		}
 		query.Provider, query.Model, query.ModelAlias, query.TechnicalOutcome = stringValue(filter.Provider), stringValue(filter.Model), stringValue(filter.ModelAlias), stringValue(filter.TechnicalOutcome)
+		query.ComparisonMode = stringValue(filter.ComparisonMode)
 		if filter.Mode != nil {
 			query.Mode = strings.ToLower(string(*filter.Mode))
 		}
@@ -4293,6 +4346,14 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 		if call.OutputTokens != nil {
 			value := int(*call.OutputTokens)
 			mapped.OutputTokens = &value
+		}
+		if call.AudioInputTokens != nil {
+			value := int(*call.AudioInputTokens)
+			mapped.AudioInputTokens = &value
+		}
+		if call.AudioDurationMS != nil {
+			value := int(*call.AudioDurationMS)
+			mapped.AudioDurationMs = &value
 		}
 		if call.CachedInputTokens != nil {
 			value := int(*call.CachedInputTokens)
@@ -4691,6 +4752,21 @@ func (r *queryResolver) VideoPreparation(ctx context.Context, mediaID string) (*
 		return nil, err
 	}
 	return mapVideoPreparationStatus(raw.(mediavideoprep.Status)), nil
+}
+
+// VoicePolicy is the resolver for the voicePolicy field.
+func (r *queryResolver) VoicePolicy(ctx context.Context) (*graphql1.VoicePolicy, error) {
+	return resolveVoicePolicy(ctx, r.Resolver)
+}
+
+// AudioNotes is the resolver for the audioNotes field.
+func (r *queryResolver) AudioNotes(ctx context.Context, inspectionID string, environmentID string, first *int, after *string) (*graphql1.AudioNoteConnection, error) {
+	return listAudioNotes(ctx, r.Resolver, inspectionID, environmentID, first, after)
+}
+
+// AudioNote is the resolver for the audioNote field.
+func (r *queryResolver) AudioNote(ctx context.Context, id string) (*graphql1.AudioNote, error) {
+	return getAudioNote(ctx, r.Resolver, id)
 }
 
 // Evidence is the resolver for the evidence field.

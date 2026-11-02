@@ -261,7 +261,7 @@ Derived from `_user_stories.md` and `_techspec.md`.
 - **UT-005** (error): `ProductAuthorizer.Authorize` rejects `Mutate=true` for `VIEWER` and `CUSTOMER_VIEWER`.
 - **UT-006** (state): `ProductAuthorizer.Authorize` reloads a disabled membership and rejects before resource I/O.
 - **UT-007** (error): `ProductAuthorizer.Authorize` wraps `MembershipStore` failure without database details.
-- **UT-008** (boundary): `TENANT_ADMIN` bypasses resource grants only for tenant-scoped Admin operations.
+- **UT-008** (boundary; orchestration decision): `TENANT_ADMIN` has tenant-wide resource scope for ADMIN and DASHBOARD, including audience-bearing tokens, to preserve existing tenant administrators without explicit grants; all other roles require a current grant.
 - **UT-009** (happy): `ScopeResolver.Resolve` maps a `BUSINESS_UNIT` grant to descendant assets, projects, and inspections and returns that grant.
 - **UT-010** (happy): `ScopeResolver.Resolve` maps an `ASSET` grant to its projects and inspections.
 - **UT-011** (happy): `ScopeResolver.Resolve` maps a `PROJECT` grant only to that project's inspections.
@@ -270,13 +270,13 @@ Derived from `_user_stories.md` and `_techspec.md`.
 - **UT-014** (state): `ScopeResolver.Resolve` follows the current parent after a resource move and rejects the old hierarchy.
 - **UT-015** (error): `ScopeResolver.Resolve` denies an archived target requested for new work.
 - **UT-016** (error): `ScopeResolver.Resolve` propagates context cancellation from its repository.
-- **UT-017** (happy): `invite_customer_user` accepts normalized email, `CUSTOMER_VIEWER`, `DASHBOARD`, and one valid scope.
-- **UT-018** (error): `invite_customer_user` rejects empty scopes with `INVALID_INPUT` and creates no event.
-- **UT-019** (error): `invite_customer_user` rejects `ADMIN` for `CUSTOMER_VIEWER`.
-- **UT-020** (idempotency): a repeated customer invitation key returns the existing active invitation.
-- **UT-021** (state): the invitation consumer moves `PENDING` to `PROVISIONED` after Keycloak returns a subject.
-- **UT-022** (error): Keycloak 429/5xx leaves the invitation retryable and records no membership.
-- **UT-023** (concurrency): a Keycloak create conflict resolves by verified email and binds one subject.
+- **UT-017** (happy): `invite_customer_user` accepts normalized email, `CUSTOMER_VIEWER`, `DASHBOARD`, and one valid scope. _Nota (tf1): coberto por `TestTFE_UT_017CustomerInvitationNormalizesEmailAndCreatesDashboardOnlyMembership` (slice `invite_customer_user`, PostgreSQL isolado). A ativação reutiliza o fluxo síncrono de convite + OTP; o link usa a origem do Admin, pois só ele hospeda `/activate/invitation` (pendente na task 07: origem/rota de ativação do Dashboard)._
+- **UT-018** (error): `invite_customer_user` rejects empty scopes with `INVALID_INPUT` and creates no event. _Nota (tf1): coberto por `TestTFE_UT_018IT_022CustomerInvitationWithoutScopesIsRejectedAndCreatesNothing`: sem escopo → `INVALID_INPUT`/`scopes`, nenhuma chamada ao provedor e nenhuma linha (membership, convite, entitlement, escopo, auditoria)._
+- **UT-019** (error): `invite_customer_user` rejects `ADMIN` for `CUSTOMER_VIEWER`. _Nota (tf1): continua válido e coberto por `TestTFE_UT_019CustomerInvitationRejectsAdminEntitlement` e `TestTFE_UT_019RoleProductPolicyRejectsAdminForCustomerAndOperationalRoles`; a regra de papéis internos (IT-202) foi superada pela ADR-003, abaixo._
+- **UT-020** (idempotency): a repeated customer invitation key returns the existing active invitation. _Nota (tf1): coberto por `TestTFE_UT_020RepeatedCustomerInvitationReturnsExistingOutcomeWithoutSecondEmail`: convite repetido para link já enviado devolve o resultado existente, sem segundo e-mail nem segunda membership; convite ativo devolve `ACCEPTED`._
+- **UT-021** (state): the invitation consumer moves `PENDING` to `PROVISIONED` after Keycloak returns a subject. _Nota (tf1): SUPERADO. O convite de usuário interno/cliente é síncrono (provisiona o sujeito e envia o link na própria mutação) e a ativação é por OTP (`activate_internal_user`); não há consumer de outbox nem required-action do Keycloak. Equivalente coberto por `TestTFE_UT_017...` e `TestTFE_IT_197IT_026...` (`PENDING` → `SENT`)._
+- **UT-022** (error): Keycloak 429/5xx leaves the invitation retryable and records no membership. _Nota (tf1): SUPERADO pelo mesmo motivo de UT-021. Comportamento equivalente: falha do provedor devolve `DEPENDENCY_UNAVAILABLE` sem membership, entitlement, escopo ou auditoria e o replay provisiona um único sujeito/membership (`TestTFE_ProviderFailureCreatesNothingAndReplayProvisionsOneSubjectAndMembership`); falha de entrega deixa `FAILED` retentável._
+- **UT-023** (concurrency): a Keycloak create conflict resolves by verified email and binds one subject. _Nota (tf1): coberto por `TestTFE_UT_023CreateConflictResolvesByVerifiedEmailAndBindsOneSubject` e `TestTFE_UT_023PersistentConflictAndAmbiguousEmailNeverBindASubject` (adaptador `platform/keycloak`)._
 - **UT-024** (happy): `configure_publication_policy` stores `MANUAL` or `AUTOMATIC` and increments version.
 - **UT-025** (boundary): missing publication policy resolves as synthetic `MANUAL`, version 0.
 - **UT-026** (concurrency): stale `expectedVersion` returns `CONFLICT` without changing policy.
@@ -305,7 +305,7 @@ Derived from `_user_stories.md` and `_techspec.md`.
 - **UT-049** (error): config rejects wildcard, malformed, duplicate, and non-HTTPS production origins.
 - **UT-050** (error): OIDC rejects an audience outside the configured set.
 - **UT-051** (happy): OIDC preserves verified audience in request metadata.
-- **UT-052** (boundary): CORS permits credentials only for exact Capture origin and never reflects unknown origins.
+- **UT-052** (boundary): CORS permits credentials only for exact Capture origin and never reflects unknown origins. _Nota (tf1): SUPERADO. Credenciais CORS não são exclusivas do Capture: todas as origens exatas configuradas (Admin, Dashboard e Capture) recebem `Access-Control-Allow-Credentials`; origens desconhecidas/lookalike nunca são refletidas. Coberto por `TestTFE_IT_221...` (três testes em `httpboundary`)._
 - **UT-053** (happy): Admin PKCE validates state and restores one same-origin relative return path.
 - **UT-054** (error): an absolute or cross-origin return path becomes the safe product home.
 - **UT-055** (state): in-memory session clears token/capabilities after `FORBIDDEN` or inactive tenant.
@@ -363,8 +363,8 @@ Derived from `_user_stories.md` and `_techspec.md`.
 #### US-003: Invite users and grant hierarchical access
 
 - **IT-021** (US-003.EC-1, Invalid input): Through Admin invitation, entitlement, and hierarchy flows, create the state where invalid recipient, role, tenant, or resource; assert the invitation or grant is rejected without partial access.
-- **IT-022** (US-003.EC-2, Empty / missing): Through Admin invitation, entitlement, and hierarchy flows, create the state where no scope is selected; assert the invitation cannot create a data-bearing dashboard membership.
-- **IT-023** (US-003.EC-3, Limits): Through Admin invitation, entitlement, and hierarchy flows, create the state where invitation or grant volume exceeds a tenant limit; assert the excess is rejected with actionable guidance and existing grants remain intact.
+- **IT-022** (US-003.EC-2, Empty / missing): Through Admin invitation, entitlement, and hierarchy flows, create the state where no scope is selected; assert the invitation cannot create a data-bearing dashboard membership. _Nota (tf1): convite de cliente sem escopo é rejeitado (`TestTFE_UT_018IT_022...`). Para membros internos a TechSpec não exige escopo (o Admin convida e concede depois); sem escopo o membro não lê recurso algum (`TestTFE_IT_022InternalMembershipWithoutScopeReadsNoScopedResource`)._
+- **IT-023** (US-003.EC-3, Limits): Through Admin invitation, entitlement, and hierarchy flows, create the state where invitation or grant volume exceeds a tenant limit; assert the excess is rejected with actionable guidance and existing grants remain intact. _Nota (tf1): PENDENTE DE PRODUTO. A TechSpec não define limite de convites/concessões por tenant. Vale o limite por comando de 100 escopos (`TestTFE_IT_023ExcessiveGrantBatchIsRejectedWithGuidanceAndExistingGrantsRemain`, mensagem em PT-BR e concessões existentes intactas); o limite por tenant exige decisão de produto._
 - **IT-024** (US-003.EC-4, Permissions): Through Admin invitation, entitlement, and hierarchy flows, create the state where an administrator tries to grant beyond their own tenant; assert the target is undiscoverable and the action is denied.
 - **IT-025** (US-003.EC-5, Concurrency): Through Admin invitation, entitlement, and hierarchy flows, create the state where access is granted and revoked concurrently; assert the final effective state is explicit and never broader than the latest authorized decision.
 - **IT-026** (US-003.EC-6, Interruption): Through Admin invitation, entitlement, and hierarchy flows, create the state where invitation delivery fails; assert the pending invitation remains visible and can be resent without creating duplicate memberships.
@@ -570,34 +570,34 @@ Derived from `_user_stories.md` and `_techspec.md`.
 
 ### GraphQL, infrastructure, and persistence contracts
 
-- **IT-181**: `me` returns current local role, entitlements, capabilities, and scopes for a valid audience; a wrong audience or missing entitlement returns `FORBIDDEN` before tenant data.
-- **IT-182**: `effectiveAccess` returns a direct `BUSINESS_UNIT` grant and paged asset/project/inspection descendants with `inheritedFrom`.
-- **IT-183**: `effectiveAccess` for an unknown or cross-tenant membership returns `NOT_FOUND` without membership metadata.
-- **IT-184**: `scopePreview` returns current descendants in stable cursor order and labels archived resources historical.
-- **IT-185**: `scopePreview` rejects `UNKNOWN` kind or a foreign resource with `INVALID_INPUT`/`NOT_FOUND` and no descendants.
+- **IT-181**: `me` returns current local role, entitlements, capabilities, and scopes for a valid audience; a wrong audience or missing entitlement returns `FORBIDDEN` before tenant data. _Nota (tf1): `me` reflete papel, entitlements e escopos do estado local atual; audiência errada ou ausência de entitlement → `FORBIDDEN` (`TestTFE_IT_181DashboardReadAuthorizationMatrix`, `TestTFE_UT_003LegacyCallerIsBoundToTheTokenAudienceEntitlement...`). Sessão externa do Capture e requisição anônima ao `me` devolvem `FORBIDDEN`/`UNAUTHENTICATED`._
+- **IT-182**: `effectiveAccess` returns a direct `BUSINESS_UNIT` grant and paged asset/project/inspection descendants with `inheritedFrom`. _Nota (tf1): `effectiveAccess` (slice `explain_effective_access`) retorna as concessões explícitas e os descendentes efetivos paginados por cursor (ordem estável por tipo e id), cada um com `inheritedFrom` (concessão explícita mais específica), `historical` e `grantable`. Cobertura: `TestTFE_IT_182...` (slice, PostgreSQL) e `TestTFE_IT_182IT_184EffectiveAccessAndScopePreviewThroughGraphQL`._
+- **IT-183**: `effectiveAccess` for an unknown or cross-tenant membership returns `NOT_FOUND` without membership metadata. _Nota (tf1): `TestTFE_IT_183...` (slice) e `TestTFE_IT_183IT_185AccessQueriesReturnStableSafeErrors` (GraphQL): membership desconhecida ou de outro tenant → `NOT_FOUND` com mensagem genérica em PT-BR._
+- **IT-184**: `scopePreview` returns current descendants in stable cursor order and labels archived resources historical. _Nota (tf1): `TestTFE_IT_184ScopePreviewReturnsCurrentDescendantsInStableOrderAndLabelsArchivedHistorical`: descendentes de recurso arquivado (ou sob ancestral arquivado) saem com `historical=true`, `grantable=false`._
+- **IT-185**: `scopePreview` rejects `UNKNOWN` kind or a foreign resource with `INVALID_INPUT`/`NOT_FOUND` and no descendants. _Nota (tf1): `TestTFE_IT_185ScopePreviewRejectsUnknownKindAndForeignResourceWithoutDescendants`: tipo desconhecido → `INVALID_INPUT`; recurso de outro tenant/inexistente → `NOT_FOUND`; cursor inválido → `PAGINATION_INVALID`; nunca devolve descendentes._
 - **IT-186**: `publicationPolicy` with no row returns `MANUAL`, version 0.
 - **IT-187**: `customerPortfolio` returns only scoped assets/projects and a stable cursor at page size 100.
 - **IT-188**: `customerPortfolio` rejects malformed filters without widening effective scope.
-- **IT-189**: `customerTimeline` orders late-processed events by `occurredAt` and returns `NOT_FOUND` for an unshared sibling.
+- **IT-189**: `customerTimeline` orders late-processed events by `occurredAt` and returns `NOT_FOUND` for an unshared sibling. _Nota de implementação: a linha do tempo deriva do ledger de publicação (`REPORT_PUBLISHED`; `REPORT_INVALIDATED` ordenada por `invalidatedAt`); coberto por `TestPub_IT189...` em `resolvers/pub_publication_integration_test.go`._ _Nota (pubfix): uma linha por EVENTO do ledger: `REPORT_PUBLISHED` (em `published_at`) e `REPORT_INVALIDATED` (em `invalidated_at`) são entradas distintas, com cursor `t2|instante|tipo|id` estável; invalidar não muda o `occurredAt` nem o tipo da entrada de publicação. Coberto por `TestPubFix_TimelineKeepsOneEntryPerEvent`._
 - **IT-190**: `customerReport` returns the current or requested historically `PUBLISHED` safe projection and returns null for a manual-unpublished version.
-- **IT-191**: after invalidation, `customerReport` returns status metadata without body, evidence URL, `canonicalJSON`, or HTML.
-- **IT-192**: `customerEvidence(SIMPLE)` returns approved current items; `ADVANCED` additionally returns replaced/discarded lineage.
-- **IT-193**: blocked evidence returns `mediaAvailability=SENSITIVE_BLOCKED` and a null URL.
+- **IT-191**: after invalidation, `customerReport` returns status metadata without body, evidence URL, `canonicalJSON`, or HTML. _Nota de implementação: sem `version`, `customerReport` continua `null` quando não há publicação ativa (contrato VV IT-277); com `version` explícita de uma publicação invalidada devolve só metadados (`status=INVALIDATED`, `historical=true`, demais campos vazios). Coberto por `TestPub_IT190ToIT191...`._
+- **IT-192**: `customerEvidence(SIMPLE)` returns approved current items; `ADVANCED` additionally returns replaced/discarded lineage. _Nota de implementação: a linhagem é reconstruída a partir dos snapshots anteriores imutáveis da vistoria (REPLACED quando um item atual responde ao mesmo `requirementKey`, senão DISCARDED); itens históricos não recebem URL de mídia. Coberto por `TestPub_IT192...`._ _Nota (pubfix): a linhagem ADVANCED considera só versões anteriores com publicação PUBLISHED ou SUPERSEDED; versões nunca publicadas ou invalidadas não vazam descrição/flags/`capturedAt`/`frameId`._
+- **IT-193**: blocked evidence returns `mediaAvailability=SENSITIVE_BLOCKED` and a null URL. _Nota (pubfix): fail-closed. A URL só é emitida quando a última decisão terminal de triagem é CLEARED, OVERRIDDEN ou DISABLED; sem decisão a foto é `MISSING` e sem URL. `SENSITIVE_DETECTION` também bloqueia, e a evidência bloqueada não expõe `frameId`; `/media/video-evidence/{id}?snapshotId=` recusa (404) para CUSTOMER_VIEWER o frame bloqueado no snapshot (`TestPubFixCustomerCannotReadFramesBlockedInTheSnapshot`). Como a mídia do fixture já é evidência submetida (imutável), a decisão CLEARED é gravada como o serviço de triagem a grava (detector real), sem passar pelo update de status da mídia._
 - **IT-194**: unpublished or out-of-scope customer evidence returns no report or evidence content.
 - **IT-195**: `myNotifications` returns only the current membership, stable paging, and server unread count.
 - **IT-196**: after membership disable, `myNotifications` returns `FORBIDDEN` and no previous page data.
-- **IT-197**: `inviteCustomerUser` creates one `PENDING` `CUSTOMER_VIEWER` invite with `DASHBOARD` and one explicit scope.
-- **IT-198**: invalid email, empty scope, cross-tenant scope, or `ADMIN` entitlement rejects the customer invite atomically.
-- **IT-199**: Keycloak 5xx remains retryable; replay provisions one subject and one membership.
-- **IT-200**: an invite for existing active access returns the existing outcome without another membership or email.
-- **IT-201**: modified `inviteInternalUser` accepts explicit product entitlements and `PROJECT` scope for a valid internal role.
-- **IT-202**: modified `inviteInternalUser` rejects `ADMIN` entitlement for a non-`TENANT_ADMIN` role.
-- **IT-203**: `assignMembershipAccess` atomically replaces role, entitlements, and scopes at the expected version.
-- **IT-204**: stale `assignMembershipAccess` returns `CONFLICT` and leaves every access row unchanged.
-- **IT-205**: removing an entitlement or scope denies the next protected request without waiting for token expiry.
+- **IT-197**: `inviteCustomerUser` creates one `PENDING` `CUSTOMER_VIEWER` invite with `DASHBOARD` and one explicit scope. _Nota (tf1): `inviteCustomerUser` cria a membership `INVITED`/`PENDING` (depois `SENT`) com `CUSTOMER_VIEWER`, `DASHBOARD` e o escopo explícito (`TestTFE_IT_197IT_026...`, `TestTFE_IT_197IT_198InviteCustomerUserThroughGraphQL`). Erros de validação voltam em `userErrors`._
+- **IT-198**: invalid email, empty scope, cross-tenant scope, or `ADMIN` entitlement rejects the customer invite atomically. _Nota (tf1): e-mail inválido, escopo vazio/duplicado/de outro tenant ou entitlement `ADMIN` rejeitam o convite de forma atômica (`TestTFE_IT_198InvalidEmailCrossTenantScopeAndAdminEntitlementRejectAtomically`); a migration 111 impede `ADMIN` para `CUSTOMER_VIEWER` também no banco (`TestTFE_IT_198DatabaseGuardRejectsAdminEntitlementForCustomerInEitherDirection`)._
+- **IT-199**: Keycloak 5xx remains retryable; replay provisions one subject and one membership. _Nota (tf1): SUPERADO (ver UT-021/UT-022): sem consumer de provisionamento. Equivalente: `TestTFE_ProviderFailureCreatesNothingAndReplayProvisionsOneSubjectAndMembership`._
+- **IT-200**: an invite for existing active access returns the existing outcome without another membership or email. _Nota (tf1): `TestTFE_IT_200ExistingActiveCustomerReturnsExistingOutcomeWithoutNewMembershipOrEmail`._
+- **IT-201**: modified `inviteInternalUser` accepts explicit product entitlements and `PROJECT` scope for a valid internal role. _Nota (tf1): `TestTFE_IT_201InviteInternalUserAcceptsExplicitEntitlementsAndProjectScope` (todos os tipos de escopo, entitlements explícitos conforme ADR-003)._
+- **IT-202**: modified `inviteInternalUser` rejects `ADMIN` entitlement for a non-`TENANT_ADMIN` role. _Nota (tf1): SUPERADO pela ADR-003 (papéis administrativos delegados também têm produto ADMIN). Regra vigente: `ADMIN` só para `TENANT_ADMIN` e papéis delegados; `MANAGER`/`EMPLOYEE`/`VIEWER`/`CUSTOMER_VIEWER` com `ADMIN` → `INVALID_INPUT`/`productEntitlements`. Coberto por `TestTFE_IT_202InviteInternalUserRejectsAdminForNonAdministrativeRolesButAcceptsDelegatedAdministrators` e `TestTFE_IT_201IT_202InviteInternalUserEntitlementsThroughGraphQL`._
+- **IT-203**: `assignMembershipAccess` atomically replaces role, entitlements, and scopes at the expected version. _Nota (tf1): `assignMembershipAccess` substitui papel, entitlements e escopos atomicamente, com `expectedVersion` obrigatório (`TestTFE_IT_203...`, `TestTFE_IT_203IT_204AssignMembershipAccessThroughGraphQL`). `assignRoleScopes` permanece como mutação legada aditiva._
+- **IT-204**: stale `assignMembershipAccess` returns `CONFLICT` and leaves every access row unchanged. _Nota (tf1): escrita obsoleta → `CONFLICT` em `userErrors`, com todas as linhas inalteradas (`TestTFE_IT_204Stale...`); concorrência: exatamente uma decisão inteira vence (`TestTFE_IT_025ConcurrentAssignmentsApplyExactlyOneWholeDecision`)._
+- **IT-205**: removing an entitlement or scope denies the next protected request without waiting for token expiry. _Nota (tf1): `TestTFE_IT_205RemovingEntitlementOrScopeDeniesNextProtectedRequestWithoutTokenExpiry` e `TestTFE_UT_006RevokedMembershipAndEntitlementAreReloadedBeforeResourceIO`._
 - **IT-206**: `configurePublicationPolicy` creates `AUTOMATIC` from version 0 and returns version 1.
 - **IT-207**: unsupported mode or stale policy version leaves the effective policy unchanged.
-- **IT-208**: automatic finalization stores snapshot, policy version, publication, audit, and outbox atomically for `CRITICAL` and `ATTENTION` with reason code `INCONCLUSIVE`.
+- **IT-208**: automatic finalization stores snapshot, policy version, publication, audit, and outbox atomically for `CRITICAL` and `ATTENTION` with reason code `INCONCLUSIVE`. _Nota de implementação: chave determinística `auto:<snapshotId>`, supersede do anterior e mesma transação do snapshot; coberto por `TestPub_IT208...` e `TestAutomaticPolicyPublishesInSnapshotTransactionUT027`._ _Nota (pubfix): o handler `inspection.classified` agora publica na PRÓPRIA transação do consumer (`generate_snapshot.CreateInTx`, worker usa `CreateSnapshotInTx`); a criação em transação separada travava contra o `FOR UPDATE` da publicação sobre a vistoria. Cobertura em PostgreSQL com o handler real: `TestAutomaticFinalizationPublishesThroughRealHandlerWithoutHang` e `TestAutomaticFinalizationConcurrentDeliveriesDoNotDeadlock` (`handle_classified/automatic_publication_integration_test.go`), além do `TestPub_IT208...` que chama `Create` direto._
 - **IT-209**: manual finalization stores snapshot and policy version while `customerReport` remains null.
 - **IT-210**: `publishReport` publishes one final snapshot, emits one event, and echoes `clientMutationId`.
 - **IT-211**: `publishReport` maps non-final/missing snapshot to `INVALID_STATE` and out-of-scope target to `NOT_FOUND`.
@@ -606,15 +606,15 @@ Derived from `_user_stories.md` and `_techspec.md`.
 - **IT-214**: `invalidateReportPublication` records reason/actor/time, removes customer content, and emits one safe notice.
 - **IT-215**: blank reason or stale version leaves the publication `PUBLISHED`.
 - **IT-216**: repeated invalidation returns current `INVALIDATED` state without another event.
-- **IT-217**: `markNotificationRead` sets `readAt` only for the current membership and decrements unread count once.
-- **IT-218**: an unknown/foreign notification returns `NOT_FOUND`; repetition preserves the original `readAt`.
+- **IT-217**: `markNotificationRead` sets `readAt` only for the current membership and decrements unread count once. _Pendente (pubfix): o fan-out de notificação da publicação manual e da invalidação (ADR-003/ADR-008) ainda não existe; depende do item de notificações._
+- **IT-218**: an unknown/foreign notification returns `NOT_FOUND`; repetition preserves the original `readAt`. _Pendente (pubfix): mesma dependência de IT-217 (fan-out de publicação manual/invalidação)._
 - **IT-219**: Admin, Dashboard, and Capture independently generate clients from the same schema revision.
 - **IT-220**: a customer GraphQL document selecting `canonicalJSON`, HTML, object key, or internal reasoning fails schema validation.
 - **IT-221**: CORS preflight accepts exact configured origins and rejects an unconfigured lookalike origin.
 - **IT-222**: an `inspection-admin` token cannot call Dashboard customer operations without `DASHBOARD`.
 - **IT-223**: an `inspection-dashboard` token cannot call Admin mutations without `ADMIN`, even for `TENANT_ADMIN`.
-- **IT-224**: a Capture external session cannot call any OIDC Admin/Dashboard operation.
-- **IT-225**: Keycloak activation binds the provisioned subject and enables Dashboard only after current membership activation.
+- **IT-224**: a Capture external session cannot call any OIDC Admin/Dashboard operation. _Nota (tf1): `TestTFE_IT_224CaptureExternalSessionCannotCallAnyOIDCOperation`: sessão externa sem autoridade OIDC é negada em todas as operações Admin/Dashboard; a borda HTTP (`cmd/inspection-api/main.go`) já recusa Authorization e cookie externo na mesma requisição, sem teste automatizado próprio._
+- **IT-225**: Keycloak activation binds the provisioned subject and enables Dashboard only after current membership activation. _Nota (tf1): SUPERADO. A ativação é por OTP e só habilita o Dashboard quando a membership passa a `ACTIVE` (`TestTFE_IT_028PendingCustomerKeepsScopeButReadsNoDataBeforeActivation`); não há vínculo por required-action do Keycloak._
 - **IT-226**: fan-out plus the existing dispatcher creates one in-app record and one attempt per selected verified channel.
 - **IT-227**: outbox replay creates no duplicate in-app record or external notification intent.
 - **IT-228**: media signing rechecks access after page load and denies revoked or sensitive media.

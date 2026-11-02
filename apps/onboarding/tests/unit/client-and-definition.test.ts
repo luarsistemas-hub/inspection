@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getOnboardingCsrfToken, setOnboardingCsrfToken } from "@/auth/onboarding-session";
-import { graphql, mapUserErrors, uploadReferencePhoto } from "@/graphql/client";
+import { graphql, logoutOnboardingSession, mapUserErrors } from "@/graphql/client";
 import { OnboardingDefinitionDocument } from "@/graphql/generated";
 import { isSupportedDefinition, nextConfirmedStep, resolveResume, sortedSteps, validateStep, valuesForParticipantMode } from "@/features/onboarding/definition";
-import { attentionItemError, isOriginUploadLocked, originUploadError, type OriginUpload } from "@/features/onboarding/origin-upload";
 
 const definition = {
   schemaVersion: 1, version: 4, segment: "REAL_ESTATE", segmentVersion: "real-estate-v1", originModes: [],
@@ -36,6 +35,19 @@ describe("onboarding session client", () => {
     expect(getOnboardingCsrfToken()).toBe("rotated-proof");
   });
 
+  it("keeps a new CSRF proof when an earlier restart logout resolves late", async () => {
+    let resolveResponse!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { resolveResponse = resolve; })));
+    setOnboardingCsrfToken("old-proof");
+
+    const logout = logoutOnboardingSession({ clearLocal: false });
+    setOnboardingCsrfToken("new-session-proof");
+    resolveResponse(new Response(null, { status: 204 }));
+    await logout;
+
+    expect(getOnboardingCsrfToken()).toBe("new-session-proof");
+  });
+
   it("logs GraphQL operation errors with the server correlation details", async () => {
     const errors = [{ message: "operation failed", extensions: { code: "INVALID_STATE", field: "input", correlationId: "correlation-4" } }];
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -45,24 +57,6 @@ describe("onboarding session client", () => {
 
     expect(log).toHaveBeenCalledWith("[GraphQL] query OnboardingDefinition failed", { errors });
     log.mockRestore();
-  });
-
-  it("sends the actual reference photo privately and requires a confirmed media ID", async () => {
-    setOnboardingCsrfToken("csrf-proof");
-    const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ mediaId: "media-1" }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ message: "upload failed" }), { status: 503 }));
-    vi.stubGlobal("fetch", fetch);
-    const file = new File(["photo bytes"], "quarto.jpg", { type: "image/jpeg" });
-    await expect(uploadReferencePhoto(file, "Quarto", ["Cafeteira"], "photo-1")).resolves.toBe("media-1");
-    const [url, init] = fetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe("/onboarding/reference-photos");
-    expect(init.credentials).toBe("include");
-    expect(init.headers).toMatchObject({ "X-CSRF-Token": "csrf-proof" });
-    const form = init.body as FormData;
-    expect(form.get("file")).toBe(file);
-    expect(form.get("description")).toBe("Quarto");
-    expect(form.get("attentionItems")).toBe('["Cafeteira"]');
-    expect(form.get("clientMutationId")).toBe("photo-1");
-    await expect(uploadReferencePhoto(file, "Quarto", ["Cafeteira"], "photo-1")).rejects.toMatchObject({ message: "upload failed" });
   });
 
   it("UT-041 maps a server field error without changing unrelated values", () => {
@@ -83,6 +77,7 @@ describe("onboarding session client", () => {
 
   it("UT-068 rejects unsupported schema and malformed segment definitions", () => {
     expect(isSupportedDefinition(definition)).toBe(true);
+    expect(isSupportedDefinition({ ...definition, schemaVersion: 2 })).toBe(true);
     expect(isSupportedDefinition({ ...definition, schemaVersion: 3 })).toBe(false);
     expect(isSupportedDefinition({ ...definition, segment: "UNKNOWN" })).toBe(false);
   });
@@ -105,10 +100,10 @@ describe("onboarding session client", () => {
     const orderedDefinition = { ...definition, steps: [
       { key: "agency", label: "Agência", position: 1, required: true, fields: [] },
       { key: "property", label: "Imóvel", position: 2, required: true, fields: [] },
-      { key: "origin", label: "Fotos", position: 3, required: true, fields: [] },
-      { key: "participant", label: "Responsável", position: 4, required: true, fields: [] },
+      { key: "participant", label: "Responsável", position: 3, required: true, fields: [] },
     ] };
     expect(nextConfirmedStep(orderedDefinition, { state: "AGENCY_SAVED", currentStep: "agency" })).toBe("property");
+    expect(nextConfirmedStep(orderedDefinition, { state: "PROPERTY_SAVED", currentStep: "property" })).toBe("participant");
     expect(nextConfirmedStep(orderedDefinition, { state: "PROPERTY_SAVED", currentStep: "origin" })).toBe("participant");
   });
 
@@ -117,21 +112,4 @@ describe("onboarding session client", () => {
     expect(errors.name).toBeTruthy();
   });
 
-  it("UT-072 rejects a missing description and more than 20 attention items", () => {
-    const file = new File(["photo"], "front.jpg", { type: "image/jpeg" });
-    const uploads = [{ id: "photo", file, description: "", attentionItems: [], sending: false, failed: false } satisfies OriginUpload];
-    expect(originUploadError(uploads)).toBeTruthy();
-    expect(attentionItemError("x".repeat(81), [])).toContain("80");
-    expect(attentionItemError("vigésimo primeiro", Array.from({ length: 20 }, (_, index) => `item-${index}`))).toContain("20");
-  });
-
-  it("UT-073 rejects attention-item duplicates case insensitively", () => {
-    expect(attentionItemError("Cadeira", ["cadeira"])).toBe("Este item já foi adicionado.");
-  });
-
-  it("UT-074 locks description and attention metadata after media confirmation", () => {
-    expect(isOriginUploadLocked({ sending: false })).toBe(false);
-    expect(isOriginUploadLocked({ sending: true })).toBe(true);
-    expect(isOriginUploadLocked({ sending: false, mediaId: "media-1" })).toBe(true);
-  });
 });

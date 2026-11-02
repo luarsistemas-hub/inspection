@@ -38,7 +38,7 @@ func TestPromoteInspectionVideoGraphQLEnvelope(t *testing.T) {
 	for _, tc := range []struct {
 		name, code, field, message string
 	}{
-		{"business state", string(apperror.InvalidState), "preparation", "video preparation is not ready"},
+		{"business state", string(apperror.InvalidState), "preparation", "A preparação do vídeo ainda não está pronta."},
 		{"inaccessible inspection", string(apperror.NotFound), "inspectionId", "inspection not found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

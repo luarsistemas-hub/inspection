@@ -169,6 +169,21 @@ type OutboxIntent struct {
 
 func (OutboxIntent) TableName() string { return "messaging.outbox" }
 
+// TranscriptRevision is an immutable human or model-authored audio-note text revision.
+type TranscriptRevision struct {
+	ID             identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID       identity.ID  `gorm:"type:uuid;primaryKey"`
+	NoteID         identity.ID  `gorm:"type:uuid;not null"`
+	RevisionNumber int          `gorm:"not null"`
+	Text           string       `gorm:"not null"`
+	Kind           string       `gorm:"size:32;not null"`
+	AuthorID       *identity.ID `gorm:"type:uuid"`
+	CallID         *identity.ID `gorm:"type:uuid"`
+	CreatedAt      time.Time
+}
+
+func (TranscriptRevision) TableName() string { return "transcription.transcript_revisions" }
+
 type InboxReceipt struct {
 	ID          identity.ID `gorm:"type:uuid;primaryKey"`
 	TenantID    identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_inbox_delivery,priority:1"`
@@ -530,15 +545,17 @@ type ExternalSession struct {
 func (ExternalSession) TableName() string { return "invitations.external_sessions" }
 
 type ProcessingAcceptance struct {
-	ID                identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID          identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_processing_acceptance,priority:1"`
-	ResponsibilityID  identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_processing_acceptance,priority:2"`
-	DisclosureVersion string      `gorm:"size:100;not null"`
-	PhotoProcessing   bool        `gorm:"not null"`
-	VideoProcessing   bool        `gorm:"not null;default:false"`
-	AIAnalysis        bool        `gorm:"not null"`
-	GPSUse            bool        `gorm:"not null"`
-	AcceptedAt        time.Time   `gorm:"not null"`
+	ID                  identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID            identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_processing_acceptance,priority:1"`
+	ResponsibilityID    identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_processing_acceptance,priority:2"`
+	DisclosureVersion   string      `gorm:"size:100;not null"`
+	PhotoProcessing     bool        `gorm:"not null"`
+	VideoProcessing     bool        `gorm:"not null;default:false"`
+	VoiceProcessing     bool        `gorm:"not null;default:false"`
+	VoiceConsentVersion string      `gorm:"size:100;not null;default:''"`
+	AIAnalysis          bool        `gorm:"not null"`
+	GPSUse              bool        `gorm:"not null"`
+	AcceptedAt          time.Time   `gorm:"not null"`
 }
 
 func (ProcessingAcceptance) TableName() string { return "invitations.processing_acceptances" }
@@ -1247,8 +1264,11 @@ type Project struct {
 	Status         string      `gorm:"size:16;not null;index"`
 	Version        int64       `gorm:"not null;default:1"`
 	IdempotencyKey string      `gorm:"size:200;not null;uniqueIndex:idx_project_idempotency,priority:2"`
-	CreatedAt      time.Time   `gorm:"not null;index:idx_projects_cursor,priority:2"`
-	UpdatedAt      time.Time
+	// ClosedAt starts the retention clock of the project's inspections. Close
+	// sets it and Reopen clears it, so a reopened project is outside retention.
+	ClosedAt  *time.Time
+	CreatedAt time.Time `gorm:"not null;index:idx_projects_cursor,priority:2"`
+	UpdatedAt time.Time
 }
 
 func (Project) TableName() string { return "projects.projects" }
@@ -1448,6 +1468,41 @@ type InventoryItemEvidence struct {
 }
 
 func (InventoryItemEvidence) TableName() string { return "origins.inventory_item_evidence" }
+
+// InventoryItemAttributeSource records the exact evidence that supports one item attribute.
+type InventoryItemAttributeSource struct {
+	ID               identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID  `gorm:"type:uuid;not null;index:idx_item_attribute_source,priority:1"`
+	ItemID           identity.ID  `gorm:"type:uuid;not null;index:idx_item_attribute_source,priority:2"`
+	OriginVersionID  identity.ID  `gorm:"type:uuid;not null"`
+	AttributeName    string       `gorm:"size:64;not null;index:idx_item_attribute_source,priority:3"`
+	SourceKind       string       `gorm:"size:24;not null;index:idx_item_attribute_source,priority:4"`
+	NoteID           *identity.ID `gorm:"type:uuid"`
+	RevisionID       *identity.ID `gorm:"type:uuid"`
+	VisualEvidenceID *identity.ID `gorm:"type:uuid"`
+	ReviewedBy       *identity.ID `gorm:"type:uuid"`
+	CreatedAt        time.Time
+}
+
+func (InventoryItemAttributeSource) TableName() string { return "inventory.item_attribute_sources" }
+
+// CatalogNoteManifest fixes transcript revisions and readiness for one room catalog generation.
+type CatalogNoteManifest struct {
+	ID                identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID          identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_catalog_note_manifest,priority:1"`
+	InspectionID      identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_catalog_note_manifest,priority:2"`
+	RequirementKey    string          `gorm:"not null;uniqueIndex:uq_catalog_note_manifest,priority:3"`
+	CatalogGeneration int             `gorm:"not null;uniqueIndex:uq_catalog_note_manifest,priority:4"`
+	NoteRevisions     json.RawMessage `gorm:"type:jsonb;not null"`
+	DeadlineAt        time.Time       `gorm:"not null;index:idx_catalog_note_manifest_due,priority:2"`
+	MissingCount      int             `gorm:"not null;default:0;index:idx_catalog_note_manifest_due,priority:1"`
+	Digest            string          `gorm:"size:64;not null"`
+	// SealedAt fixes the manifest: a sealed row is immutable.
+	SealedAt  *time.Time
+	CreatedAt time.Time
+}
+
+func (CatalogNoteManifest) TableName() string { return "analysis.catalog_note_manifests" }
 
 // InventoryDecision is an append-only audit entry for inventory changes.
 type InventoryDecision struct {
@@ -1688,9 +1743,11 @@ type ReportPublication struct {
 	Version                                int64       `gorm:"not null;default:1"`
 	PublishedAt                            *time.Time
 	InvalidatedAt                          *time.Time
-	SupersededBy                           *identity.ID `gorm:"type:uuid"`
-	CreatedAt                              time.Time
-	UpdatedAt                              time.Time
+	// InvalidatedBy is the actor who withdrew the release, kept for audit.
+	InvalidatedBy *identity.ID `gorm:"type:uuid"`
+	SupersededBy  *identity.ID `gorm:"type:uuid"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 func (ReportPublication) TableName() string { return "reports.report_publications" }
@@ -1811,6 +1868,9 @@ type LLMCallRecord struct {
 	HTTPStatus                        *int
 	InputTokens, OutputTokens         *int64
 	CachedInputTokens                 *int64
+	AudioDurationMS, AudioInputTokens *int64
+	TextInputTokens, ReasoningTokens  *int64
+	AudioTokenUnit                    *string `gorm:"size:24"`
 	ImageCount                        *int
 	RequestBodyBytes                  *int64
 	ReportedCost                      *float64 `gorm:"type:numeric(20,12)"`

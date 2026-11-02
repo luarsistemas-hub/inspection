@@ -34,6 +34,7 @@ import (
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
+	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/mediator"
@@ -45,6 +46,63 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestVoicePolicyExternalSessionWithOperatorMetadataPreservesCaptureCSRF(t *testing.T) {
+	tenantID, responsibilityID := identity.NewID(), identity.NewID()
+	invitations, credentials := captureSessionFixture(t, tenantID, responsibilityID)
+	db := invitations.DB
+	if err := db.Exec(`CREATE UNIQUE INDEX invitations.idx_test_processing_acceptance ON processing_acceptances(tenant_id,responsibility_id)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS transcription").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS capture").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE capture.capture_drafts (id text,tenant_id text,responsibility_id text,kind text,media_kind text)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO capture.capture_drafts VALUES(?,?,?,?,?)`, identity.NewID(), tenantID, responsibilityID, "INSPECTION", "PHOTO").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE transcription.tenant_policies (tenant_id text PRIMARY KEY,enabled boolean,tenant_note_limit integer,tenant_audio_limit_ms integer,inspection_note_limit integer,inspection_audio_limit_ms integer,version integer)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO transcription.tenant_policies VALUES(?,?,?,?,?,?,?)`, tenantID, true, 100, 300000, 20, 60000, 3).Error; err != nil {
+		t.Fatal(err)
+	}
+	bus := mediator.New()
+	if err := acceptprocessing.Setup(acceptprocessing.Dependencies{Bus: bus, Service: invitations}); err != nil {
+		t.Fatal(err)
+	}
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: db, Bus: bus, Invitations: invitations}}))
+	server.SetErrorPresenter(graph.PresentError)
+	metadata := requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Internal: true, Roles: []string{auth.TenantAdmin}}}
+	execute := func(query string) string {
+		t.Helper()
+		body, err := json.Marshal(map[string]string{"query": query})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := requestctx.WithExternalCredentials(req.Context(), credentials)
+		ctx = requestctx.WithMetadata(ctx, metadata)
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, req.WithContext(ctx))
+		return recorder.Body.String()
+	}
+
+	policyResponse := execute(`query { voicePolicy { enabled tenantNoteLimit tenantAudioLimitMs inspectionNoteLimit inspectionAudioLimitMs version } }`)
+	if strings.Contains(policyResponse, `"errors"`) || !strings.Contains(policyResponse, `"enabled":true`) || !strings.Contains(policyResponse, `"version":3`) {
+		t.Fatalf("valid external capture session did not read tenant voice policy: %s", policyResponse)
+	}
+	acceptResponse := execute(`mutation { acceptProcessing(input:{disclosureVersion:"pt-BR-1",photoProcessing:true,videoProcessing:true,voiceProcessing:true,voiceConsentVersion:"pt-BR-1",aiAnalysis:true,gpsUse:true,clientMutationId:"voice-policy-csrf-regression"}) { status } }`)
+	if strings.Contains(acceptResponse, `"errors"`) || !strings.Contains(acceptResponse, `"status":"ACCEPTED"`) {
+		t.Fatalf("voice policy read invalidated capture CSRF before acceptProcessing: %s", acceptResponse)
+	}
+}
 
 func TestTask5GraphQLTransportIT411ToIT412IT473ToIT478IT509ToIT526(t *testing.T) {
 	tenantID, responsibilityID := identity.NewID(), identity.NewID()
@@ -271,7 +329,7 @@ func TestVideoPreparationRemainsReadableAfterSubmission(t *testing.T) {
 	server.SetErrorPresenter(graph.PresentError)
 	response := executeCaptureGraphQL(t, server, `query { videoPreparation(mediaId:"`+mediaID.String()+`") { stage } }`, tenantID, credentials, true)
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"stage":"PROCESSING"`) {
-		t.Fatalf("submitted capture cannot read preparation: %s", response)
+		t.Fatalf("video preparation unavailable after submission revoked the capture session: %s", response)
 	}
 	response = executeCaptureGraphQL(t, server, `query { videoPreparation(mediaId:"`+identity.NewID().String()+`") { stage } }`, tenantID, credentials, true)
 	if !strings.Contains(response, "NOT_FOUND") {

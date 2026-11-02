@@ -211,6 +211,11 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 		return fail(err, false)
 	}
 	value = projected
+	if reserved.job.Audience == "PDF_CUSTOMER" {
+		if err := redactScreenedEvidence(workCtx, e.db, reserved.job.TenantID, &value); err != nil {
+			return fail(err, !errors.Is(err, errPermanentPDF))
+		}
+	}
 	if err := overlaySourceAvailability(workCtx, e.db, reserved.job.TenantID, &value, e.now().UTC()); err != nil {
 		return fail(err, true)
 	}
@@ -738,7 +743,7 @@ func projectForAudience(snapshot reportcore.Snapshot, audience string) (reportco
 		return snapshot, true, nil
 	case "PDF_CUSTOMER":
 		snapshot.Findings = nil
-		return snapshot, false, nil
+		return redactBlockedEvidence(snapshot), false, nil
 	default:
 		return reportcore.Snapshot{}, false, errPermanentPDF
 	}

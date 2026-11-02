@@ -106,7 +106,7 @@ func TestExpirySerializesPlaybackLeaseAndLegalHoldIT604(t *testing.T) {
 		t.Fatal("timed out acquiring source row lock")
 	}
 	server := task06GraphQLServer(h.DB)
-	adminContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}})
+	adminContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	holdResponse := make(chan string, 1)
 	go func() {
 		query := `mutation { applyLegalHold(input:{sourceMediaId:"` + mediaID.String() + `",reason:"expiry race",clientMutationId:"it604"}) { status } }`

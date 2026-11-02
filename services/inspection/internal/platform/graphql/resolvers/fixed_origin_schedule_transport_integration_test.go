@@ -43,7 +43,14 @@ func TestFixedOriginMissingReferenceGraphQLIT455(t *testing.T) {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, false)
 			clientID := "IT-455-" + entryPoint
-			response := executeFixedOriginEntry(t, fx, entryPoint, clientID)
+			// Schedules deliberately defer validation when referenceVersionId is
+			// omitted (each occurrence resolves the origin active at its creation),
+			// so the missing reference is named explicitly for the schedule entry points.
+			referenceID := ""
+			if entryPoint != "createInspection" {
+				referenceID = identity.NewID().String()
+			}
+			response := executeFixedOriginEntryWithReference(t, fx, entryPoint, clientID, referenceID)
 			assertFixedOriginInvalidInput(t, response)
 			assertFixedOriginNoSideEffects(t, fx, clientID)
 		})
@@ -55,7 +62,20 @@ func TestFixedOriginPhotoReferenceForVideoGraphQL(t *testing.T) {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, true)
 			clientID := "IT-454-" + entryPoint
-			response := executeFixedOriginEntry(t, fx, entryPoint, clientID)
+			// createInspection resolves the active origin implicitly. Schedules
+			// deliberately defer validation when referenceVersionId is omitted
+			// (each occurrence pins the origin active at its creation), so the
+			// applicable schedule entry points receive the legacy PHOTO version
+			// explicitly.
+			referenceID := ""
+			if entryPoint != "createInspection" {
+				var origin database.Origin
+				if err := fx.h.AdminDB.Where("tenant_id=? AND asset_id=?", fx.seed.TenantID, fx.seed.AssetID).Take(&origin).Error; err != nil || origin.ActiveVersionID == nil {
+					t.Fatalf("photo origin fixture: origin=%+v err=%v", origin, err)
+				}
+				referenceID = origin.ActiveVersionID.String()
+			}
+			response := executeFixedOriginEntryWithReference(t, fx, entryPoint, clientID, referenceID)
 			assertFixedOriginCatalogOriginFirst(t, response)
 			assertFixedOriginNoSideEffects(t, fx, clientID)
 		})
@@ -88,7 +108,7 @@ func TestVV_IT_450CreationOperationsRequireManagementCapability(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, false)
 			setHistoricalVideoAdmissionDisabled(t, fx)
 			versionID := seedFixedVideoOrigin(t, fx)
-			viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-450"})
+			viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-450"})
 			query := fixedOriginEntryQuery(fx, entryPoint, "VV-IT-450-"+entryPoint, versionID.String())
 			response := executeFixedOriginRequest(t, fx, query, viewer, "", "")
 			assertFixedOriginTransportError(t, response, "FORBIDDEN")
@@ -103,9 +123,10 @@ func TestVV_IT_067OriginMutationsForbidViewer(t *testing.T) {
 	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{
 		TenantID: fx.seed.TenantID,
 		Principal: requestctx.Principal{
-			IdentityID: fx.seed.IdentityID,
-			TenantID:   fx.seed.TenantID,
-			Roles:      []string{auth.Viewer},
+			IdentityID:          fx.seed.IdentityID,
+			TenantID:            fx.seed.TenantID,
+			Roles:               []string{auth.Viewer},
+			ProductEntitlements: auth.ProductsForRole(auth.Viewer),
 		},
 		CorrelationID: "vv-it-067",
 	})
@@ -129,6 +150,17 @@ func TestVV_IT_067OriginMutationsForbidViewer(t *testing.T) {
 	for _, mutation := range mutations {
 		t.Run(mutation.name, func(t *testing.T) {
 			response := executeFixedOriginRequest(t, fx, mutation.query, viewer, "", "")
+			if mutation.name == "activateOriginVersion" {
+				// ADR-021: origin activation is retired (baselines are activated
+				// through activateBaselineVersion). The retired operation never
+				// transitions anything, whoever calls it, and reports a safe
+				// unavailable user error without a version.
+				if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"version":null`) || !strings.Contains(response, `"code":"INVALID_STATE"`) {
+					t.Fatalf("retired activateOriginVersion must return only the unavailable user error, got %s", response)
+				}
+				assertInventoryVersionStatus(t, api06Fixture{fixedOriginGraphQLFixture: fx}, versionID, "ACTIVE")
+				return
+			}
 			assertFixedOriginTransportError(t, response, "FORBIDDEN")
 		})
 	}
@@ -395,6 +427,17 @@ func newFixedOriginGraphQLFixture(t *testing.T, photoOrigin bool) fixedOriginGra
 }
 
 func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalog.ComparisonMode) fixedOriginGraphQLFixture {
+	return newInspectionModeGraphQLFixtureWithSchema(t, photoOrigin, mode, catalog.EnvironmentSchemaVersion)
+}
+
+// newLegacyVideoGraphQLFixture builds the fixture around a schema 1 video
+// template, whose capture exposes the single video:main requirement and the
+// origin guidance projected over it.
+func newLegacyVideoGraphQLFixture(t *testing.T, mode catalog.ComparisonMode) fixedOriginGraphQLFixture {
+	return newInspectionModeGraphQLFixtureWithSchema(t, false, mode, catalog.LegacySchemaVersion)
+}
+
+func newInspectionModeGraphQLFixtureWithSchema(t *testing.T, photoOrigin bool, mode catalog.ComparisonMode, schemaVersion int) fixedOriginGraphQLFixture {
 	t.Helper()
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
@@ -409,7 +452,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 	if err != nil {
 		t.Fatal(err)
 	}
-	templateID, templateVersionID, err := createVideoInspectionTemplateWithMode(ctx, h, seed, mode)
+	templateID, templateVersionID, err := createVideoInspectionTemplateWithSchema(ctx, h, seed, mode, schemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +489,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 	}); err != nil {
 		t.Fatal(err)
 	}
-	document, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: catalog.SchemaVersion, IsVideo: true, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"})
+	document, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: schemaVersion, IsVideo: true, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +518,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 		ScheduleService:   core.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}},
 	}}))
 	server.SetErrorPresenter(graph.PresentError)
-	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "it45x"}
+	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "it45x"}
 	return fixedOriginGraphQLFixture{ctx: requestctx.WithMetadata(ctx, meta), h: h, seed: seed, server: server, bus: bus, templateID: templateID}
 }
 

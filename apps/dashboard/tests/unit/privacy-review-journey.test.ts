@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { graphql } = vi.hoisted(() => ({ graphql: vi.fn() }));
-vi.mock("@/graphql/client", () => ({ graphql }));
+vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 vi.mock("@inspection/design-system", () => ({ Dialog: ({ isOpen, children }: { isOpen: boolean; children: unknown }) => isOpen ? createElement("div", { role: "dialog" }, children as never) : null }));
 

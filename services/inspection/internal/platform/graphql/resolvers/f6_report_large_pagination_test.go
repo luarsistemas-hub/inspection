@@ -51,7 +51,7 @@ func TestVV_IT_257TwoHundredFindingsAndLimitationsRemainReachable(t *testing.T) 
 		t.Fatal(err)
 	}
 	server := task06GraphQLServer(db)
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}}})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	findingIDs, gapKeys, evidenceIDs := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	after, pages := "", 0
 	for {

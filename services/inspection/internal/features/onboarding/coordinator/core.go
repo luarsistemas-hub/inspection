@@ -10,7 +10,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"inspection/libs/identity"
 	assetaddress "inspection/services/inspection/internal/features/assets/address"
+	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -46,30 +48,71 @@ type SubmitResult struct {
 	Digest                            string
 }
 
+const (
+	// maxNameCodePoints bounds every person, agency, and unit name.
+	maxNameCodePoints = catalog.MaxNameCodePoints
+	// maxEmailLength is the RFC 5321 address limit.
+	maxEmailLength = 320
+	// maxUnitCodeCodePoints matches the business unit code column.
+	maxUnitCodeCodePoints = 200
+)
+
 // ValidateProperty validates the fields owned by the property checkpoint.
 func ValidateProperty(payload StepPayload, now time.Time) error {
+	_, err := canonicalProperty(payload, now)
+	return err
+}
+
+// canonicalProperty validates the property checkpoint and returns the only
+// document that may be stored: catalog keys, NFC text, uppercase enums.
+func canonicalProperty(payload StepPayload, now time.Time) (StepPayload, error) {
+	result := StepPayload{}
 	if raw, ok := payload["addressDetails"].(map[string]any); ok {
 		details := assetaddress.Details{PostalCode: mapString(raw, "postalCode"), Street: mapString(raw, "street"), Number: mapString(raw, "number"), WithoutNumber: raw["withoutNumber"] == true, Complement: mapString(raw, "complement"), District: mapString(raw, "district"), City: mapString(raw, "city"), State: mapString(raw, "state"), MunicipalityCode: mapString(raw, "municipalityCode"), Reference: mapString(raw, "reference")}
-		if _, err := assetaddress.Validate(details); err != nil {
-			return apperror.New(apperror.InvalidInput, "addressDetails", err.Error())
+		value, err := assetaddress.Validate(details)
+		if err != nil {
+			return nil, apperror.New(apperror.InvalidInput, "addressDetails", "Confira os dados do endereço informado.")
 		}
+		result["addressDetails"] = map[string]any{"countryCode": value.CountryCode, "postalCode": value.PostalCode, "street": value.Street, "number": value.Number, "withoutNumber": value.WithoutNumber, "complement": value.Complement, "district": value.District, "city": value.City, "state": value.State, "municipalityCode": value.MunicipalityCode, "reference": value.Reference}
 	} else {
-		legacyAddress := stringValue(payload, "address")
-		if legacyAddress == "" || utf8.RuneCountInString(legacyAddress) > catalog.MaxTextCodePoints {
-			return apperror.New(apperror.InvalidInput, "address", "address is required and must be within the text limit")
+		legacyAddress, ok := assetaddress.CleanText(stringValue(payload, "address"))
+		if !ok || legacyAddress == "" || utf8.RuneCountInString(legacyAddress) > catalog.MaxTextCodePoints {
+			return nil, apperror.New(apperror.InvalidInput, "address", "Informe um endereço válido para o imóvel.")
 		}
+		result["address"] = legacyAddress
 	}
 	deadline, ok := propertyDeadline(payload)
 	if !ok || !deadline.After(now) {
-		return apperror.New(apperror.InvalidInput, "deadline", "deadline must be in the future")
+		return nil, apperror.New(apperror.InvalidInput, "deadline", "Informe um prazo futuro para a vistoria.")
 	}
-	purpose := strings.ToUpper(stringValue(payload, "purpose"))
-	switch purpose {
-	case "SALE", "RENTAL", "MAINTENANCE", "INSURANCE":
-	default:
-		return apperror.New(apperror.InvalidInput, "purpose", "invalid property purpose")
+	if value := stringValue(payload, "deadline"); value != "" {
+		result["deadline"] = value
+	} else {
+		result["deadlineAt"] = stringValue(payload, "deadlineAt")
 	}
-	return nil
+	purpose, ok := catalogOption("purpose", stringValue(payload, "purpose"))
+	if !ok {
+		return nil, apperror.New(apperror.InvalidInput, "purpose", "Selecione uma finalidade válida para a vistoria.")
+	}
+	result["purpose"] = purpose
+	propertyType, ok := catalogOption("propertyType", stringValue(payload, "propertyType"))
+	if !ok {
+		return nil, apperror.New(apperror.InvalidInput, "propertyType", "Selecione um tipo de imóvel válido.")
+	}
+	result["propertyType"] = propertyType
+	return result, nil
+}
+
+// catalogOption resolves value against the closed property options and
+// returns the catalog's canonical (upper-case) spelling.
+func catalogOption(field, value string) (string, bool) {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	for _, option := range onboardingcatalog.FieldOptions("property", field) {
+		if option == value {
+			return option, true
+		}
+	}
+	return "", false
 }
 
 func mapString(value map[string]any, key string) string {
@@ -79,66 +122,123 @@ func mapString(value map[string]any, key string) string {
 
 // ValidateDelegate enforces participant input before any domain write.
 func ValidateDelegate(payload StepPayload) error {
-	if stringValue(payload, "name") == "" {
-		return apperror.New(apperror.InvalidInput, "name", "participant name is required")
+	_, err := canonicalDelegate(payload)
+	return err
+}
+
+func canonicalDelegate(payload StepPayload) (StepPayload, error) {
+	name, ok := assetaddress.CleanText(stringValue(payload, "name"))
+	if name == "" {
+		return nil, apperror.New(apperror.InvalidInput, "name", "Informe o nome da pessoa responsável.")
 	}
-	email := stringValue(payload, "email")
-	normalized, err := participantcore.Normalize("EMAIL", email)
+	if !ok || utf8.RuneCountInString(name) > maxNameCodePoints {
+		return nil, apperror.New(apperror.InvalidInput, "name", "O nome da pessoa responsável deve ter até 200 caracteres e não pode conter caracteres especiais ocultos.")
+	}
+	email, err := canonicalEmail(stringValue(payload, "email"))
 	if err != nil {
-		return apperror.New(apperror.InvalidInput, "email", "invalid email")
+		return nil, apperror.New(apperror.InvalidInput, "email", "Informe um e-mail válido.")
 	}
-	confirmation, err := participantcore.Normalize("EMAIL", stringValue(payload, "emailConfirmation"))
+	confirmation, err := canonicalEmail(stringValue(payload, "emailConfirmation"))
+	if err != nil || confirmation != email {
+		return nil, apperror.New(apperror.InvalidInput, "emailConfirmation", "Os e-mails precisam ser iguais.")
+	}
+	return StepPayload{"mode": "DELEGATE", "name": name, "email": email, "emailConfirmation": confirmation}, nil
+}
+
+func canonicalEmail(value string) (string, error) {
+	normalized, err := participantcore.Normalize("EMAIL", value)
 	if err != nil {
-		return apperror.New(apperror.InvalidInput, "emailConfirmation", "email confirmation does not match")
+		return "", err
 	}
-	if confirmation != normalized {
-		return apperror.New(apperror.InvalidInput, "emailConfirmation", "email confirmation does not match")
+	if len(normalized) > maxEmailLength || !assetaddress.SafeText(normalized) {
+		return "", fmt.Errorf("invalid email")
 	}
-	return nil
+	return normalized, nil
+}
+
+func canonicalAgency(payload StepPayload) (StepPayload, error) {
+	name := stringValue(payload, "agencyName")
+	if name == "" {
+		name = stringValue(payload, "name")
+	}
+	name, ok := assetaddress.CleanText(name)
+	if name == "" || !ok || utf8.RuneCountInString(name) > maxNameCodePoints {
+		return nil, apperror.New(apperror.InvalidInput, "name", "Informe um nome válido para a imobiliária, com até 200 caracteres.")
+	}
+	result := StepPayload{"name": name}
+	if _, present := payload["agencyName"]; present {
+		result["agencyName"] = name
+	}
+	for _, field := range []struct{ key, label string }{{"businessUnitCode", "o código da unidade"}, {"businessUnitName", "o nome da unidade"}} {
+		raw := stringValue(payload, field.key)
+		if raw == "" {
+			continue
+		}
+		value, ok := assetaddress.CleanText(raw)
+		if !ok || utf8.RuneCountInString(value) > maxUnitCodeCodePoints {
+			return nil, apperror.New(apperror.InvalidInput, field.key, "Confira "+field.label+": use até 200 caracteres, sem caracteres especiais ocultos.")
+		}
+		result[field.key] = value
+	}
+	if raw := stringValue(payload, "existingAgencyId"); raw != "" {
+		id, err := identity.ParseID(raw)
+		if err != nil {
+			return nil, apperror.New(apperror.InvalidInput, "existingAgencyId", "Confirme a imobiliária vinculada a este e-mail.")
+		}
+		result["existingAgencyId"] = id.String()
+	}
+	return result, nil
 }
 
 // ValidateCheckpointPayload validates the payload owned by a checkpoint
 // before it can be persisted or trigger any external provisioning work.
 func ValidateCheckpointPayload(step string, payload StepPayload, now time.Time) error {
+	_, err := CanonicalCheckpointPayload(step, payload, now)
+	return err
+}
+
+// CanonicalCheckpointPayload validates a checkpoint and returns the canonical
+// document to persist. Browser-supplied keys outside the catalog are dropped,
+// text is NFC without control or format code points, and enums use their
+// catalog spelling.
+func CanonicalCheckpointPayload(step string, payload StepPayload, now time.Time) (StepPayload, error) {
 	switch strings.ToUpper(strings.TrimSpace(step)) {
 	case "AGENCY":
-		name := stringValue(payload, "agencyName")
-		if name == "" {
-			name = stringValue(payload, "name")
-		}
-		if name == "" || utf8.RuneCountInString(name) > catalog.MaxTextCodePoints {
-			return apperror.New(apperror.InvalidInput, "name", "agency name is required and must be within the text limit")
-		}
+		return canonicalAgency(payload)
 	case "PROPERTY":
-		return ValidateProperty(payload, now)
+		return canonicalProperty(payload, now)
 	case "PARTICIPANT":
-		mode := strings.ToUpper(stringValue(payload, "mode"))
-		switch mode {
+		switch strings.ToUpper(stringValue(payload, "mode")) {
 		case "SELF":
-			return nil
+			return StepPayload{"mode": "SELF"}, nil
 		case "DELEGATE":
-			return ValidateDelegate(payload)
+			return canonicalDelegate(payload)
 		default:
-			return apperror.New(apperror.InvalidInput, "mode", "invalid participant mode")
+			return nil, apperror.New(apperror.InvalidInput, "mode", "Selecione quem realizará a vistoria.")
 		}
 	default:
-		return apperror.New(apperror.InvalidInput, "step", "invalid step")
+		return nil, apperror.New(apperror.InvalidInput, "step", "Esta etapa não está disponível. Atualize a página e tente novamente.")
 	}
-	return nil
 }
 
 // ValidateSubmit enforces ordering and truthful pending states. It is pure so
 // the GraphQL and worker boundaries can share the same transition contract.
 func ValidateSubmit(in SubmitInput) (SubmitResult, error) {
 	if strings.TrimSpace(in.IdempotencyKey) == "" {
-		return SubmitResult{}, apperror.New(apperror.InvalidInput, "clientMutationId", "idempotency key is required")
+		return SubmitResult{}, apperror.New(apperror.InvalidInput, "clientMutationId", "Não foi possível concluir a solicitação. Tente novamente.")
 	}
 	for _, step := range []string{"AGENCY", "PROPERTY", "PARTICIPANT"} {
 		if _, ok := in.Steps[step]; !ok {
-			return SubmitResult{}, apperror.New(apperror.InvalidState, "step", "incomplete step: "+strings.ToLower(step))
+			return SubmitResult{}, missingStepError(step)
 		}
 	}
 	if err := ValidateProperty(in.Steps["PROPERTY"], in.Now); err != nil {
+		if deadline, ok := propertyDeadline(in.Steps["PROPERTY"]); ok && !deadline.After(in.Now) {
+			// The checkpoint is immutable, so a deadline that was valid when it was
+			// confirmed can lapse before the user submits. Say so truthfully and
+			// point to the recovery path instead of a misleading input error.
+			return SubmitResult{}, apperror.New(apperror.InvalidState, "deadline", "O prazo escolhido para a vistoria já passou. Inicie um novo cadastro para informar outro prazo.")
+		}
 		return SubmitResult{}, err
 	}
 	participant := in.Steps["PARTICIPANT"]
@@ -150,13 +250,35 @@ func ValidateSubmit(in SubmitInput) (SubmitResult, error) {
 			return SubmitResult{}, err
 		}
 	} else {
-		return SubmitResult{}, apperror.New(apperror.InvalidInput, "mode", "invalid participant mode")
+		return SubmitResult{}, apperror.New(apperror.InvalidInput, "mode", "Selecione quem realizará a vistoria.")
 	}
 	state, action := StateReadyToSubmit, NextActionOpenCapture
 	if in.DeliveryState == "PENDING" || in.DeliveryState == "FAILED" {
 		state, action = StateDeliveryPending, NextActionRetryDelivery
 	}
 	return SubmitResult{State: state, NextAction: action, DeliveryStatus: in.DeliveryState, Digest: digest(in)}, nil
+}
+
+var stepLabels = map[string]string{"AGENCY": "Imobiliária", "PROPERTY": "Imóvel", "PARTICIPANT": "Responsável pela vistoria"}
+
+func missingStepError(step string) error {
+	return apperror.New(apperror.InvalidState, strings.ToLower(step), "Preencha e confirme a etapa "+stepLabels[step]+" antes de continuar.")
+}
+
+// ValidateCheckpointPrerequisites requires a stored checkpoint for every step
+// that precedes the requested one. The session's current step alone is not
+// proof: a verified session already points at AGENCY before it is confirmed.
+func ValidateCheckpointPrerequisites(step string, completed map[string]bool) error {
+	step = strings.ToUpper(strings.TrimSpace(step))
+	for _, prior := range []string{"AGENCY", "PROPERTY", "PARTICIPANT"} {
+		if prior == step {
+			return nil
+		}
+		if !completed[prior] {
+			return missingStepError(prior)
+		}
+	}
+	return nil
 }
 
 func digest(in SubmitInput) string {
@@ -209,7 +331,7 @@ func ValidateCheckpointOrder(current, requested string) error {
 		return fmt.Errorf("unknown onboarding step %q", requested)
 	}
 	if ranks[strings.ToUpper(requested)] > ranks[strings.ToUpper(current)]+1 {
-		return apperror.New(apperror.InvalidState, "property", "onboarding prerequisites are incomplete")
+		return apperror.New(apperror.InvalidState, "property", "Preencha e confirme todas as etapas antes de continuar.")
 	}
 	return nil
 }

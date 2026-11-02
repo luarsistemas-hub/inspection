@@ -12,6 +12,25 @@ model_list:
     litellm_params:
       model: gemini/gemini-3.6-flash
       api_key: os.environ/LLM_API_KEY
+  # Dedicated audio aliases used only by the transcription gateway. Keep the
+  # inspection and video aliases above independent from these model profiles.
+  - model_name: gemini-2.5-flash-lite
+    litellm_params:
+      model: gemini/gemini-2.5-flash-lite
+      api_key: os.environ/LLM_API_KEY
+      timeout: 40
+  - model_name: gemini-2.0-flash-lite
+    litellm_params:
+      model: gemini/gemini-2.0-flash-lite
+      api_key: os.environ/LLM_API_KEY
+      timeout: 40
+  # Canonical TechSpec alternative profile. The Go profile catalog still uses
+  # the 2.0 alias; keep both until its owning task aligns and validates it.
+  - model_name: gemini-3.5-flash-lite
+    litellm_params:
+      model: gemini/gemini-3.5-flash-lite
+      api_key: os.environ/LLM_API_KEY
+      timeout: 40
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

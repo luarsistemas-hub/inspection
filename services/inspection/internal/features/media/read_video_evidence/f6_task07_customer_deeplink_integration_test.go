@@ -33,6 +33,13 @@ type task07DeepLink struct {
 // without any customer publication.
 func seedTask07UnpublishedReport(t *testing.T) task07DeepLink {
 	t.Helper()
+	return seedTask07Report(t, nil)
+}
+
+// seedTask07Report is seedTask07UnpublishedReport with an optional change to
+// the single evidence item before the immutable snapshot is stored.
+func seedTask07Report(t *testing.T, mutate func(*report.Evidence)) task07DeepLink {
+	t.Helper()
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
 	}
@@ -50,7 +57,11 @@ func seedTask07UnpublishedReport(t *testing.T) task07DeepLink {
 	submissionID, preparationID := identity.NewID(), identity.NewID()
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	digest := strings.Repeat("e", 64)
-	canonical, err := json.Marshal(report.Snapshot{Evidence: []report.Evidence{{ID: d.frameID.String(), FrameID: d.frameID.String(), SourceMediaID: d.mediaID.String(), PreparationID: preparationID.String(), FrameDigest: digest, DisplayDigest: digest}}})
+	evidence := report.Evidence{ID: d.frameID.String(), FrameID: d.frameID.String(), SourceMediaID: d.mediaID.String(), PreparationID: preparationID.String(), FrameDigest: digest, DisplayDigest: digest}
+	if mutate != nil {
+		mutate(&evidence)
+	}
+	canonical, err := json.Marshal(report.Snapshot{Evidence: []report.Evidence{evidence}})
 	if err != nil {
 		t.Fatal(err)
 	}

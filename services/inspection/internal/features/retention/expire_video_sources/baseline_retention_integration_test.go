@@ -398,7 +398,7 @@ func TestIntegration_IT052_AnchoredDeletionRequestBlocksWithoutStoppingTheQueue(
 	processedAt := l.now.Add(-time.Hour)
 	l.within(func(tx *gorm.DB) error {
 		for _, request := range []database.DeletionRequest{
-			{ID: blockedEarlier, TenantID: l.f.TenantID, SourceMediaID: &anchored.mediaID, Status: "BLOCKED", Reason: "active baseline prevents source deletion", RequestedAt: l.now.Add(-2 * time.Hour), ProcessedAt: &processedAt},
+			{ID: blockedEarlier, TenantID: l.f.TenantID, SourceMediaID: &anchored.mediaID, Status: "BLOCKED", Reason: "Referência ativa impede a exclusão da fonte.", RequestedAt: l.now.Add(-2 * time.Hour), ProcessedAt: &processedAt},
 			{ID: anchoredRequest, TenantID: l.f.TenantID, SourceMediaID: &anchored.mediaID, Status: "REQUESTED", RequestedAt: l.now.Add(-time.Minute)},
 			{ID: freeRequest, TenantID: l.f.TenantID, SourceMediaID: &free.mediaID, Status: "REQUESTED", RequestedAt: l.now},
 		} {
@@ -428,7 +428,7 @@ func TestIntegration_IT052_AnchoredDeletionRequestBlocksWithoutStoppingTheQueue(
 		return nil
 	})
 	for _, id := range []identity.ID{blockedEarlier, anchoredRequest} {
-		if row := statuses[id]; row.Status != "BLOCKED" || !strings.Contains(row.Reason, "active baseline") {
+		if row := statuses[id]; row.Status != "BLOCKED" || !strings.Contains(row.Reason, "Referência ativa") {
 			t.Fatalf("IT-052 anchored request %s status=%s reason=%q; want BLOCKED by active baseline", id, row.Status, row.Reason)
 		}
 	}

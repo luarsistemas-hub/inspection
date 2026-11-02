@@ -107,6 +107,15 @@ func (s Service) Decide(ctx context.Context, in DecideInput) (DecideResult, erro
 			if err := tx.Save(&item).Error; err != nil {
 				return err
 			}
+			// An explicit decision is the human review of every sourced attribute
+			// (and of those the reviewer changed); earlier sources stay recorded.
+			var changed []string
+			if d.Action == "EDIT" && d.Patch != nil {
+				changed = patchedAttributes(*d.Patch)
+			}
+			if err := RecordHumanReview(tx, item, in.ActorMembershipID, changed, now); err != nil {
+				return err
+			}
 			reason := d.ReasonText
 			if d.Action == "REJECT" {
 				reason = d.Reason
@@ -143,7 +152,20 @@ func (s Service) BulkAccept(ctx context.Context, tenantID, versionID, environmen
 			return apperror.New(apperror.NotFound, "environmentId", "environment not found")
 		}
 		now := s.now()
+		undecidedVoice := 0
+		itemIDs := make([]identity.ID, 0, len(items))
 		for _, item := range items {
+			itemIDs = append(itemIDs, item.ID)
+		}
+		voicePending, err := UndecidedVoiceItems(tx, tenantID, itemIDs)
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			if voicePending[item.ID] {
+				undecidedVoice++
+				continue
+			}
 			before := marshal(item)
 			if err := applyAccept(tx, tenantID, &item); err != nil {
 				code, _, safe := apperror.Public(err)
@@ -163,6 +185,9 @@ func (s Service) BulkAccept(ctx context.Context, tenantID, versionID, environmen
 				return err
 			}
 			accepted++
+		}
+		if accepted == 0 && undecidedVoice > 0 {
+			return apperror.New(apperror.InvalidState, "environmentId", "Há atributos informados por voz aguardando revisão.")
 		}
 		return nil
 	})

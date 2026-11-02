@@ -4,7 +4,9 @@ package core
 import "sort"
 
 type Recipient struct {
-	ID, Channel, Destination     string
+	ID, Channel, Destination string
+	// ChannelID distinguishes separate verified destinations for one membership.
+	ChannelID                    string
 	Internal, Verified, Selected bool
 }
 

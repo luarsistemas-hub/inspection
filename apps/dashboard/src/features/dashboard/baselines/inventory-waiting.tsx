@@ -21,7 +21,7 @@ export function InventoryWaiting({ inspectionId, canReview }: { inspectionId: st
   useEffect(() => {
     if (!canReview) return;
     void graphql<G.InspectionDetailQuery, G.InspectionDetailQueryVariables>(G.InspectionDetailDocument, { id: inspectionId }).then((result) => {
-      if (!result.inspection) throw new Error("A vistoria não está disponível neste contexto.");
+      if (!result.inspection) throw Object.assign(new Error("A vistoria não está disponível neste contexto."), { isUserError: true });
       setAssetId(result.inspection.assetId);
     }).catch((failure) => setError(failureText(failure)));
   }, [inspectionId, canReview]);

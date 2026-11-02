@@ -59,7 +59,7 @@ func TestReplayHoldAndDeletionRequestKeepsSameLogicalScopeIT334(t *testing.T) {
 	deletionMutation := `mutation { recordDeletionRequest(input:{sourceMediaId:"` + f.mediaID.String() + `",reason:"purge C1",clientMutationId:"it334-purge"}) { status requestId } }`
 	for i := 0; i < 2; i++ {
 		response := executeTask06GraphQL(t, f.server, deletionMutation, f.adminContext)
-		if !strings.Contains(response, "INVALID_STATE") || !strings.Contains(response, "legal hold prevents source deletion") {
+		if !strings.Contains(response, "INVALID_STATE") || !strings.Contains(response, "Retenção legal impede a exclusão da fonte.") {
 			t.Fatalf("purge request replay %d did not preserve the held source scope: %s", i+1, response)
 		}
 	}
@@ -135,7 +135,7 @@ func newVideoHoldFixture(t *testing.T, status string) videoHoldFixture {
 		t.Fatal(err)
 	}
 	f.server = task06GraphQLServer(h.DB)
-	f.adminContext = requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: f.tenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: f.tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "it329-334"})
+	f.adminContext = requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: f.tenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: f.tenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "it329-334"})
 	return f
 }
 

@@ -17,6 +17,18 @@ export type AcceptProcessingInput = {
   gpsUse: Scalars['Boolean']['input'];
   photoProcessing: Scalars['Boolean']['input'];
   videoProcessing: InputMaybe<Scalars['Boolean']['input']>;
+  voiceConsentVersion: InputMaybe<Scalars['String']['input']>;
+  voiceProcessing: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type AccessResource = {
+  __typename?: 'AccessResource';
+  grantable: Scalars['Boolean']['output'];
+  historical: Scalars['Boolean']['output'];
+  kind: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  resourceId: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
 };
 
 export type ActivateBaselineVersionInput = {
@@ -165,12 +177,120 @@ export type AssetPayload = {
   userErrors: Array<UserError>;
 };
 
+export type AssignMembershipAccessInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  membershipId: Scalars['ID']['input'];
+  productEntitlements: Array<Scalars['String']['input']>;
+  role: Scalars['String']['input'];
+  scopes: Array<ScopeAssignmentInput>;
+};
+
 export type AssignRoleScopesInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: InputMaybe<Scalars['Int']['input']>;
   membershipId: Scalars['ID']['input'];
   role: Scalars['String']['input'];
   scopes: Array<ScopeAssignmentInput>;
+};
+
+export type AudioNote = {
+  __typename?: 'AudioNote';
+  anchor: AudioNoteAnchor;
+  anchorStatus: Scalars['String']['output'];
+  audioAvailability: Scalars['String']['output'];
+  audioDeletionStatus: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  currentRevisionId: Maybe<Scalars['ID']['output']>;
+  durationMs: Scalars['Int']['output'];
+  endMs: Maybe<Scalars['Int']['output']>;
+  environmentId: Scalars['ID']['output'];
+  environmentName: Maybe<Scalars['String']['output']>;
+  failureCode: Maybe<Scalars['String']['output']>;
+  highlightSource: Maybe<Scalars['String']['output']>;
+  highlighted: Scalars['Boolean']['output'];
+  id: Scalars['ID']['output'];
+  inspectionId: Scalars['ID']['output'];
+  noSpeech: Scalars['Boolean']['output'];
+  photoMediaId: Maybe<Scalars['ID']['output']>;
+  requirementKey: Scalars['String']['output'];
+  responsibilityId: Scalars['ID']['output'];
+  revisions: Array<AudioNoteRevision>;
+  sourceMediaId: Maybe<Scalars['ID']['output']>;
+  startMs: Maybe<Scalars['Int']['output']>;
+  status: Scalars['String']['output'];
+  targetKind: Scalars['String']['output'];
+  textConfirmed: Scalars['Boolean']['output'];
+  updatedAt: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+  videoAttemptId: Maybe<Scalars['ID']['output']>;
+};
+
+export type AudioNoteAnchor = {
+  __typename?: 'AudioNoteAnchor';
+  approximate: Scalars['Boolean']['output'];
+  frames: Array<AudioNoteAnchorFrame>;
+  framesTruncated: Scalars['Boolean']['output'];
+  kind: Scalars['String']['output'];
+  mediaId: Maybe<Scalars['ID']['output']>;
+  mediaStatus: Scalars['String']['output'];
+  playbackUrl: Maybe<Scalars['String']['output']>;
+  previewUrl: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+  visualCoverage: Scalars['String']['output'];
+};
+
+export type AudioNoteAnchorFrame = {
+  __typename?: 'AudioNoteAnchorFrame';
+  id: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
+  timestampMs: Scalars['Int']['output'];
+  url: Maybe<Scalars['String']['output']>;
+};
+
+export type AudioNoteConnection = {
+  __typename?: 'AudioNoteConnection';
+  nodes: Array<AudioNote>;
+  pageInfo: PageInfo;
+};
+
+export type AudioNotePayload = {
+  __typename?: 'AudioNotePayload';
+  clientMutationId: Scalars['String']['output'];
+  note: Maybe<AudioNote>;
+  userErrors: Array<UserError>;
+};
+
+export type AudioNoteRevision = {
+  __typename?: 'AudioNoteRevision';
+  authorId: Maybe<Scalars['ID']['output']>;
+  authorName: Maybe<Scalars['String']['output']>;
+  callId: Maybe<Scalars['ID']['output']>;
+  createdAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+  revisionNumber: Scalars['Int']['output'];
+  text: Scalars['String']['output'];
+};
+
+export type AudioNoteRevisionKind =
+  | 'HUMAN_EDIT'
+  | 'PARTICIPANT_DECLARATION';
+
+export type AudioNoteUploadIntent = {
+  __typename?: 'AudioNoteUploadIntent';
+  expiresAt: Scalars['String']['output'];
+  headers: Scalars['JSON']['output'];
+  method: Scalars['String']['output'];
+  url: Scalars['String']['output'];
+};
+
+export type AudioNoteUploadPayload = {
+  __typename?: 'AudioNoteUploadPayload';
+  clientMutationId: Scalars['String']['output'];
+  noteId: Maybe<Scalars['ID']['output']>;
+  upload: Maybe<AudioNoteUploadIntent>;
+  userErrors: Array<UserError>;
 };
 
 export type AuditEvent = {
@@ -380,6 +500,12 @@ export type CloseOriginInvitationInput = {
   versionId: Scalars['ID']['input'];
 };
 
+export type CompleteAudioNoteUploadInput = {
+  clientMutationId: Scalars['String']['input'];
+  noteId: Scalars['ID']['input'];
+  uploadProof: Scalars['String']['input'];
+};
+
 export type CompleteInternalUserActivationInput = {
   clientMutationId: Scalars['String']['input'];
   password: InputMaybe<Scalars['String']['input']>;
@@ -426,6 +552,22 @@ export type ConfigureVideoPolicyInput = {
   maxDurationMinutes: Scalars['Int']['input'];
   originRetentionDays: Scalars['Int']['input'];
   supersededBaselineRetentionDays: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ConfigureVoicePolicyInput = {
+  clientMutationId: Scalars['String']['input'];
+  enabled: Scalars['Boolean']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  inspectionAudioLimitMs: Scalars['Int']['input'];
+  inspectionNoteLimit: Scalars['Int']['input'];
+  tenantAudioLimitMs: Scalars['Int']['input'];
+  tenantNoteLimit: Scalars['Int']['input'];
+};
+
+export type ConfirmAudioNoteTextInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  noteId: Scalars['ID']['input'];
 };
 
 export type ContactInput = {
@@ -532,6 +674,23 @@ export type CounterpartyResponsePayload = {
   respondedAt: Maybe<Scalars['String']['output']>;
   response: Scalars['String']['output'];
   userErrors: Array<UserError>;
+};
+
+export type CreateAudioNoteUploadInput = {
+  clientMutationId: Scalars['String']['input'];
+  clientNoteId: Scalars['ID']['input'];
+  consentVersion: Scalars['String']['input'];
+  contentSha256: Scalars['String']['input'];
+  contentType: Scalars['String']['input'];
+  disclosureVersion: Scalars['String']['input'];
+  durationMs: Scalars['Int']['input'];
+  endMs: InputMaybe<Scalars['Int']['input']>;
+  photoMediaId: InputMaybe<Scalars['ID']['input']>;
+  requirementKey: Scalars['String']['input'];
+  sizeBytes: Scalars['Int']['input'];
+  startMs: InputMaybe<Scalars['Int']['input']>;
+  timeBasis: InputMaybe<Scalars['String']['input']>;
+  videoAttemptId: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type CreateBusinessUnitInput = {
@@ -771,9 +930,44 @@ export type DisableMembershipInput = {
   membershipId: Scalars['ID']['input'];
 };
 
+export type DiscardAudioNoteInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  noteId: Scalars['ID']['input'];
+};
+
 export type DiscardBaselineDraftInput = {
   clientMutationId: Scalars['String']['input'];
   originVersionId: Scalars['ID']['input'];
+};
+
+export type EffectiveAccess = {
+  __typename?: 'EffectiveAccess';
+  descendants: EffectiveAccessEntryConnection;
+  grants: Array<AccessResource>;
+  membershipId: Scalars['ID']['output'];
+  productEntitlements: Array<Scalars['String']['output']>;
+  role: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  tenantWide: Scalars['Boolean']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type EffectiveAccessEntry = {
+  __typename?: 'EffectiveAccessEntry';
+  grantable: Scalars['Boolean']['output'];
+  historical: Scalars['Boolean']['output'];
+  inheritedFrom: Scope;
+  kind: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  resourceId: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type EffectiveAccessEntryConnection = {
+  __typename?: 'EffectiveAccessEntryConnection';
+  nodes: Array<EffectiveAccessEntry>;
+  pageInfo: PageInfo;
 };
 
 export type EvidenceMode =
@@ -814,6 +1008,9 @@ export type ExternalSessionPayload = {
 export type GlobalLlmCallUsage = {
   __typename?: 'GlobalLLMCallUsage';
   attempt: Scalars['Int']['output'];
+  audioDurationMs: Maybe<Scalars['Int']['output']>;
+  audioInputTokens: Maybe<Scalars['Int']['output']>;
+  audioTokenUnit: Maybe<Scalars['String']['output']>;
   cachedInputTokens: Maybe<Scalars['Int']['output']>;
   callId: Scalars['ID']['output'];
   comparisonMode: Scalars['String']['output'];
@@ -836,6 +1033,7 @@ export type GlobalLlmCallUsage = {
   modelAlias: Scalars['String']['output'];
   outputTokens: Maybe<Scalars['Int']['output']>;
   provider: Maybe<Scalars['String']['output']>;
+  reasoningTokens: Maybe<Scalars['Int']['output']>;
   replayGeneration: Scalars['Int']['output'];
   reportedCost: Maybe<Scalars['Float']['output']>;
   reportedCostDecimal: Maybe<Scalars['String']['output']>;
@@ -845,6 +1043,7 @@ export type GlobalLlmCallUsage = {
   technicalOutcome: Scalars['String']['output'];
   tenantId: Scalars['ID']['output'];
   tenantName: Scalars['String']['output'];
+  textInputTokens: Maybe<Scalars['Int']['output']>;
   transportDelivered: Maybe<Scalars['Boolean']['output']>;
 };
 
@@ -1043,6 +1242,20 @@ export type InvalidateReportPublicationInput = {
   reason: Scalars['String']['input'];
 };
 
+export type InventoryAttributeSource = {
+  __typename?: 'InventoryAttributeSource';
+  attributeName: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  currentRevisionId: Maybe<Scalars['ID']['output']>;
+  id: Scalars['ID']['output'];
+  noteId: Maybe<Scalars['ID']['output']>;
+  reviewedBy: Maybe<Scalars['ID']['output']>;
+  revisionId: Maybe<Scalars['ID']['output']>;
+  sourceKind: Scalars['String']['output'];
+  stale: Scalars['Boolean']['output'];
+  visualEvidenceId: Maybe<Scalars['ID']['output']>;
+};
+
 export type InventoryCounts = {
   __typename?: 'InventoryCounts';
   included: Scalars['Int']['output'];
@@ -1066,7 +1279,9 @@ export type InventoryDraft = {
   noticeCode: Maybe<Scalars['String']['output']>;
   progress: InventoryProgress;
   readOnly: Scalars['Boolean']['output'];
+  sourceInspectionId: Maybe<Scalars['ID']['output']>;
   version: OriginVersion;
+  voiceSummary: InventoryVoiceSummary;
   warnings: Array<Scalars['String']['output']>;
 };
 
@@ -1082,6 +1297,7 @@ export type InventoryEnvironment = {
   position: Scalars['Int']['output'];
   requirementKey: Maybe<Scalars['String']['output']>;
   typeCode: Scalars['String']['output'];
+  voiceSummary: InventoryVoiceSummary;
 };
 
 export type InventoryEnvironmentPayload = {
@@ -1114,6 +1330,7 @@ export type InventoryEvidenceInput = {
 
 export type InventoryItem = {
   __typename?: 'InventoryItem';
+  attributeSources: Array<InventoryAttributeSource>;
   color: Maybe<Scalars['String']['output']>;
   condition: Scalars['String']['output'];
   confidenceBps: Maybe<Scalars['Int']['output']>;
@@ -1134,6 +1351,7 @@ export type InventoryItem = {
   suggested: Maybe<Scalars['JSON']['output']>;
   typeCode: Scalars['String']['output'];
   version: Scalars['Int']['output'];
+  voiceConflicts: Array<InventoryVoiceConflict>;
 };
 
 export type InventoryItemPatchInput = {
@@ -1170,6 +1388,14 @@ export type InventoryProgress = {
   pending: Scalars['Int']['output'];
 };
 
+export type InventoryRegenerationPayload = {
+  __typename?: 'InventoryRegenerationPayload';
+  clientMutationId: Scalars['String']['output'];
+  jobId: Maybe<Scalars['ID']['output']>;
+  status: Maybe<Scalars['String']['output']>;
+  userErrors: Array<UserError>;
+};
+
 export type InventorySplitPartInput = {
   condition: InputMaybe<Scalars['String']['input']>;
   evidenceIds: Array<Scalars['ID']['input']>;
@@ -1199,6 +1425,21 @@ export type InventoryTrailEntry = {
   targetType: Scalars['String']['output'];
 };
 
+export type InventoryVoiceConflict = {
+  __typename?: 'InventoryVoiceConflict';
+  attributeName: Scalars['String']['output'];
+  visualValue: Scalars['String']['output'];
+  voiceValue: Maybe<Scalars['String']['output']>;
+};
+
+export type InventoryVoiceSummary = {
+  __typename?: 'InventoryVoiceSummary';
+  conflictItems: Scalars['Int']['output'];
+  notesWithoutItem: Scalars['Int']['output'];
+  pendingVoiceItems: Scalars['Int']['output'];
+  staleSuggestions: Scalars['Int']['output'];
+};
+
 export type InvitationOtpPayload = {
   __typename?: 'InvitationOtpPayload';
   clientMutationId: Scalars['String']['output'];
@@ -1213,10 +1454,19 @@ export type InvitationPayload = {
   userErrors: Array<UserError>;
 };
 
+export type InviteCustomerUserInput = {
+  clientMutationId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+  productEntitlements: InputMaybe<Array<Scalars['String']['input']>>;
+  scopes: Array<ScopeAssignmentInput>;
+};
+
 export type InviteInternalUserInput = {
   clientMutationId: Scalars['String']['input'];
   email: Scalars['String']['input'];
   name: Scalars['String']['input'];
+  productEntitlements: InputMaybe<Array<Scalars['String']['input']>>;
   role: Scalars['String']['input'];
   scopes: Array<ScopeAssignmentInput>;
 };
@@ -1236,6 +1486,9 @@ export type LlmCallState =
 export type LlmCallUsage = {
   __typename?: 'LLMCallUsage';
   attempt: Scalars['Int']['output'];
+  audioDurationMs: Maybe<Scalars['Int']['output']>;
+  audioInputTokens: Maybe<Scalars['Int']['output']>;
+  audioTokenUnit: Maybe<Scalars['String']['output']>;
   cachedInputTokens: Maybe<Scalars['Int']['output']>;
   callId: Scalars['ID']['output'];
   comparisonMode: Scalars['String']['output'];
@@ -1257,6 +1510,7 @@ export type LlmCallUsage = {
   modelAlias: Scalars['String']['output'];
   outputTokens: Maybe<Scalars['Int']['output']>;
   provider: Maybe<Scalars['String']['output']>;
+  reasoningTokens: Maybe<Scalars['Int']['output']>;
   replayGeneration: Scalars['Int']['output'];
   reportedCost: Maybe<Scalars['Float']['output']>;
   reportedCostDecimal: Maybe<Scalars['String']['output']>;
@@ -1264,6 +1518,7 @@ export type LlmCallUsage = {
   startedAt: Scalars['String']['output'];
   state: LlmCallState;
   technicalOutcome: Scalars['String']['output'];
+  textInputTokens: Maybe<Scalars['Int']['output']>;
   transportDelivered: Maybe<Scalars['Boolean']['output']>;
 };
 
@@ -1323,6 +1578,7 @@ export type LlmUsageCostState =
   | 'UNVERIFIED';
 
 export type LlmUsageFilter = {
+  comparisonMode: InputMaybe<Scalars['String']['input']>;
   cost: InputMaybe<LlmUsageCostState>;
   from: InputMaybe<Scalars['String']['input']>;
   includeTestData: InputMaybe<Scalars['Boolean']['input']>;
@@ -1457,6 +1713,7 @@ export type Membership = {
   id: Scalars['ID']['output'];
   invitationStatus: Scalars['String']['output'];
   name: Scalars['String']['output'];
+  productEntitlements: Array<Scalars['String']['output']>;
   role: Scalars['String']['output'];
   scopes: Array<Scope>;
   status: Scalars['String']['output'];
@@ -1497,6 +1754,7 @@ export type Mutation = {
   applyLegalHold: RetentionMutationPayload;
   archiveAsset: AssetPayload;
   archiveBusinessUnit: BusinessUnitPayload;
+  assignMembershipAccess: MembershipPayload;
   assignRoleScopes: MembershipPayload;
   beginVideoCapture: VideoAttemptPayload;
   bulkAcceptInventoryEnvironment: BulkAcceptInventoryEnvironmentPayload;
@@ -1504,6 +1762,7 @@ export type Mutation = {
   cancelSchedule: SchedulePayload;
   closeOriginInvitation: OriginVersionPayload;
   closeProject: ProjectPayload;
+  completeAudioNoteUpload: AudioNotePayload;
   completeInternalUserActivation: InternalUserActivationPayload;
   completeMediaUpload: MediaPayload;
   completeOnboarding: OnboardingPayload;
@@ -1511,9 +1770,12 @@ export type Mutation = {
   configurePublicationPolicy: PublicationPolicyPayload;
   configureRetentionPolicy: RetentionPolicyPayload;
   configureVideoPolicy: VideoPolicyPayload;
+  configureVoicePolicy: VoicePolicyPayload;
+  confirmAudioNoteText: AudioNotePayload;
   contestBaseline: CounterpartyResponsePayload;
   correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
   correctOnboardingResponsibleEmail: OnboardingPayload;
+  createAudioNoteUpload: AudioNoteUploadPayload;
   createBusinessUnit: BusinessUnitPayload;
   createInspection: InspectionPayload;
   createMediaUpload: MediaUploadPayload;
@@ -1525,10 +1787,12 @@ export type Mutation = {
   declareCaptureImpossibility: CapturePayload;
   declareSensitiveDetectionFalsePositive: MediaPayload;
   disableMembership: MembershipPayload;
+  discardAudioNote: AudioNotePayload;
   discardBaselineDraft: OriginVersionPayload;
   invalidateInspection: InspectionPayload;
   invalidateOriginVersion: OriginVersionPayload;
   invalidateReportPublication: ReportPublicationPayload;
+  inviteCustomerUser: MembershipPayload;
   inviteInternalUser: MembershipPayload;
   inviteOriginCapture: OriginInvitationPayload;
   markNotificationRead: RecipientNotificationPayload;
@@ -1546,6 +1810,7 @@ export type Mutation = {
   reanalyzeVideoInspection: ReanalyzeVideoInspectionPayload;
   recordCaptureQualityWarning: CaptureQualityWarningPayload;
   recordDeletionRequest: RetentionMutationPayload;
+  regenerateInventorySuggestions: InventoryRegenerationPayload;
   registerAsset: AssetPayload;
   releaseLegalHold: RetentionMutationPayload;
   removeInventoryEnvironment: InventoryEnvironmentPayload;
@@ -1563,12 +1828,15 @@ export type Mutation = {
   resendInspectionInvitation: ResendInspectionInvitationPayload;
   resendInternalUserInvitation: MembershipPayload;
   resolveBaselineContestation: CounterpartyInvitationPayload;
+  retryAudioNote: AudioNotePayload;
   retryInventoryDraft: OriginVersionPayload;
   retryVideoPreparation: VideoPreparationPayload;
+  reviseAudioNote: AudioNotePayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
   saveOnboardingStep: OnboardingPayload;
   setAdminInitialPassword: OnboardingPayload;
+  setAudioNoteHighlight: AudioNotePayload;
   setDeliveryChannels: ParticipantPayload;
   skipProjectStage: ProjectPayload;
   splitInventoryItem: InventoryItemsPayload;
@@ -1649,6 +1917,11 @@ export type MutationArchiveBusinessUnitArgs = {
 };
 
 
+export type MutationAssignMembershipAccessArgs = {
+  input: AssignMembershipAccessInput;
+};
+
+
 export type MutationAssignRoleScopesArgs = {
   input: AssignRoleScopesInput;
 };
@@ -1681,6 +1954,11 @@ export type MutationCloseOriginInvitationArgs = {
 
 export type MutationCloseProjectArgs = {
   input: ProjectTransitionInput;
+};
+
+
+export type MutationCompleteAudioNoteUploadArgs = {
+  input: CompleteAudioNoteUploadInput;
 };
 
 
@@ -1719,6 +1997,16 @@ export type MutationConfigureVideoPolicyArgs = {
 };
 
 
+export type MutationConfigureVoicePolicyArgs = {
+  input: ConfigureVoicePolicyInput;
+};
+
+
+export type MutationConfirmAudioNoteTextArgs = {
+  input: ConfirmAudioNoteTextInput;
+};
+
+
 export type MutationContestBaselineArgs = {
   input: ContestBaselineInput;
 };
@@ -1731,6 +2019,11 @@ export type MutationCorrectInspectionResponsibleEmailArgs = {
 
 export type MutationCorrectOnboardingResponsibleEmailArgs = {
   input: CorrectOnboardingResponsibleEmailInput;
+};
+
+
+export type MutationCreateAudioNoteUploadArgs = {
+  input: CreateAudioNoteUploadInput;
 };
 
 
@@ -1789,6 +2082,11 @@ export type MutationDisableMembershipArgs = {
 };
 
 
+export type MutationDiscardAudioNoteArgs = {
+  input: DiscardAudioNoteInput;
+};
+
+
 export type MutationDiscardBaselineDraftArgs = {
   input: DiscardBaselineDraftInput;
 };
@@ -1806,6 +2104,11 @@ export type MutationInvalidateOriginVersionArgs = {
 
 export type MutationInvalidateReportPublicationArgs = {
   input: InvalidateReportPublicationInput;
+};
+
+
+export type MutationInviteCustomerUserArgs = {
+  input: InviteCustomerUserInput;
 };
 
 
@@ -1881,6 +2184,11 @@ export type MutationRecordCaptureQualityWarningArgs = {
 
 export type MutationRecordDeletionRequestArgs = {
   input: RecordDeletionRequestInput;
+};
+
+
+export type MutationRegenerateInventorySuggestionsArgs = {
+  input: RegenerateInventorySuggestionsInput;
 };
 
 
@@ -1969,6 +2277,11 @@ export type MutationResolveBaselineContestationArgs = {
 };
 
 
+export type MutationRetryAudioNoteArgs = {
+  input: RetryAudioNoteInput;
+};
+
+
 export type MutationRetryInventoryDraftArgs = {
   input: RetryInventoryDraftInput;
 };
@@ -1976,6 +2289,11 @@ export type MutationRetryInventoryDraftArgs = {
 
 export type MutationRetryVideoPreparationArgs = {
   input: RetryVideoPreparationInput;
+};
+
+
+export type MutationReviseAudioNoteArgs = {
+  input: ReviseAudioNoteInput;
 };
 
 
@@ -1996,6 +2314,11 @@ export type MutationSaveOnboardingStepArgs = {
 
 export type MutationSetAdminInitialPasswordArgs = {
   input: SetAdminInitialPasswordInput;
+};
+
+
+export type MutationSetAudioNoteHighlightArgs = {
+  input: SetAudioNoteHighlightInput;
 };
 
 
@@ -2638,6 +2961,8 @@ export type Query = {
   analysisPrompt: AnalysisPrompt;
   asset: Maybe<Asset>;
   assets: AssetConnection;
+  audioNote: Maybe<AudioNote>;
+  audioNotes: AudioNoteConnection;
   auditEvents: AuditEventConnection;
   baselineInventory: Maybe<BaselineInventory>;
   baselinePolicy: BaselinePolicy;
@@ -2649,6 +2974,7 @@ export type Query = {
   customerReport: Maybe<CustomerReport>;
   customerTimeline: CustomerTimelineConnection;
   dashboardSummary: DashboardSummary;
+  effectiveAccess: EffectiveAccess;
   externalCapture: ExternalCapture;
   inspection: Maybe<Inspection>;
   inspectionLLMUsage: InspectionLlmUsage;
@@ -2682,6 +3008,7 @@ export type Query = {
   reports: ReportConnection;
   retentionPolicies: RetentionPolicyConnection;
   schedules: ScheduleConnection;
+  scopePreview: ScopePreview;
   segmentDefinitionVersion: Maybe<SegmentDefinitionVersion>;
   segmentDefinitions: SegmentDefinitionConnection;
   sensitiveContentScreeningBypassed: Scalars['Boolean']['output'];
@@ -2700,6 +3027,7 @@ export type Query = {
   videoPreparationEvidence: VideoPreparationEvidenceConnection;
   videoPreparations: VideoPreparationConnection;
   videoUploadStatus: VideoUploadStatus;
+  voicePolicy: Maybe<VoicePolicy>;
 };
 
 
@@ -2719,6 +3047,19 @@ export type QueryAssetsArgs = {
   businessUnitId: InputMaybe<Scalars['ID']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   search: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryAudioNoteArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryAudioNotesArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  environmentId: Scalars['ID']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+  inspectionId: Scalars['ID']['input'];
 };
 
 
@@ -2779,6 +3120,13 @@ export type QueryCustomerTimelineArgs = {
 export type QueryDashboardSummaryArgs = {
   businessUnitId: InputMaybe<Scalars['ID']['input']>;
   projectId: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type QueryEffectiveAccessArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  membershipId: Scalars['ID']['input'];
 };
 
 
@@ -2943,6 +3291,14 @@ export type QueryReportsArgs = {
 export type QuerySchedulesArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryScopePreviewArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  kind: Scalars['String']['input'];
+  resourceId: Scalars['ID']['input'];
 };
 
 
@@ -3121,6 +3477,14 @@ export type RecordDeletionRequestInput = {
   sourceMediaId: InputMaybe<Scalars['ID']['input']>;
 };
 
+export type RegenerateInventorySuggestionsInput = {
+  clientMutationId: Scalars['String']['input'];
+  environmentId: Scalars['ID']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  originVersionId: Scalars['ID']['input'];
+  revisionIds: Array<Scalars['ID']['input']>;
+};
+
 export type RegisterAssetInput = {
   asset: AssetInput;
   clientMutationId: Scalars['String']['input'];
@@ -3158,6 +3522,7 @@ export type Report = {
   mode: Scalars['String']['output'];
   pdfStatus: Scalars['String']['output'];
   projectId: Maybe<Scalars['ID']['output']>;
+  publication: Maybe<ReportPublication>;
   requirements: Array<ReportRequirement>;
   timeline: Array<ReportTimelineEntry>;
   version: Scalars['Int']['output'];
@@ -3301,6 +3666,7 @@ export type ReportSummary = {
   id: Scalars['ID']['output'];
   inspectionId: Scalars['ID']['output'];
   participantName: Scalars['String']['output'];
+  publication: Maybe<ReportPublication>;
   version: Scalars['Int']['output'];
 };
 
@@ -3456,6 +3822,12 @@ export type RetentionPolicyPayload = {
   userErrors: Array<UserError>;
 };
 
+export type RetryAudioNoteInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  noteId: Scalars['ID']['input'];
+};
+
 export type RetryInventoryDraftInput = {
   clientMutationId: Scalars['String']['input'];
   originVersionId: Scalars['ID']['input'];
@@ -3465,6 +3837,14 @@ export type RetryVideoPreparationInput = {
   clientMutationId: Scalars['String']['input'];
   expectedPreparationVersion: Scalars['Int']['input'];
   mediaId: Scalars['ID']['input'];
+};
+
+export type ReviseAudioNoteInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  noteId: Scalars['ID']['input'];
+  revisionKind: InputMaybe<AudioNoteRevisionKind>;
+  text: Scalars['String']['input'];
 };
 
 export type RevokeInvitationInput = {
@@ -3528,6 +3908,12 @@ export type Scope = {
 export type ScopeAssignmentInput = {
   kind: Scalars['String']['input'];
   resourceId: Scalars['ID']['input'];
+};
+
+export type ScopePreview = {
+  __typename?: 'ScopePreview';
+  descendants: EffectiveAccessEntryConnection;
+  target: AccessResource;
 };
 
 export type SegmentDefinition = {
@@ -3606,6 +3992,13 @@ export type SensitiveMediaReviewConnection = {
 export type SetAdminInitialPasswordInput = {
   clientMutationId: Scalars['String']['input'];
   password: Scalars['String']['input'];
+};
+
+export type SetAudioNoteHighlightInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  highlighted: Scalars['Boolean']['input'];
+  noteId: Scalars['ID']['input'];
 };
 
 export type SetDeliveryChannelsInput = {
@@ -4104,4 +4497,21 @@ export type VideoUploadStatus = {
   missingParts: Array<Scalars['Int']['output']>;
   receivedParts: Array<Scalars['Int']['output']>;
   status: Scalars['String']['output'];
+};
+
+export type VoicePolicy = {
+  __typename?: 'VoicePolicy';
+  enabled: Scalars['Boolean']['output'];
+  inspectionAudioLimitMs: Maybe<Scalars['Int']['output']>;
+  inspectionNoteLimit: Maybe<Scalars['Int']['output']>;
+  tenantAudioLimitMs: Maybe<Scalars['Int']['output']>;
+  tenantNoteLimit: Maybe<Scalars['Int']['output']>;
+  version: Scalars['Int']['output'];
+};
+
+export type VoicePolicyPayload = {
+  __typename?: 'VoicePolicyPayload';
+  clientMutationId: Scalars['String']['output'];
+  policy: Maybe<VoicePolicy>;
+  userErrors: Array<UserError>;
 };

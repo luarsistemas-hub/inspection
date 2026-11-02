@@ -14,7 +14,6 @@ import (
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
-	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
@@ -41,14 +40,14 @@ func request(ctx context.Context, d Dependencies, c Command) (Result, error) {
 	err := (tenanttx.Runner{DB: d.DB}).Within(ctx, c.TenantID, func(tx *gorm.DB) error {
 		s, err := loadState(tx, c.TenantID, c.InspectionID, true)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return apperror.New(apperror.NotFound, "inspectionId", "vistoria não encontrada")
+			return apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 		}
 		if err != nil {
 			return err
 		}
-		principal, err := d.Authorizer.Authorize(ctx, c.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: s.asset.BusinessUnitID}, true)
+		principal, err := authorizeNewWork(ctx, d.Authorizer, c.TenantID, []string{auth.TenantAdmin, auth.Manager}, s.asset.BusinessUnitID, c.InspectionID)
 		if err != nil {
-			return apperror.New(apperror.NotFound, "inspectionId", "vistoria não encontrada")
+			return apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 		}
 		var existing database.InspectionOriginPromotion
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND inspection_id=? AND client_mutation_id=?", c.TenantID, c.InspectionID, c.ClientMutationID).First(&existing).Error

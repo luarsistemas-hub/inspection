@@ -19,6 +19,7 @@ import (
 	"github.com/johnfercher/maroto/v2"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
 	marotoimage "github.com/johnfercher/maroto/v2/pkg/components/image"
+	"github.com/johnfercher/maroto/v2/pkg/components/page"
 	"github.com/johnfercher/maroto/v2/pkg/components/row"
 	"github.com/johnfercher/maroto/v2/pkg/components/text"
 	"github.com/johnfercher/maroto/v2/pkg/config"
@@ -155,7 +156,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			addText("• "+label(reason), props.Text{Size: 9})
+			addText("• "+core.ReasonLabel(reason), props.Text{Size: 9})
 		}
 	}
 
@@ -174,15 +175,19 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			addText(inventoryProblemHeading(item), props.Text{Size: 10, Top: 4})
+			lead := &keptHeading{}
+			lead.add(inventoryProblemHeading(item), props.Text{Size: 10, Top: 4})
 			if item.ConditionBefore != "" || item.ConditionAfter != "" {
-				addText(label(item.ConditionBefore)+" → "+label(item.ConditionAfter), props.Text{Size: 8})
+				lead.add(label(item.ConditionBefore)+" → "+label(item.ConditionAfter), props.Text{Size: 8})
 			}
 			if item.Reason != "" {
-				addText(item.Reason, props.Text{Size: 8})
+				lead.add(item.Reason, props.Text{Size: 8})
+			}
+			if len(item.Pairs) == 0 {
+				lead.flush(documentMaker, 0)
 			}
 			for _, pair := range item.Pairs {
-				addText("Evidência de referência ↔ vistoria atual", props.Text{Size: 8})
+				lead.add("Evidência de referência ↔ vistoria atual", props.Text{Size: 8})
 				paired := make([]core.Evidence, 0, 2)
 				for _, side := range []struct{ id, role string }{{pair.Origin, "REFERENCE"}, {pair.Current, "CURRENT"}} {
 					if side.id == "" {
@@ -194,15 +199,22 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 					}
 					paired = append(paired, core.Evidence{ID: side.id, Role: side.role, Availability: availability})
 				}
-				if len(paired) > 0 {
-					if err := addEvidenceRows(ctx, documentMaker, paired, assets, item.Name, document.SnapshotID, r.DashboardOrigin); err != nil {
-						return nil, err
-					}
+				if len(paired) == 0 {
+					lead.flush(documentMaker, 0)
+					continue
 				}
+				if err := addEvidenceRows(ctx, documentMaker, lead, paired, assets, item.Name, document.SnapshotID, r.DashboardOrigin); err != nil {
+					return nil, err
+				}
+				lead = &keptHeading{}
 			}
 		}
 	}
-	addText("Evidências", props.Text{Size: 11, Top: 6})
+	// Each requirement heading (title, instructions, summary) is kept on the
+	// same page as the first image row of its evidence (PDF-KEEP); the
+	// "Evidências" section title travels with the first heading.
+	lead := &keptHeading{}
+	lead.add("Evidências", props.Text{Size: 11, Top: 6})
 	evidenceByRequirement := make(map[string][]core.Evidence, len(document.Snapshot.Requirements))
 	for _, evidence := range document.Snapshot.Evidence {
 		evidenceByRequirement[evidence.RequirementKey] = append(evidenceByRequirement[evidence.RequirementKey], evidence)
@@ -213,17 +225,19 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 			return nil, err
 		}
 		seenRequirements[requirement.Key] = true
-		addText(requirement.Section+" · "+requirement.Label, props.Text{Size: 10, Top: 4})
-		addText(requirement.Instructions, props.Text{Size: 8})
-		addText(analysisSummary(requirement), props.Text{Size: 8, Bottom: 3})
+		lead.add(requirement.Section+" · "+requirement.Label, props.Text{Size: 10, Top: 4})
+		lead.add(requirement.Instructions, props.Text{Size: 8})
+		lead.add(analysisSummary(requirement), props.Text{Size: 8, Bottom: 3})
 		items := evidenceByRequirement[requirement.Key]
 		if len(items) == 0 {
-			addText("Nenhuma evidência registrada para este requisito.", props.Text{Size: 8})
+			lead.add("Nenhuma evidência registrada para este requisito.", props.Text{Size: 8})
+			lead.flush(documentMaker, 0)
 			continue
 		}
-		if err := addEvidenceRows(ctx, documentMaker, items, assets, requirement.Label, document.SnapshotID, r.DashboardOrigin); err != nil {
+		if err := addEvidenceRows(ctx, documentMaker, lead, items, assets, requirement.Label, document.SnapshotID, r.DashboardOrigin); err != nil {
 			return nil, err
 		}
+		lead = &keptHeading{}
 	}
 	extraKeys := make([]string, 0, len(evidenceByRequirement))
 	for key := range evidenceByRequirement {
@@ -233,11 +247,13 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	}
 	sort.Strings(extraKeys)
 	for _, key := range extraKeys {
-		addText("Evidências adicionais", props.Text{Size: 10, Top: 4})
-		if err := addEvidenceRows(ctx, documentMaker, evidenceByRequirement[key], assets, "", document.SnapshotID, r.DashboardOrigin); err != nil {
+		lead.add("Evidências adicionais", props.Text{Size: 10, Top: 4})
+		if err := addEvidenceRows(ctx, documentMaker, lead, evidenceByRequirement[key], assets, "", document.SnapshotID, r.DashboardOrigin); err != nil {
 			return nil, err
 		}
+		lead = &keptHeading{}
 	}
+	lead.flush(documentMaker, 0)
 	if document.Internal {
 		addText("Constatações", props.Text{Size: 11, Top: 6})
 		if len(document.Snapshot.Findings) == 0 {
@@ -369,9 +385,80 @@ func analysisSummary(requirement core.Requirement) string {
 	return summary
 }
 
+// keptHeading holds the text rows that introduce an evidence block together
+// with an estimate of their height, so they can be placed on a page only when
+// the first image row that follows fits there too (PDF-KEEP). Maroto cannot
+// split a row but breaks pages between rows; without this the title and the
+// limitation of an evidence could end one page while its image starts the next.
+type keptHeading struct {
+	rows []marotocore.Row
+	mm   float64
+}
+
+// add appends a text block (chunked like every other PDF text) to the heading.
+func (h *keptHeading) add(value string, prop props.Text) {
+	prop.Family = "Roboto"
+	h.rows = append(h.rows, textRows(value, prop, fullWidthChunk)...)
+	h.mm += estimateTextMM(value, prop)
+}
+
+// flush emits the heading, moving it to a new page first when it plus the
+// following followMM millimetres of content do not fit on the current one.
+func (h *keptHeading) flush(documentMaker marotocore.Maroto, followMM float64) {
+	if len(h.rows) == 0 {
+		return
+	}
+	keepTogether(documentMaker, h.mm+followMM)
+	documentMaker.AddRows(h.rows...)
+	h.rows, h.mm = nil, 0
+}
+
+// keepTogether starts a new page when a block of needMM millimetres does not
+// fit in the space left on the current one. It never emits a blank page: at the
+// top of a page the call is a no-op, so a block taller than a page still flows.
+// Maroto's own check also counts the page header twice, so the decision errs on
+// the side of an early break, never of a split block.
+func keepTogether(documentMaker marotocore.Maroto, needMM float64) {
+	if !documentMaker.FitlnCurrentPage(needMM) {
+		documentMaker.AddPages(page.New())
+	}
+}
+
+const (
+	pdfTextWidthMM = 180.0
+	ptToMM         = 25.4 / 72
+	// averageGlyphEm overestimates the Roboto average advance so that wrapped
+	// lines are never undercounted.
+	averageGlyphEm = 0.6
+)
+
+// estimateTextMM bounds, from above, the height Maroto gives the rows built by
+// textRows for value: one font-size line per wrapped line plus the spacing.
+func estimateTextMM(value string, prop props.Text) float64 {
+	size := prop.Size
+	if size <= 0 {
+		size = 10
+	}
+	perLine := max(1, int(pdfTextWidthMM/(size*ptToMM*averageGlyphEm)))
+	lines := 0
+	for _, chunk := range chunkText(value, fullWidthChunk) {
+		lines += (len([]rune(chunk)) + perLine - 1) / perLine
+	}
+	if lines == 0 {
+		return 0
+	}
+	return float64(lines)*size*ptToMM + prop.Top + prop.Bottom
+}
+
 // addEvidenceRows lays out reference photos in the left column and current
-// photos in the right one; without references, photos fill two columns.
-func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items []core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) error {
+// photos in the right one; without references, photos fill two columns. The
+// optional lead heading is emitted on the same page as the first image row, and
+// in the multi-chunk caption layout every image stays with the start of its
+// caption.
+func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, lead *keptHeading, items []core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) error {
+	if lead == nil {
+		lead = &keptHeading{}
+	}
 	var references, others []core.Evidence
 	for _, item := range items {
 		if item.Role == "REFERENCE" {
@@ -383,10 +470,11 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items
 	var left, right []core.Evidence
 	if len(references) > 0 {
 		left, right = references, others
-		documentMaker.AddRows(row.New().Add(
+		lead.rows = append(lead.rows, row.New().Add(
 			col.New(6).Add(text.New("Referência", props.Text{Size: 8, Family: "Roboto", Bottom: 1})),
 			col.New(6).Add(text.New("Vistoria atual", props.Text{Size: 8, Family: "Roboto", Bottom: 1})),
 		))
+		lead.mm += 8*ptToMM + 1
 	} else {
 		for index, item := range others {
 			if index%2 == 0 {
@@ -416,6 +504,8 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items
 		if len([]rune(leftCaption)) <= captionChunk && len([]rune(rightCaption)) <= captionChunk {
 			// Image and caption share one row so a page break cannot separate them.
 			lines := max(captionLines(leftCaption)+linkLineCount(leftLink), captionLines(rightCaption)+linkLineCount(rightLink))
+			rowMM := imageHeightMM + 2 + float64(lines)*captionLineMM
+			lead.flush(documentMaker, rowMM)
 			if leftCaption != "" {
 				leftImage.Add(text.New(leftCaption, props.Text{Size: 8, Family: "Roboto", Top: imageHeightMM + 1}))
 			}
@@ -428,8 +518,15 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items
 			if rightLink != "" {
 				addLinkText(rightImage, rightLink, imageHeightMM+1+float64(captionLines(rightCaption))*captionLineMM)
 			}
-			documentMaker.AddRows(row.New(imageHeightMM+2+float64(lines)*captionLineMM).Add(leftImage, rightImage))
+			documentMaker.AddRows(row.New(rowMM).Add(leftImage, rightImage))
 		} else {
+			// The image keeps company with the first caption chunk.
+			firstChunkMM := float64(max(captionLines(firstChunk(leftCaption)), captionLines(firstChunk(rightCaption)))) * captionLineMM
+			if len(lead.rows) > 0 {
+				lead.flush(documentMaker, imageHeightMM+1+firstChunkMM)
+			} else {
+				keepTogether(documentMaker, imageHeightMM+1+firstChunkMM)
+			}
 			documentMaker.AddRows(row.New(imageHeightMM).Add(leftImage, rightImage))
 			leftChunks, rightChunks := chunkText(leftCaption, captionChunk), chunkText(rightCaption, captionChunk)
 			for line := 0; line < len(leftChunks) || line < len(rightChunks); line++ {
@@ -464,6 +561,14 @@ const (
 	// captionCharsPerLine is deliberately low so the reserved height is never short.
 	captionCharsPerLine = 45
 )
+
+// firstChunk returns the first piece of a caption split by chunkText.
+func firstChunk(caption string) string {
+	if chunks := chunkText(caption, captionChunk); len(chunks) > 0 {
+		return chunks[0]
+	}
+	return ""
+}
 
 func captionLines(caption string) int {
 	if caption == "" {
@@ -589,11 +694,13 @@ func classificationLabel(value string) string {
 	return map[string]string{"NORMAL": "Sem alertas identificados", "ATTENTION": "Requer atenção", "CRITICAL": "Crítica"}[value]
 }
 
+// label presents enum values of the PDF. Classification reason codes are not
+// here: core.ReasonLabel is their single vocabulary, shared with the HTML
+// report (INCONCLUSIVE below is the analysis status, not a reason).
 func label(value string) string {
 	labels := map[string]string{
-		"MISSING_EVIDENCE": "Evidência ausente", "QUALITY_LOW": "Qualidade insuficiente", "INCONCLUSIVE": "Inconclusiva", "ANALYSIS_FAILED": "Falha técnica na análise", "OBSERVED_CHANGE": "Mudança observada", "CRITICAL_FINDING": "Constatação crítica",
-		"REFERENCE": "Referência", "CURRENT": "Vistoria atual", "CONSERVATION": "Conservação", "INVENTORY": "Inventário", "CLEANLINESS": "Limpeza", "OBSTRUCTION": "Obstrução", "EVIDENCE_QUALITY": "Qualidade da evidência",
-		"CURRENT_ONLY": "Análise atual", "COMPARE_ORIGIN_CURRENT": "Comparação com referência", "PENDING": "Pendente", "COMPLETED": "Concluída", "FAILED": "Falha técnica", "GPS_MISSING": "Localização ausente", "LOW_QUALITY": "Qualidade insuficiente", "SENSITIVE_DETECTION": "Detecção sensível", "CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico", "CLASSIFICATION_CRITICAL": "Classificação crítica",
+		"INCONCLUSIVE": "Inconclusiva", "REFERENCE": "Referência", "CURRENT": "Vistoria atual", "CONSERVATION": "Conservação", "INVENTORY": "Inventário", "CLEANLINESS": "Limpeza", "OBSTRUCTION": "Obstrução", "EVIDENCE_QUALITY": "Qualidade da evidência",
+		"CURRENT_ONLY": "Análise atual", "COMPARE_ORIGIN_CURRENT": "Comparação com referência", "PENDING": "Pendente", "COMPLETED": "Concluída", "FAILED": "Falha técnica", "GPS_MISSING": "Localização ausente", "LOW_QUALITY": "Qualidade insuficiente", "SENSITIVE_DETECTION": "Detecção sensível", "CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico",
 		"NONE": "Insuficiente", "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta", "CRITICAL": "Crítica", "REVIEW": "Revisar evidência", "RECOVER": "Solicitar complemento", "NO_ACTION": "Nenhuma ação adicional",
 		"MISSING": "Item ausente", "CONDITION_CHANGED": "Condição alterada", "PRESENT_UNCHANGED": "Presente sem alteração relevante", "NOT_OBSERVED": "Não observado", "OUTSIDE_INVENTORY": "Fora do inventário", "IMPROVED": "Condição melhorada", "ENVIRONMENT_NOT_CAPTURED": "Ambiente não capturado",
 		"NEW": "Novo", "GOOD": "Bom", "FAIR": "Regular", "POOR": "Ruim", "NOT_ASSESSABLE": "Não avaliável",

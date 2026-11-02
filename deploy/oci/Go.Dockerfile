@@ -15,6 +15,7 @@ RUN set -eu; \
       worker) commands="worker" ;; \
       scheduler) commands="scheduler" ;; \
       video-worker) commands="video-worker" ;; \
+      transcription-worker) commands="transcription-worker" ;; \
       operations) commands="migrate prompt-seed seed schema-check keycloak-check" ;; \
       *) echo "Unknown Go image component: $COMPONENT" >&2; exit 2 ;; \
     esac; \
@@ -34,4 +35,15 @@ RUN apk add --no-cache ffmpeg && mkdir -p /var/lib/inspection-video-scratch && c
 USER inspection
 ENTRYPOINT ["/usr/local/bin/inspection-video-worker"]
 
+FROM runtime AS transcription-worker
+USER root
+RUN apk add --no-cache ffmpeg && ffmpeg -version >/dev/null && ffprobe -version >/dev/null
+USER inspection
+ENTRYPOINT ["/usr/local/bin/inspection-transcription-worker"]
+
+# Default image (api, worker, scheduler, operations). The API probes uploaded
+# audio duration with ffprobe, so the build fails if it is missing.
 FROM runtime AS default
+USER root
+RUN apk add --no-cache ffmpeg && ffprobe -version >/dev/null
+USER inspection

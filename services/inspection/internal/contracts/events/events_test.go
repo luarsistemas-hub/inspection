@@ -79,6 +79,42 @@ func TestInventoryEventContracts_IT039(t *testing.T) {
 	})
 }
 
+func TestTranscriptionEventContractsAreSmallAndVersioned(t *testing.T) {
+	valid := map[string]any{
+		"transcription.requested.v1": TranscriptionRequestedPayload{NoteID: identity.NewID(), JobID: identity.NewID(), Generation: 1},
+		"transcription.completed.v1": TranscriptionCompletedPayload{NoteID: identity.NewID(), RevisionID: ptrID(identity.NewID()), Generation: 1},
+		"transcription.failed.v1":    TranscriptionFailedPayload{NoteID: identity.NewID(), Generation: 1, SafeCode: "PROVIDER_UNAVAILABLE"},
+	}
+	for eventType, payload := range valid {
+		t.Run(eventType, func(t *testing.T) {
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, payload)); err != nil {
+				t.Fatalf("valid transcription event rejected: %v", err)
+			}
+			var fields map[string]any
+			raw, _ := json.Marshal(payload)
+			_ = json.Unmarshal(raw, &fields)
+			fields["transcript"] = "conteudo sensivel"
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, fields)); !errors.Is(err, ErrInvalidEnvelope) {
+				t.Fatalf("unexpected transcription field accepted: %v", err)
+			}
+		})
+	}
+	if _, err := DefaultRegistry().Validate(eventJSON(t, "transcription.failed.v1", TranscriptionFailedPayload{NoteID: identity.NewID(), Generation: 1, SafeCode: "provider detail"})); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("unsafe failure code accepted: %v", err)
+	}
+}
+
+func TestTranscriptionNoSpeechEventMayOmitRevision(t *testing.T) {
+	payload := TranscriptionCompletedPayload{NoteID: identity.NewID(), Generation: 1, NoSpeech: true}
+	if _, err := DefaultRegistry().Validate(eventJSON(t, "transcription.completed.v1", payload)); err != nil {
+		t.Fatalf("no-speech event without revision rejected: %v", err)
+	}
+	payload.NoSpeech = false
+	if _, err := DefaultRegistry().Validate(eventJSON(t, "transcription.completed.v1", payload)); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("speech event without revision accepted: %v", err)
+	}
+}
+
 func eventJSON(t *testing.T, eventType string, payload any) []byte {
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{"id": identity.NewID(), "type": eventType, "schemaVersion": eventVersion(eventType), "occurredAt": time.Now().UTC(), "tenantId": identity.NewID(), "correlationId": "it039", "payload": payload})
@@ -202,5 +238,23 @@ func TestLifecycleEventsIT551ToIT554IT581ToIT582(t *testing.T) {
 		if _, err := registry.Validate(invalid); !errors.Is(err, ErrUnknownContract) {
 			t.Fatalf("%s invalid major accepted: %v", eventType, err)
 		}
+	}
+}
+
+func TestReportPublicationEventContracts(t *testing.T) {
+	for _, eventType := range []string{"report.published.v1", "report.publication_invalidated.v1"} {
+		t.Run(eventType, func(t *testing.T) {
+			good := map[string]any{"publicationId": identity.NewID(), "snapshotId": identity.NewID(), "inspectionId": identity.NewID()}
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, good)); err != nil {
+				t.Fatalf("id-only payload rejected: %v", err)
+			}
+			withReason := map[string]any{"publicationId": identity.NewID(), "snapshotId": identity.NewID(), "inspectionId": identity.NewID(), "reason": "motivo interno"}
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, withReason)); !errors.Is(err, ErrInvalidEnvelope) {
+				t.Fatalf("payload with free text accepted: %v", err)
+			}
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, map[string]any{"snapshotId": identity.NewID(), "inspectionId": identity.NewID()})); !errors.Is(err, ErrInvalidEnvelope) {
+				t.Fatalf("payload missing publication accepted: %v", err)
+			}
+		})
 	}
 }

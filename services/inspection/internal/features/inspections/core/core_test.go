@@ -42,7 +42,7 @@ func TestCreateCaptureRequirementsDerivesPinnedPhotoEnvironmentsHelper(t *testin
 	for index := range reference.Requirements {
 		reference.Requirements[index] = capturecore.Requirement{Key: "env:" + identity.NewID().String(), EvidenceKind: "PHOTO", MinimumMedia: 1, MaximumMedia: 20, Required: true, Expected: true}
 	}
-	got := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, reference)
+	got := CaptureRequirementsForCreation(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, reference)
 	if len(got) != 4 {
 		t.Fatalf("photo inspection requirements=%+v; want four pinned environments", got)
 	}
@@ -57,7 +57,7 @@ func TestCreateCaptureRequirementsUsesVideoEnvironmentsHelper(t *testing.T) {
 	reference := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:" + identity.NewID().String(), EvidenceKind: "VIDEO", MaximumMedia: 3, Expected: true}}}
 	limits := catalog.DefaultEnvironmentCapture()
 	limits.Photo.Minimum, limits.Photo.Maximum = 3, 5
-	got := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2, IsVideo: true, EnvironmentCapture: limits}, catalog.FixedOrigin, reference)
+	got := CaptureRequirementsForCreation(catalog.TemplateDocument{SchemaVersion: 2, IsVideo: true, EnvironmentCapture: limits}, catalog.FixedOrigin, reference)
 	if len(got) != 1 || !strings.HasPrefix(got[0].Key, "env:") || got[0].EvidenceKind != "VIDEO" || got[0].MaximumMedia != 3 {
 		t.Fatalf("video requirements=%+v", got)
 	}
@@ -67,14 +67,14 @@ func TestCreateCaptureRequirementsUsesVideoEnvironmentsHelper(t *testing.T) {
 		}
 	}
 	photoReference := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:room", EvidenceKind: "PHOTO", MinimumMedia: 1, MaximumMedia: 20, Expected: true}}}
-	photo := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2, EnvironmentCapture: limits}, catalog.FixedOrigin, photoReference)
+	photo := CaptureRequirementsForCreation(catalog.TemplateDocument{SchemaVersion: 2, EnvironmentCapture: limits}, catalog.FixedOrigin, photoReference)
 	if len(photo) != 1 || photo[0].MinimumMedia != 3 || photo[0].MaximumMedia != 5 {
 		t.Fatalf("custom v2 photo limits=%+v; want minimum 3 and maximum 5", photo)
 	}
 }
 
 func TestCreateCaptureRequirementsWithoutInventoryIsEmptyHelper(t *testing.T) {
-	got := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2, CaptureLayout: "ENVIRONMENTS", Requirements: []catalog.CaptureRequirement{{Key: "legacy", EvidenceKind: "PHOTO"}}}, catalog.ChecklistOnly, nil)
+	got := CaptureRequirementsForCreation(catalog.TemplateDocument{SchemaVersion: 2, CaptureLayout: "ENVIRONMENTS", Requirements: []catalog.CaptureRequirement{{Key: "legacy", EvidenceKind: "PHOTO"}}}, catalog.ChecklistOnly, nil)
 	if len(got) != 0 {
 		t.Fatalf("v2 no-inventory inspection requirements=%+v; want none until capture declarations", got)
 	}
@@ -82,9 +82,9 @@ func TestCreateCaptureRequirementsWithoutInventoryIsEmptyHelper(t *testing.T) {
 
 func TestCreateCaptureRequirementsStayPinnedToResolvedVersionHelper(t *testing.T) {
 	pinned := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:pinned", EvidenceKind: "PHOTO", MaximumMedia: 20, Expected: true}}}
-	created := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, pinned)
+	created := CaptureRequirementsForCreation(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, pinned)
 	newlyActivated := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:new", EvidenceKind: "PHOTO", MaximumMedia: 20, Expected: true}}}
-	_ = createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, newlyActivated)
+	_ = CaptureRequirementsForCreation(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, newlyActivated)
 	if len(created) != 1 || created[0].Key != "env:pinned" {
 		t.Fatalf("created draft requirements changed with later activation: %+v", created)
 	}

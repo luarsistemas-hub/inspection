@@ -36,6 +36,7 @@ import { loadDashboardReviewers } from "./reviewer-options";
 import { CustomerReportVisual, ReportVisual } from "./report-visual";
 import { FixedOriginSelector, OriginManagement, useActiveCompatibleOriginId, useTemplateMediaKind } from "./origin-controls";
 import { BaselinesJourney } from "./baselines-journey";
+import { VoiceNotesPanel } from "./voice-notes-panel";
 
 type Page = "Início" | "Agenda de vistorias" | "Vistorias" | "Projetos e etapas" | "Triagem" | "Revisão de privacidade" | "Laudos" | "Portfólio" | "Notificações" | "Inventários";
 const desktopNavigationStorageKey = "inspection.dashboard.navigation-collapsed";
@@ -74,7 +75,7 @@ export function DashboardShell({ section }: { section: Page }) {
         const activeMemberships = membershipData.me.memberships.filter((membership) => membership.status === "ACTIVE");
         setMemberships(activeMemberships);
         if (activeMemberships.length === 1) { selectMembership(activeMemberships[0].id); setMessage("Contexto de acesso selecionado. Carregando dados protegidos…"); void loadGate(); return; }
-        setCurrentIdentity(undefined); setCapability(undefined); setMessage("Selecione o contexto de acesso antes de carregar dados protegidos."); return;
+        setCurrentIdentity(undefined); setCapability(undefined); setMessage(activeMemberships.length ? "Selecione o contexto de acesso antes de carregar dados protegidos." : "Sua conta não possui acesso ativo ao Painel. Nenhum dado operacional foi carregado."); return;
       }
 
       // A membership stored in sessionStorage may have been revoked while the tab
@@ -292,6 +293,19 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
   const reloadDetail = () => setReloadKey((value) => value + 1);
   useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando detalhes da vistoria…"); void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => { if (request !== detailRequest.current) return; setDetail(data.inspection); setMessage(data.inspection ? "" : "Esta vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id, reloadKey]);
   useEffect(() => {
+    if (detail?.status !== "ANALYZING") return;
+    let inFlight = false;
+    const timer = window.setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id })
+        .then((data) => { if (data.inspection) setDetail(data.inspection); })
+        .catch(() => { /* A later poll can recover from a transient request failure. */ })
+        .finally(() => { inFlight = false; });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [id, detail?.status]);
+  useEffect(() => {
     if (!retryTracking) return;
     let inFlight = false;
     const timer = window.setInterval(() => {
@@ -341,6 +355,7 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
       <div><dt>Evidências</dt><dd>{detail.evidenceCount}</dd></div>
       {detail.stateReason && <div className="inspection-detail-reason"><dt>Motivo</dt><dd>{detail.stateReason}</dd></div>}
     </dl>
+    <VoiceNotesPanel inspectionId={detail.id} />
     {detail.status === "COMPLETED" && <Link className="inspection-report-cta" href={`/reports?inspectionId=${encodeURIComponent(detail.id)}`}>Abrir laudo <span aria-hidden="true">→</span></Link>}
     <section className="inspection-origin-context" aria-labelledby="inspection-origin-context-title">
       <h3 id="inspection-origin-context-title">Referência desta vistoria</h3>
@@ -527,6 +542,8 @@ function RecaptureRequestDialog({ inspection, onClose, onSubmit }: { inspection?
     event.preventDefault();
     if (!inspection) return;
     if (!reason.trim() || !deadlineAt || !requirementKey.trim()) { setError("Preencha o motivo, o prazo e o requisito antes de solicitar o complemento."); return; }
+    const deadline = new Date(deadlineAt);
+    if (Number.isNaN(deadline.getTime()) || deadline.getTime() <= Date.now()) { setError("Informe um prazo final posterior ao momento atual."); return; }
     setBusy(true);
     try {
       await onSubmit({ inspectionId: inspection.id, deadlineAt: new Date(deadlineAt).toISOString(), items: [{ requirementKey: requirementKey.trim(), reason: reason.trim(), originalMediaId: null }], clientMutationId: mutationId() });

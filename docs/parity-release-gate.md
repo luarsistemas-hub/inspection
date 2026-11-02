@@ -8,13 +8,8 @@ Run the complete local gate from the repository root:
 ./scripts/parity-gate.sh
 ```
 
-The script first validates the current four-application migration inventory and requires real-E2E credentials. It then starts and seeds the isolated Compose stack, regenerates and checks GraphQL artifacts, runs Go verification, runs all four product checks and authenticated Playwright suites, writes redacted evidence, validates the legacy inventory against `docs/legacy-inventory.json`, captures Compose logs, and removes the temporary volumes. Set `INSPECTION_PARITY_ARTIFACTS` to retain artifacts outside the repository.
+The script validates `docs/design-system/migration-inventory.json` and `docs/design-system/accessibility-evidence.json`, then requires real-E2E prerequisites. It starts and seeds the isolated Compose stack, regenerates and checks GraphQL artifacts, runs Go verification, runs all four product checks and Playwright suites, writes redacted journey evidence, validates the accessibility evidence, captures Compose logs, and removes the temporary volumes. The inventory is route and state coverage; accessibility evidence records executed assessments and unresolved manual checks. Set `INSPECTION_PARITY_ARTIFACTS` to retain artifacts outside the repository.
 
-The inventory is independently reviewable:
+Review the route/state inventory and accessibility evidence directly at `docs/design-system/migration-inventory.json` and `docs/design-system/accessibility-evidence.json` (with the human-readable companion `accessibility-evidence.md`). Validate them with `node scripts/lib/design-system-migration.mjs validate --repository . --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json`.
 
-```sh
-node scripts/lib/legacy-inventory.mjs generate --legacy-root apps/web --output /tmp/legacy-inventory.json
-node scripts/lib/legacy-inventory.mjs validate --input /tmp/legacy-inventory.json --baseline docs/legacy-inventory.json --fail-on-unclassified --fail-on-drift
-```
-
-The gate blocks on any active legacy reference, unclassified entry, fingerprint drift, generated-artifact drift, failed authenticated journey, missing evidence field, or sensitive value in evidence. Historical Admin links use `/dashboard` and `/capture` redirects; unknown paths remain owned by the destination's not-found behavior. A failed or interrupted run leaves the captured failure log and never deletes the versioned inventory.
+The gate blocks on migration inventory drift, failed authenticated journeys, missing journey-evidence fields, or sensitive values in generated evidence. Accessibility records that remain `not-tested` or `blocked` stay unresolved and prevent a conformance claim. Historical Admin links use `/dashboard` and `/capture` redirects; unknown paths remain owned by the destination's not-found behavior. A failed or interrupted run leaves the captured failure log and never deletes the versioned inventory.

@@ -46,7 +46,7 @@ func TestVideoPreparationsGraphQLTenantFilterAndPagination(t *testing.T) {
 		}
 	}
 	server := task06GraphQLServer(db)
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantA, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantA, Roles: []string{auth.Manager}}})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantA, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantA, Roles: []string{auth.Manager}, ProductEntitlements: auth.ProductsForRole(auth.Manager)}})
 	first := executeTask06GraphQL(t, server, `query { videoPreparations(status:["FAILED"],first:1) { nodes { mediaId status stage preparationVersion attempts processedFrames errorCode retryable sourceAvailable } pageInfo { endCursor hasNextPage } } }`, ctx)
 	if strings.Contains(first, `"errors"`) || !strings.Contains(first, `"hasNextPage":true`) || !strings.Contains(first, `"errorCode":"STORE_UNAVAILABLE"`) || strings.Contains(first, jobs[2].ID.String()) {
 		t.Fatalf("unexpected first page: %s", first)
@@ -66,7 +66,7 @@ func TestVideoPreparationsGraphQLTenantFilterAndPagination(t *testing.T) {
 	if !strings.Contains(invalidFilter, "INVALID_INPUT") {
 		t.Fatalf("invalid status filter was accepted: %s", invalidFilter)
 	}
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantA, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantA, Roles: []string{auth.Viewer}}})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantA, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantA, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}})
 	denied := executeTask06GraphQL(t, server, `query { videoPreparations { nodes { mediaId } } }`, viewer)
 	if !strings.Contains(denied, "FORBIDDEN") {
 		t.Fatalf("viewer read was not denied: %s", denied)
@@ -122,7 +122,7 @@ func TestSensitiveMediaReviewQueriesRejectNonReviewers(t *testing.T) {
 		})
 	}
 	tenantID := identity.NewID()
-	external := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}}})
+	external := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}, ProductEntitlements: auth.ProductsForRole(auth.Manager)}})
 	response := executeTask06GraphQL(t, server, `query { sensitiveMediaReviews { nodes { mediaId } } }`, external)
 	if !strings.Contains(response, `"code":"FORBIDDEN"`) {
 		t.Fatalf("external participant read privacy queue: %s", response)

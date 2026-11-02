@@ -73,7 +73,11 @@ func Setup(d Dependencies) error {
 			}
 			return nil, err
 		}
-		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
+		roles := []string{auth.TenantAdmin, auth.Manager}
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: command.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, Mutate: true}); err != nil {
+			return nil, err
+		}
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: command.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: command.InspectionID}, Mutate: true, NewWork: true}); err != nil {
 			return nil, err
 		}
 		return queue(ctx, within, d.Now, command)

@@ -52,11 +52,13 @@ type Session struct {
 }
 
 type ProcessingConsent struct {
-	DisclosureVersion string
-	PhotoProcessing   bool
-	VideoProcessing   bool
-	AIAnalysis        bool
-	GPSUse            bool
+	DisclosureVersion   string
+	PhotoProcessing     bool
+	VideoProcessing     bool
+	VoiceProcessing     bool
+	VoiceConsentVersion string
+	AIAnalysis          bool
+	GPSUse              bool
 }
 
 const PrivacyDisclosureVersion = "pt-BR-1"
@@ -64,33 +66,36 @@ const PrivacyDisclosureVersion = "pt-BR-1"
 func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string, consent ProcessingConsent) error {
 	tenantID, sessionHash, err := scopedHash(sessionToken)
 	if err != nil {
-		return apperror.New(apperror.SessionExpired, "", "session expired")
+		return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 	}
 	if strings.TrimSpace(consent.DisclosureVersion) != PrivacyDisclosureVersion || !consent.AIAnalysis || !consent.GPSUse {
-		return apperror.New(apperror.InvalidInput, "consent", "processing, AI analysis, and GPS use must be accepted")
+		return apperror.New(apperror.InvalidInput, "consent", "Aceite o uso dos dados, a análise por inteligência artificial e o uso da localização.")
+	}
+	if consent.VoiceProcessing && strings.TrimSpace(consent.VoiceConsentVersion) == "" {
+		return apperror.New(apperror.InvalidInput, "voiceConsentVersion", "A autorização específica para uso de voz é necessária.")
 	}
 	now := s.now()
 	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var session database.ExternalSession
 		if err := tx.Where("tenant_id = ? AND session_digest = ? AND kind='CAPTURE'", tenantID, sessionHash[:]).First(&session).Error; err != nil || !security.Active(now, session.ExpiresAt, session.RevokedAt) || !isCaptureSession(session) {
-			return apperror.New(apperror.SessionExpired, "", "session expired")
+			return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 		}
 		if err := activeInvitation(tx, tenantID, *session.InvitationID, now); err != nil {
 			return err
 		}
 		proof, proofErr := security.CSRFProof(sessionHash, csrf, s.Pepper)
 		if proofErr != nil || len(session.CSRFDigest) != 32 || !security.Equal(proof, bytes32(session.CSRFDigest)) {
-			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+			return apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar esta solicitação. Atualize a página e tente novamente.")
 		}
 		var draft database.CaptureDraft
 		if err := tx.Select("media_kind", "kind").Where("tenant_id=? AND responsibility_id=?", tenantID, session.ResponsibilityID).First(&draft).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.NotFound, "responsibility", "capture not found")
+				return apperror.New(apperror.NotFound, "responsibility", "A captura não foi encontrada.")
 			}
-			return apperror.New(apperror.InvalidState, "consent", "capture is unavailable")
+			return apperror.New(apperror.InvalidState, "consent", "A captura está indisponível. Tente novamente mais tarde.")
 		}
 		if (draft.MediaKind == "VIDEO" && !consent.VideoProcessing) || (draft.MediaKind == "PHOTO" && !consent.PhotoProcessing) {
-			return apperror.New(apperror.InvalidInput, "consent", "processing for this capture must be accepted")
+			return apperror.New(apperror.InvalidInput, "consent", "Aceite o processamento correspondente a esta captura.")
 		}
 		if draft.MediaKind == "VIDEO" && draft.Kind != "RECAPTURE" {
 			var existing database.ProcessingAcceptance
@@ -99,8 +104,8 @@ func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string
 				return err
 			}
 		}
-		row := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: *session.ResponsibilityID, DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: consent.PhotoProcessing, VideoProcessing: consent.VideoProcessing, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
-		return tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "responsibility_id"}}, DoUpdates: clause.AssignmentColumns([]string{"disclosure_version", "photo_processing", "video_processing", "ai_analysis", "gps_use", "accepted_at"})}).Create(&row).Error
+		row := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: *session.ResponsibilityID, DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: consent.PhotoProcessing, VideoProcessing: consent.VideoProcessing, VoiceProcessing: consent.VoiceProcessing, VoiceConsentVersion: consent.VoiceConsentVersion, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
+		return tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "responsibility_id"}}, DoUpdates: clause.AssignmentColumns([]string{"disclosure_version", "photo_processing", "video_processing", "voice_processing", "voice_consent_version", "ai_analysis", "gps_use", "accepted_at"})}).Create(&row).Error
 	})
 }
 
@@ -128,7 +133,7 @@ func (s Service) HasProcessingAcceptance(ctx context.Context, tenantID, responsi
 func (s Service) RequestOTP(ctx context.Context, linkToken string) error {
 	tenantID, hash, err := scopedHash(linkToken)
 	if err != nil {
-		return apperror.New(apperror.InvalidInput, "linkToken", "invalid invitation")
+		return apperror.New(apperror.InvalidInput, "linkToken", "O convite informado é inválido.")
 	}
 	now := s.now()
 	var code string
@@ -138,7 +143,7 @@ func (s Service) RequestOTP(ctx context.Context, linkToken string) error {
 			return safeInvitationError(err)
 		}
 		if invitation.Status != "ACTIVE" || !now.Before(invitation.ExpiresAt) || invitation.RevokedAt != nil {
-			return apperror.New(apperror.InvalidState, "", "invitation unavailable")
+			return apperror.New(apperror.InvalidState, "", "Este convite está indisponível.")
 		}
 		key := invitation.ID.String()
 		var existing database.OTPChallenge
@@ -146,13 +151,13 @@ func (s Service) RequestOTP(ctx context.Context, linkToken string) error {
 			if result, limitErr := s.Limits.AllowResend(ctx, key); limitErr != nil {
 				return dependency(limitErr)
 			} else if !result.Allowed {
-				return apperror.New(apperror.RateLimited, "", "retry later")
+				return apperror.New(apperror.RateLimited, "", "Aguarde um momento antes de tentar novamente.")
 			}
 		}
 		if result, err := s.Limits.AllowSend(ctx, key); err != nil {
 			return dependency(err)
 		} else if !result.Allowed {
-			return apperror.New(apperror.RateLimited, "", "retry later")
+			return apperror.New(apperror.RateLimited, "", "Aguarde um momento antes de tentar novamente.")
 		}
 		generated, err := generateCode()
 		if err != nil {
@@ -174,10 +179,10 @@ func (s Service) RequestOTP(ctx context.Context, linkToken string) error {
 	}
 	var intents []DeliveryIntent
 	if err := json.Unmarshal(invitation.DeliveryIntents, &intents); err != nil || len(intents) == 0 {
-		return apperror.New(apperror.InvalidState, "", "invitation has no delivery channel")
+		return apperror.New(apperror.InvalidState, "", "O convite não possui um canal de envio disponível.")
 	}
 	if err := s.Notifier.SendOTP(ctx, invitation.TenantID, invitation.ID, code, intents); err != nil {
-		return dependency(err)
+		return dependencyOrPublic(err)
 	}
 	return nil
 }
@@ -185,7 +190,7 @@ func (s Service) RequestOTP(ctx context.Context, linkToken string) error {
 func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session, error) {
 	tenantID, hash, err := scopedHash(linkToken)
 	if err != nil {
-		return Session{}, apperror.New(apperror.InvalidInput, "linkToken", "invalid invitation")
+		return Session{}, apperror.New(apperror.InvalidInput, "linkToken", "O convite informado é inválido.")
 	}
 	now := s.now()
 	var result Session
@@ -196,19 +201,19 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 			return safeInvitationError(err)
 		}
 		if invitation.Status != "ACTIVE" || !now.Before(invitation.ExpiresAt) || invitation.RevokedAt != nil {
-			return apperror.New(apperror.SessionExpired, "", "session expired")
+			return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 		}
 		if allowed, err := s.Limits.AllowAttempt(ctx, invitation.ID.String()); err != nil {
 			return dependency(err)
 		} else if !allowed.Allowed {
-			return apperror.New(apperror.RateLimited, "", "retry later")
+			return apperror.New(apperror.RateLimited, "", "Aguarde um momento antes de tentar novamente.")
 		}
 		var challenge database.OTPChallenge
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND invitation_id = ? AND expires_at > ?", tenantID, invitation.ID, now).Order("created_at desc").First(&challenge).Error; err != nil {
 			return safeInvitationError(err)
 		}
 		if challenge.VerifiedAt != nil || !now.Before(challenge.ExpiresAt) || challenge.Attempts >= 5 {
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 		}
 		actual, err := security.HashOTP(code, s.Pepper)
 		developmentCode := strings.EqualFold(strings.TrimSpace(s.Stage), "dev") && code == "111111"
@@ -218,7 +223,7 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 				return updateErr
 			}
 			// Commit the attempt before returning the public rejection.
-			rejection = apperror.New(apperror.InvalidInput, "code", "invalid code")
+			rejection = apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 			return nil
 		}
 		challenge.VerifiedAt = &now
@@ -263,7 +268,7 @@ func confirmResponsibleAccess(ctx context.Context, tx *gorm.DB, invitation datab
 		return err
 	}
 	if len(responsibilities) == 0 {
-		return apperror.New(apperror.NotFound, "responsibility", "inspection responsibility not found")
+		return apperror.New(apperror.NotFound, "responsibility", "A responsabilidade pela vistoria não foi encontrada.")
 	}
 	if err := verifyInvitedEmail(tx, invitation, responsibilities[0], now); err != nil {
 		return err
@@ -313,7 +318,7 @@ func verifyInvitedEmail(tx *gorm.DB, invitation database.Invitation, responsibil
 func (s Service) Revoke(ctx context.Context, linkToken string) error {
 	tenantID, hash, err := scopedHash(linkToken)
 	if err != nil {
-		return apperror.New(apperror.InvalidInput, "linkToken", "invalid invitation")
+		return apperror.New(apperror.InvalidInput, "linkToken", "O convite informado é inválido.")
 	}
 	now := s.now()
 	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -333,7 +338,7 @@ func (s Service) Revoke(ctx context.Context, linkToken string) error {
 func (s Service) ValidateSession(ctx context.Context, token, csrf string) (identity.ID, error) {
 	tenantID, hash, err := scopedHash(token)
 	if err != nil {
-		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 	}
 	now := s.now()
 	var row database.ExternalSession
@@ -342,13 +347,13 @@ func (s Service) ValidateSession(ctx context.Context, token, csrf string) (ident
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				var counterparty database.ExternalSession
 				if lookupErr := tx.Where("tenant_id=? AND session_digest=? AND kind='COUNTERPARTY'", tenantID, hash[:]).First(&counterparty).Error; lookupErr == nil {
-					return apperror.New(apperror.Unauthenticated, "", "authentication required")
+					return apperror.New(apperror.Unauthenticated, "", "É necessário validar o acesso ao convite.")
 				}
 			}
 			return err
 		}
 		if !isCaptureSession(row) {
-			return apperror.New(apperror.SessionExpired, "", "session expired")
+			return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 		}
 		return activeInvitation(tx, tenantID, *row.InvitationID, now)
 	})
@@ -356,14 +361,14 @@ func (s Service) ValidateSession(ctx context.Context, token, csrf string) (ident
 		if apperror.Is(err, apperror.Unauthenticated) {
 			return identity.ID{}, err
 		}
-		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 	}
 	if !security.Active(now, row.ExpiresAt, row.RevokedAt) {
-		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 	}
 	proof, err := security.CSRFProof(hash, csrf, s.Pepper)
 	if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
-		return identity.ID{}, apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+		return identity.ID{}, apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar esta solicitação. Atualize a página e tente novamente.")
 	}
 	return *row.ResponsibilityID, nil
 }
@@ -377,7 +382,7 @@ func isCaptureSession(session database.ExternalSession) bool {
 func activeInvitation(tx *gorm.DB, tenantID, invitationID identity.ID, now time.Time) error {
 	var invitation database.Invitation
 	if err := tx.Where("tenant_id=? AND id=?", tenantID, invitationID).First(&invitation).Error; err != nil || invitation.Status != "ACTIVE" || !security.Active(now, invitation.ExpiresAt, invitation.RevokedAt) {
-		return apperror.New(apperror.SessionExpired, "", "session expired")
+		return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 	}
 	return nil
 }
@@ -393,20 +398,20 @@ func (s Service) ValidateCaptureRead(ctx context.Context, token, csrf string) (i
 	}
 	tenantID, hash, err := scopedHash(token)
 	if err != nil {
-		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 	}
 	var session database.ExternalSession
 	err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id=? AND session_digest=? AND kind='CAPTURE'", tenantID, hash[:]).First(&session).Error; err != nil || !s.now().Before(session.ExpiresAt) || !isCaptureSession(session) {
-			return apperror.New(apperror.SessionExpired, "", "session expired")
+			return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 		}
 		proof, err := security.CSRFProof(hash, csrf, s.Pepper)
 		if err != nil || len(session.CSRFDigest) != 32 || !security.Equal(proof, bytes32(session.CSRFDigest)) {
-			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+			return apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar esta solicitação. Atualize a página e tente novamente.")
 		}
 		var invitation database.Invitation
 		if err := tx.Where("tenant_id=? AND id=? AND responsibility_id=? AND status='COMPLETED'", tenantID, session.InvitationID, session.ResponsibilityID).First(&invitation).Error; err != nil {
-			return apperror.New(apperror.SessionExpired, "", "session expired")
+			return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Acesse o convite novamente.")
 		}
 		return nil
 	})
@@ -439,9 +444,15 @@ func scopedHash(value string) (identity.ID, [32]byte, error) {
 }
 func bytes32(value []byte) [32]byte { var result [32]byte; copy(result[:], value); return result }
 func dependency(err error) error    { return apperror.Wrap(apperror.DependencyUnavailable, err) }
+func dependencyOrPublic(err error) error {
+	if code, _, _ := apperror.Public(err); code != apperror.Internal {
+		return err
+	}
+	return dependency(err)
+}
 func safeInvitationError(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return apperror.New(apperror.InvalidInput, "linkToken", "invalid invitation")
+		return apperror.New(apperror.InvalidInput, "linkToken", "O convite informado é inválido.")
 	}
 	return dependency(err)
 }

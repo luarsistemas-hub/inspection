@@ -75,7 +75,7 @@ func newFixedOriginFixtureWithVideo(t *testing.T, video bool) (*fixedOriginFixtu
 }
 
 func principalContext(tenantID identity.ID, role string) context.Context {
-	principal := requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{role}}
+	principal := requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{role}, ProductEntitlements: auth.ProductsForRole(role)}
 	return requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: principal})
 }
 
@@ -144,8 +144,8 @@ func TestCreateRejectsParticipantOutsideAuthorizedUnits(t *testing.T) {
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.input.TenantID, Principal: principal})
 	_, err := (Service{Bus: bus, Authorizer: auth.Authorizer{}}).Create(ctx, fixture.input)
 	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.Forbidden {
-		t.Fatalf("Create error = %v, want forbidden for a participant from an inaccessible unit", err)
+	if !errors.As(err, &appErr) || appErr.Code != apperror.NotFound {
+		t.Fatalf("Create error = %v, want NOT_FOUND for a participant from an inaccessible unit", err)
 	}
 	if fixture.originAsks != 0 {
 		t.Fatal("origin was resolved before rejecting the participant's unit scope")

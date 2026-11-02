@@ -77,7 +77,7 @@ func TestVV_IT_478RequestRecaptureRequiresAuthentication(t *testing.T) {
 
 func TestVV_IT_479RequestRecaptureRequiresCapability(t *testing.T) {
 	fx := newAPI10Fixture(t)
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-479"})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-479"})
 	assertAPI10Rejected(t, fx, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fx.valid("vv-it-479"), viewer, "", ""), "FORBIDDEN")
 }
 
@@ -278,6 +278,6 @@ func newAPI10FixtureWithHarness(t *testing.T, h *harness.Harness) api10Fixture {
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: bus}}))
 	server.SetErrorPresenter(graph.PresentError)
-	admin := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-api10"})
+	admin := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-api10"})
 	return api10Fixture{fixedOriginGraphQLFixture: fixedOriginGraphQLFixture{ctx: admin, h: h, seed: seed, server: server, bus: bus}, componentKey: componentKey, currentMedia: mediaID}
 }

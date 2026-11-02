@@ -105,9 +105,14 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				return result.Error
 			}
 			if result.RowsAffected == 0 {
-				if err := tx.Where("tenant_id=? AND inspection_id=? AND requirement_key=? AND model_alias=? AND prompt_digest=? AND input_digest=?", job.TenantID, job.InspectionID, job.RequirementKey, job.ModelAlias, job.PromptDigest, job.InputDigest).First(&job).Error; err != nil {
+				// Load the already stored job into a fresh value: First(&job)
+				// would add the discarded random primary key of the new job to the
+				// condition and never find the duplicate.
+				var existing database.ComparisonJob
+				if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND requirement_key=? AND model_alias=? AND prompt_digest=? AND input_digest=?", job.TenantID, job.InspectionID, job.RequirementKey, job.ModelAlias, job.PromptDigest, job.InputDigest).Take(&existing).Error; err != nil {
 					return err
 				}
+				job = existing
 			}
 			requestID := identity.NewID()
 			eventType := "analysis.comparison_requested.v1"

@@ -13,6 +13,7 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/i
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-seed ./services/inspection/cmd/inspection-seed && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-worker ./services/inspection/cmd/inspection-worker && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-video-worker ./services/inspection/cmd/inspection-video-worker && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-transcription-worker ./services/inspection/cmd/inspection-transcription-worker && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-scheduler ./services/inspection/cmd/inspection-scheduler && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-schema-check ./services/inspection/cmd/inspection-schema-check && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-keycloak-check ./services/inspection/cmd/inspection-keycloak-check
@@ -23,7 +24,12 @@ FROM alpine:3.22 AS runtime
 RUN apk add --no-cache ca-certificates tzdata && addgroup -S inspection && adduser -S inspection -G inspection
 USER inspection
 
+# The API probes uploaded audio duration with ffprobe (objectstore.CompleteAudio),
+# so every stage that runs inspection-api must ship it.
 FROM runtime AS prebuilt
+USER root
+RUN apk add --no-cache ffmpeg && ffprobe -version >/dev/null
+USER inspection
 COPY --chown=inspection:inspection .build/oci-bin/ /usr/local/bin/
 
 FROM runtime AS video-worker
@@ -33,5 +39,15 @@ USER inspection
 COPY --from=build --chown=inspection:inspection /out/inspection-video-worker /usr/local/bin/inspection-video-worker
 ENTRYPOINT ["/usr/local/bin/inspection-video-worker"]
 
+FROM runtime AS transcription-worker
+USER root
+RUN apk add --no-cache ffmpeg && ffmpeg -version >/dev/null && ffprobe -version >/dev/null
+USER inspection
+COPY --from=build --chown=inspection:inspection /out/inspection-transcription-worker /usr/local/bin/inspection-transcription-worker
+ENTRYPOINT ["/usr/local/bin/inspection-transcription-worker"]
+
 FROM runtime AS local
+USER root
+RUN apk add --no-cache ffmpeg && ffprobe -version >/dev/null
+USER inspection
 COPY --from=build /out /usr/local/bin

@@ -3,6 +3,8 @@
 import { FormEvent, useRef, useState } from "react";
 import { Alert, Button, Field, Input, Recovery, Steps } from "@inspection/design-system";
 import { beginPKCE } from "@/auth/pkce";
+import { AdminLocalError, graphQLFailureText } from "@/graphql/client";
+import { activationErrorMessage } from "@/auth/activation";
 import { completeInvitation, requestInvitationCode, verifyInvitationCode } from "@/auth/user-invitation-activation";
 import { ActivationShell } from "../activation-shell";
 
@@ -19,11 +21,11 @@ export default function InvitationActivationPage() {
     try {
       const token = stage === "request" && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("token") : null;
       const result = stage === "request" ? await requestInvitationCode(token) : stage === "verify" ? await verifyInvitationCode(code) : await completeInvitation(activation?.newIdentity ? password : null);
-      if (result.userErrors.length) { setMessage(result.userErrors[0].message); return; }
-      if (stage === "request") { if (!result.activation) throw new Error("O convite não retornou os dados de ativação."); setActivation({ email: result.activation.email, newIdentity: result.activation.newIdentity }); setStage("verify"); }
+      if (result.userErrors.length) { setMessage(result.userErrors[0].message || activationErrorMessage(result.userErrors[0].code)); return; }
+      if (stage === "request") { if (!result.activation) throw new AdminLocalError("Não foi possível carregar os dados do convite. Solicite um novo código."); setActivation({ email: result.activation.email, newIdentity: result.activation.newIdentity }); setStage("verify"); }
       else if (stage === "verify") setStage(activation?.newIdentity ? "password" : "ready");
       else setStage("ready");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível concluir a ativação."); }
+    } catch (error) { setMessage(graphQLFailureText(error)); }
     finally { submitting.current = false; setBusy(false); }
   };
   if (stage === "ready") return <ActivationShell title="Acesso ativado" description="Seu convite foi confirmado."><Recovery kind="empty" title="Tudo pronto">Agora entre com sua conta. Se você já tinha uma senha, ela continua a mesma.</Recovery><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", "/organization")}>Entrar na administração</Button></ActivationShell>;

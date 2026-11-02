@@ -16,6 +16,7 @@ import (
 
 	"inspection/libs/identity"
 	report "inspection/services/inspection/internal/features/reports/core"
+	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -194,19 +195,28 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 		return access{}, http.StatusUnauthorized
 	}
 	r = r.WithContext(requestctx.WithMetadata(r.Context(), metadata))
-	snapshotText, responsibilityText := r.URL.Query().Get("snapshotId"), r.URL.Query().Get("responsibilityId")
-	if (snapshotText == "") == (responsibilityText == "") {
+	snapshotText, responsibilityText, inspectionText := r.URL.Query().Get("snapshotId"), r.URL.Query().Get("responsibilityId"), r.URL.Query().Get("inspectionId")
+	scopeCount := 0
+	for _, value := range []string{snapshotText, responsibilityText, inspectionText} {
+		if value != "" {
+			scopeCount++
+		}
+	}
+	if scopeCount != 1 {
 		return access{}, http.StatusNotFound
 	}
 	if metadata.Principal.Internal {
 		responsibilityID, parseErr := identity.ParseID(responsibilityText)
-		if snapshotText != "" || parseErr != nil || responsibilityID != metadata.Principal.IdentityID {
+		if snapshotText != "" || inspectionText != "" || parseErr != nil || responsibilityID != metadata.Principal.IdentityID {
 			return access{}, http.StatusNotFound
 		}
 	}
 	var item access
 	item.metadata = metadata
 	originEvidence := false
+	// snapshotBlocked records that the report snapshot withheld this visual from
+	// customers (sensitive flag or SENSITIVE_BLOCKED availability).
+	snapshotBlocked := false
 	var err error
 	err = (tenanttx.Runner{DB: h.deps.DB}).Within(r.Context(), metadata.TenantID, func(tx *gorm.DB) error {
 		var mediaID identity.ID
@@ -248,7 +258,25 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 				item.objectKey, item.contentType = proxy.ObjectKey, proxy.ContentType
 			}
 		}
-		if snapshotText != "" {
+		if inspectionText != "" {
+			inspectionID, parseErr := identity.ParseID(inspectionText)
+			if parseErr != nil || metadata.Principal.Internal {
+				return gorm.ErrRecordNotFound
+			}
+			var inspection database.Inspection
+			if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=?", metadata.TenantID, inspectionID).Take(&inspection).Error; err != nil {
+				return err
+			}
+			principal, err := h.deps.Authorizer.Authorize(r.Context(), metadata.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, false)
+			if err != nil || hasRole(principal.Roles, auth.CustomerViewer) {
+				return gorm.ErrRecordNotFound
+			}
+			item.inspection = inspectionID
+			var responsibility database.Responsibility
+			if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=? AND inspection_id=?", metadata.TenantID, item.media.ResponsibilityID, inspectionID).Take(&responsibility).Error; err != nil {
+				return gorm.ErrRecordNotFound
+			}
+		} else if snapshotText != "" {
 			snapshotID, parseErr := identity.ParseID(snapshotText)
 			if parseErr != nil {
 				return gorm.ErrRecordNotFound
@@ -258,6 +286,7 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 				if !snapshotContainsEvidence(snapshot.CanonicalJSON, item.frame, mediaID) {
 					return gorm.ErrRecordNotFound
 				}
+				snapshotBlocked = snapshotEvidenceBlocked(snapshot.CanonicalJSON, item.frame, mediaID)
 				item.inspection = snapshot.InspectionID
 			} else if frame && errors.Is(err, gorm.ErrRecordNotFound) {
 				// Inventory review links carry an origin-version id. A retained frame
@@ -330,7 +359,10 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 				return err
 			}
 			if hasRole(principal.Roles, auth.CustomerViewer) {
-				if snapshotText == "" {
+				// A customer never receives a visual the snapshot blocked, even
+				// when its release is active: the URL is only a convention, not a
+				// permission.
+				if snapshotText == "" || snapshotBlocked {
 					return gorm.ErrRecordNotFound
 				}
 				var publication database.ReportPublication
@@ -404,6 +436,29 @@ func snapshotContainsEvidence(canonical []byte, frame *database.VideoFrame, medi
 			continue
 		}
 		if frame == nil || evidence.FrameID == frame.ID.String() && evidence.PreparationID == frame.PreparationID.String() && strings.EqualFold(evidence.FrameDigest, frame.SHA256) && strings.EqualFold(evidence.DisplayDigest, frame.SHA256) {
+			return true
+		}
+	}
+	return false
+}
+
+// snapshotEvidenceBlocked reports whether the snapshot withholds the requested
+// visual from customers. A frame is blocked when any snapshot entry for that
+// exact frame is blocked. The source video is blocked when any entry citing it
+// is: playing the whole video would show the moment the snapshot hid.
+func snapshotEvidenceBlocked(canonical []byte, frame *database.VideoFrame, mediaID identity.ID) bool {
+	var snapshot report.Snapshot
+	if json.Unmarshal(canonical, &snapshot) != nil {
+		return true
+	}
+	for _, evidence := range snapshot.Evidence {
+		if evidence.SourceMediaID != mediaID.String() {
+			continue
+		}
+		if frame != nil && (evidence.FrameID != frame.ID.String() || evidence.PreparationID != frame.PreparationID.String() || !strings.EqualFold(evidence.FrameDigest, frame.SHA256)) {
+			continue
+		}
+		if customerreport.EvidenceBlocked(evidence) {
 			return true
 		}
 	}

@@ -113,7 +113,10 @@ func TestIT142ProcessingAcceptanceRetryIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	consent := ProcessingConsent{DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: true, AIAnalysis: true, GPSUse: true}
+	if err := service.AcceptProcessing(ctx, session.Token, session.CSRF, ProcessingConsent{DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: true, VoiceProcessing: true, AIAnalysis: true, GPSUse: true}); appCode(err) != apperror.InvalidInput {
+		t.Fatalf("voice opt-in without a disclosure version should be rejected, got %v", err)
+	}
+	consent := ProcessingConsent{DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: true, VoiceProcessing: true, VoiceConsentVersion: "voice-v1", AIAnalysis: true, GPSUse: true}
 	for range 2 {
 		if err := service.AcceptProcessing(ctx, session.Token, session.CSRF, consent); err != nil {
 			t.Fatal(err)
@@ -122,6 +125,10 @@ func TestIT142ProcessingAcceptanceRetryIsIdempotent(t *testing.T) {
 	var count int64
 	if err := db.Model(&database.ProcessingAcceptance{}).Where("responsibility_id=?", session.ResponsibilityID).Count(&count).Error; err != nil || count != 1 {
 		t.Fatalf("duplicate acceptance: %d %v", count, err)
+	}
+	var stored database.ProcessingAcceptance
+	if err := db.Where("responsibility_id=?", session.ResponsibilityID).First(&stored).Error; err != nil || !stored.VoiceProcessing {
+		t.Fatalf("separate voice consent was not persisted: %+v err=%v", stored, err)
 	}
 }
 
@@ -143,7 +150,7 @@ func TestIT129IT134VideoRequiresVideoAndDerivedImagesDisclosureAfterPhotoConsent
 		t.Fatal(err)
 	}
 	oldPhoto := database.ProcessingAcceptance{DisclosureVersion: "photo-v1", PhotoProcessing: true, VideoProcessing: false, AIAnalysis: true, GPSUse: true}
-	if err := db.Exec(`INSERT INTO invitations.processing_acceptances (id,tenant_id,responsibility_id,disclosure_version,photo_processing,video_processing,ai_analysis,gps_use,accepted_at) VALUES (?,?,?,?,?,?,?,?,?)`, identity.NewID(), tenantID, session.ResponsibilityID, oldPhoto.DisclosureVersion, true, false, true, true, time.Unix(1000, 0)).Error; err != nil {
+	if err := db.Exec(`INSERT INTO invitations.processing_acceptances (id,tenant_id,responsibility_id,disclosure_version,photo_processing,video_processing,voice_processing,voice_consent_version,ai_analysis,gps_use,accepted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, identity.NewID(), tenantID, session.ResponsibilityID, oldPhoto.DisclosureVersion, true, false, false, "", true, true, time.Unix(1000, 0)).Error; err != nil {
 		t.Fatal(err)
 	}
 	accepted, err := service.HasProcessingAcceptance(ctx, tenantID, session.ResponsibilityID)
@@ -174,14 +181,14 @@ func TestCompletedCaptureReadDoesNotRestoreMutationAuthority(t *testing.T) {
 	if err := db.Model(&database.Invitation{}).Where("token_hash=?", hash[:]).Updates(map[string]any{"status": "COMPLETED", "revoked_at": *now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&database.ExternalSession{}).Where("responsibility_id=?", session.ResponsibilityID).Update("revoked_at", *now).Error; err != nil {
-		t.Fatal(err)
-	}
 	if _, err := service.ValidateSession(ctx, session.Token, session.CSRF); appCode(err) != apperror.SessionExpired {
 		t.Fatalf("completion restored mutation: %v", err)
 	}
+	if err := db.Model(&database.ExternalSession{}).Where("responsibility_id=?", session.ResponsibilityID).Update("revoked_at", *now).Error; err != nil {
+		t.Fatal(err)
+	}
 	if id, err := service.ValidateCaptureRead(ctx, session.Token, session.CSRF); err != nil || id != session.ResponsibilityID {
-		t.Fatalf("confirmation unavailable: %s %v", id, err)
+		t.Fatalf("confirmation unavailable after submission revoked its session: %s %v", id, err)
 	}
 	if _, err := service.ValidateCaptureRead(ctx, session.Token, "wrong"); appCode(err) != apperror.Forbidden {
 		t.Fatalf("confirmation ignored CSRF: %v", err)
@@ -189,5 +196,27 @@ func TestCompletedCaptureReadDoesNotRestoreMutationAuthority(t *testing.T) {
 	*now = now.Add(security.SessionTTL)
 	if _, err := service.ValidateCaptureRead(ctx, session.Token, session.CSRF); appCode(err) != apperror.SessionExpired {
 		t.Fatalf("confirmation ignored session expiry: %v", err)
+	}
+}
+
+func TestRevokedInvitationCannotUseCompletedCaptureRead(t *testing.T) {
+	db, service, token, notifier, now := securityFixture(t)
+	ctx := context.Background()
+	if err := service.RequestOTP(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	session, err := service.VerifyOTP(ctx, token, notifier.code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := security.HashToken(token)
+	if err := db.Model(&database.Invitation{}).Where("token_hash=?", hash[:]).Updates(map[string]any{"status": "REVOKED", "revoked_at": *now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&database.ExternalSession{}).Where("responsibility_id=?", session.ResponsibilityID).Update("revoked_at", *now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ValidateCaptureRead(ctx, session.Token, session.CSRF); appCode(err) != apperror.SessionExpired {
+		t.Fatalf("administratively revoked invitation remained readable: %v", err)
 	}
 }

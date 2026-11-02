@@ -56,7 +56,11 @@ func Setup(d Dependencies) error {
 		} else if err != nil {
 			return nil, err
 		}
-		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
+		roles := []string{auth.TenantAdmin, auth.Manager}
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: command.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, Mutate: true}); err != nil {
+			return nil, err
+		}
+		if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: command.TenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: command.InspectionID}, Mutate: true, NewWork: true}); err != nil {
 			return nil, err
 		}
 		var promoted database.OriginVersion
@@ -139,13 +143,13 @@ func Setup(d Dependencies) error {
 			versionID := identity.NewID()
 			responsibilityID := media.ResponsibilityID
 			promoted = database.OriginVersion{ID: versionID, TenantID: command.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparation.ID, VideoPlanID: &analysisPlan.ID, ScopeManifestDigest: preparation.ManifestDigest, IdempotencyKey: idempotency, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
-			if err := tx.Create(&promoted).Error; err != nil {
-				return err
-			}
 			if origin.ActiveVersionID != nil {
 				if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", command.TenantID, *origin.ActiveVersionID).Updates(map[string]any{"status": "SUPERSEDED", "superseded_at": now}).Error; err != nil {
 					return err
 				}
+			}
+			if err := tx.Create(&promoted).Error; err != nil {
+				return err
 			}
 			if err := tx.Model(&origin).Updates(map[string]any{"active_version_id": promoted.ID, "version": origin.Version + 1, "updated_at": now}).Error; err != nil {
 				return err

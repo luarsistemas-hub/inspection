@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { graphql } from "@/graphql/client";
 import { VideoOperationsPage } from "@/features/admin/video-operations-page";
 
-vi.mock("@/graphql/client", () => ({ graphql: vi.fn(), graphqlOptionalPermission: vi.fn() }));
+vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql: vi.fn(), graphqlOptionalPermission: vi.fn() }));
 vi.mock("@inspection/design-system", async () => {
   const React = await import("react");
   return {

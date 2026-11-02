@@ -11,6 +11,7 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
+	catalognotes "inspection/services/inspection/internal/features/analysis/catalog_notes"
 	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	inventorycore "inspection/services/inspection/internal/features/inventory/core"
@@ -57,6 +58,25 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				return messaging.ErrPermanent
 			}
 			inspectionID = p.InspectionID
+		case "transcription.completed.v1", "transcription.failed.v1":
+			// A note reached a terminal result: the room manifest that was
+			// waiting for it is re-evaluated.
+			var p struct {
+				NoteID     identity.ID `json:"noteId"`
+				Generation int         `json:"generation"`
+			}
+			if json.Unmarshal(envelope.Payload, &p) != nil || p.NoteID == (identity.ID{}) || p.Generation < 1 {
+				return messaging.ErrPermanent
+			}
+			var note struct{ InspectionID identity.ID }
+			if err := tx.WithContext(ctx).Raw("SELECT inspection_id FROM transcription.audio_notes WHERE tenant_id=? AND id=?", envelope.TenantID, p.NoteID).Scan(&note).Error; err != nil {
+				return err
+			}
+			if note.InspectionID == (identity.ID{}) {
+				// Unknown note (or another tenant's): nothing to re-evaluate.
+				return nil
+			}
+			inspectionID = note.InspectionID
 		case "media.video_prepared.v1":
 			var p events.VideoPreparedPayload
 			if json.Unmarshal(envelope.Payload, &p) != nil || p.MediaID == (identity.ID{}) {
@@ -190,7 +210,7 @@ func Request(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.I
 	if pinned != nil {
 		return requestCompare(tx, tenantID, inspection, *pinned, requirements, captured, now)
 	}
-	return requestCatalog(ctx, tx, tenantID, inspection, requirements, captured, now)
+	return requestCatalog(ctx, tx, tenantID, inspection, capture.ResponsibilityID, requirements, captured, now)
 }
 
 // preparationsTerminal reports whether the latest preparation of every clip of
@@ -275,12 +295,25 @@ func requestCompare(tx *gorm.DB, tenantID identity.ID, inspection database.Inspe
 
 // requestCatalog opens (or reuses) the CAPTURE draft of this inspection and one
 // CATALOG job per captured environment. Impossible environments get no job.
-func requestCatalog(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, now time.Time) error {
+func requestCatalog(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, responsibilityID identity.ID, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, now time.Time) error {
 	version, err := captureDraft(tx, tenantID, inspection, now)
 	if err != nil {
 		return err
 	}
-	count, err := CreateCatalogJobs(ctx, tx, tenantID, inspection, version.ID, requirements, captured, 1, inspection.InventoryPromptSnapshotID, now)
+	// The room's visual evidence is ready here. Rooms with submitted voice
+	// notes get a manifest: their job becomes due once every note is resolved
+	// or, at the latest, when the two-minute wait ends.
+	schedule := func(requirement capturecore.Requirement, mediaIDs []identity.ID) (time.Time, error) {
+		outcome, err := catalognotes.Evaluate(ctx, tx, catalognotes.Room{TenantID: tenantID, InspectionID: inspection.ID, ResponsibilityID: responsibilityID, RequirementKey: requirement.Key, MediaIDs: mediaIDs, Generation: 1}, now, false)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if outcome.Ready || outcome.Manifest == nil {
+			return now, nil
+		}
+		return outcome.Manifest.DeadlineAt, nil
+	}
+	count, err := createCatalogJobs(ctx, tx, tenantID, inspection, version.ID, requirements, captured, 1, inspection.InventoryPromptSnapshotID, now, schedule)
 	if err != nil {
 		return err
 	}
@@ -296,17 +329,31 @@ func requestCatalog(ctx context.Context, tx *gorm.DB, tenantID identity.ID, insp
 
 // CreateCatalogJobs creates capture environments and CATALOG jobs for a chosen draft.
 func CreateCatalogJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, draftID identity.ID, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, generation int, promptSnapshotID *identity.ID, now time.Time) (int, error) {
+	return createCatalogJobs(ctx, tx, tenantID, inspection, draftID, requirements, captured, generation, promptSnapshotID, now, nil)
+}
+
+// catalogSchedule returns when the CATALOG job of one captured environment is due.
+type catalogSchedule func(requirement capturecore.Requirement, mediaIDs []identity.ID) (time.Time, error)
+
+func createCatalogJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, draftID identity.ID, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, generation int, promptSnapshotID *identity.ID, now time.Time, schedule catalogSchedule) (int, error) {
 	if generation < 1 || draftID == (identity.ID{}) {
 		return 0, apperror.New(apperror.InvalidInput, "draftId", "rascunho e geração são obrigatórios")
 	}
 	tx = tx.WithContext(ctx)
 	jobs := 0
 	for position, requirement := range requirements {
-		if _, ok, err := CapturedMedia(requirement, captured); err != nil || !ok {
+		mediaIDs, ok, err := CapturedMedia(requirement, captured)
+		if err != nil || !ok {
 			if err != nil {
 				return 0, err
 			}
 			continue
+		}
+		dueAt := now
+		if schedule != nil {
+			if dueAt, err = schedule(requirement, mediaIDs); err != nil {
+				return 0, err
+			}
 		}
 		name := requirement.EnvironmentName
 		if name == "" {
@@ -327,9 +374,16 @@ func CreateCatalogJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, i
 			return 0, err
 		}
 		identityID := env.IdentityID
-		job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: draftID, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "PENDING", NextAttemptAt: now, EnvironmentIdentityID: &identityID, PromptSnapshotID: promptSnapshotID, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job).Error; err != nil {
-			return 0, err
+		job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: draftID, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "PENDING", NextAttemptAt: dueAt, EnvironmentIdentityID: &identityID, PromptSnapshotID: promptSnapshotID, CreatedAt: now, UpdatedAt: now}
+		created := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job)
+		if created.Error != nil {
+			return 0, created.Error
+		}
+		if created.RowsAffected == 0 && !dueAt.After(now) {
+			// The job already waits for voice notes that are now resolved.
+			if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND inspection_id=? AND kind='CATALOG' AND requirement_key=? AND generation=? AND status='PENDING' AND attempts=0 AND next_attempt_at>?", tenantID, inspection.ID, key, generation, dueAt).Updates(map[string]any{"next_attempt_at": dueAt, "updated_at": now}).Error; err != nil {
+				return 0, err
+			}
 		}
 		jobs++
 	}

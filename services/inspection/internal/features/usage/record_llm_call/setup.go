@@ -4,6 +4,7 @@ package record_llm_call
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"inspection/libs/identity"
@@ -20,13 +21,59 @@ type Dependencies struct {
 	DB *gorm.DB
 }
 
+// Ledger exposes standard attempt recording and one-time late cost reconciliation.
+type Ledger interface {
+	llm.CallLedger
+	ReportLateCost(context.Context, LateCost) error
+}
+
+// LateCost carries provider cost metadata that arrived after the call was finalized.
+type LateCost struct {
+	TenantID, CallID string
+	Cost             float64
+	Source           string
+	ReportedAt       time.Time
+}
+
 // Setup returns a durable LLM call ledger. PostgreSQL writes run under the
 // same forced-RLS tenant boundary used by the rest of the service.
-func Setup(deps Dependencies) (llm.CallLedger, error) {
+func Setup(deps Dependencies) (Ledger, error) {
 	if deps.DB == nil {
 		return nil, fmt.Errorf("slice usage/record_llm_call: missing database")
 	}
 	return ledger{db: deps.DB}, nil
+}
+
+// ReportLateCost fills unknown cost provenance once without changing attempt outcome.
+func (l ledger) ReportLateCost(ctx context.Context, report LateCost) error {
+	tenantID, err := parseID("tenant", report.TenantID)
+	if err != nil {
+		return llm.NewError(llm.CodeLedgerPersistence, 0, err)
+	}
+	callID, err := parseID("call", report.CallID)
+	if err != nil || report.Cost < 0 || math.IsNaN(report.Cost) || math.IsInf(report.Cost, 0) || (report.Source != "header" && report.Source != "body") {
+		return llm.NewError(llm.CodeLedgerPersistence, 0, fmt.Errorf("invalid late cost report"))
+	}
+	updatedAt := report.ReportedAt.UTC()
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
+	err = l.withTenant(ctx, tenantID, func(tx *gorm.DB) error {
+		result := tx.Model(&database.LLMCallRecord{}).
+			Where("tenant_id=? AND call_id=? AND state=? AND reported_cost IS NULL AND cost_source=?", tenantID, callID, "FINISHED", "unknown").
+			Updates(map[string]any{"reported_cost": report.Cost, "cost_source": report.Source, "updated_at": updatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("late cost already reported or call not eligible")
+		}
+		return nil
+	})
+	if err != nil {
+		return llm.NewError(llm.CodeLedgerPersistence, 0, err)
+	}
+	return nil
 }
 
 type ledger struct{ db *gorm.DB }
@@ -72,8 +119,9 @@ func (l ledger) Start(ctx context.Context, start llm.CallStart) error {
 	row := database.LLMCallRecord{
 		CallID: callID, TenantID: tenantID, InspectionID: inspectionID, JobID: jobID, EventID: eventID, ExecutionID: executionID,
 		CorrelationID: start.CorrelationID, Attempt: start.Attempt, ReplayGeneration: start.ReplayGeneration,
-		Mode: start.Mode, ComparisonMode: start.ComparisonMode, ModelAlias: start.ModelAlias, PromptDigest: start.PromptDigest,
-		State: "STARTED", TechnicalOutcome: "pending", StartedAt: startedAt, UpdatedAt: startedAt,
+		Mode: start.Mode, ComparisonMode: start.ComparisonMode, ModelAlias: start.ModelAlias, PromptDigest: start.PromptDigest, AudioDurationMS: optionalAudioDurationMS(start.AudioDurationMS),
+		AudioTokenUnit: optionalTextPointer(start.AudioTokenUnit),
+		State:          "STARTED", TechnicalOutcome: "pending", StartedAt: startedAt, UpdatedAt: startedAt,
 	}
 	err = l.withTenant(ctx, tenantID, func(tx *gorm.DB) error { return tx.Create(&row).Error })
 	if err != nil {
@@ -111,6 +159,11 @@ func (l ledger) Finish(ctx context.Context, finish llm.CallFinish) error {
 		"input_tokens":        finish.InputTokens,
 		"output_tokens":       finish.OutputTokens,
 		"cached_input_tokens": finish.CachedInputTokens,
+		"audio_duration_ms":   finish.AudioDurationMS,
+		"audio_input_tokens":  finish.AudioInputTokens,
+		"text_input_tokens":   finish.TextInputTokens,
+		"reasoning_tokens":    finish.ReasoningTokens,
+		"audio_token_unit":    nullableText(finish.AudioTokenUnit),
 		"image_count":         optionalInt(finish.ImageCount),
 		"request_body_bytes":  optionalInt64(finish.RequestBodyBytes),
 		"reported_cost":       finish.ReportedCostDecimal,
@@ -170,6 +223,21 @@ func optionalInt(value int) *int {
 
 func optionalInt64(value int64) *int64 {
 	if value < 0 {
+		return nil
+	}
+	return &value
+}
+
+// optionalAudioDurationMS stores only positive source audio durations; zero means unknown.
+func optionalAudioDurationMS(value int64) *int64 {
+	if value <= 0 {
+		return nil
+	}
+	return &value
+}
+
+func optionalTextPointer(value string) *string {
+	if value == "" {
 		return nil
 	}
 	return &value

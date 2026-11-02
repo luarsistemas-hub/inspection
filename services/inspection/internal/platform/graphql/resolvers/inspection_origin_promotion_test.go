@@ -19,7 +19,7 @@ import (
 
 func promotionContext() context.Context {
 	tenant := identity.NewID()
-	meta := requestctx.Metadata{TenantID: tenant, CorrelationID: "promotion-test", Principal: requestctx.Principal{TenantID: tenant, IdentityID: identity.NewID(), MembershipID: identity.NewID(), Roles: []string{auth.TenantAdmin}}}
+	meta := requestctx.Metadata{TenantID: tenant, CorrelationID: "promotion-test", Principal: requestctx.Principal{TenantID: tenant, IdentityID: identity.NewID(), MembershipID: identity.NewID(), Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}}
 	return requestctx.WithMetadata(context.Background(), meta)
 }
 

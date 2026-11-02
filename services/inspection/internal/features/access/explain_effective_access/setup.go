@@ -84,17 +84,27 @@ func Setup(deps Dependencies) error {
 	if deps.DB == nil || deps.Bus == nil || deps.Scopes == nil {
 		return fmt.Errorf("slice %s: missing dependency", sliceName)
 	}
-	return deps.Bus.RegisterQuery(Query{}, func(ctx context.Context, raw any) (any, error) {
+	if err := deps.Bus.RegisterQuery(Query{}, func(ctx context.Context, raw any) (any, error) {
 		return handle(ctx, deps, raw.(Query))
+	}); err != nil {
+		return err
+	}
+	if err := deps.Bus.RegisterQuery(EffectiveAccessQuery{}, func(ctx context.Context, raw any) (any, error) {
+		return handleEffectiveAccess(ctx, deps, raw.(EffectiveAccessQuery))
+	}); err != nil {
+		return err
+	}
+	return deps.Bus.RegisterQuery(ScopePreviewQuery{}, func(ctx context.Context, raw any) (any, error) {
+		return handleScopePreview(ctx, deps, raw.(ScopePreviewQuery))
 	})
 }
 
 func handle(ctx context.Context, deps Dependencies, query Query) (Result, error) {
 	if query.TenantID == (identity.ID{}) || query.MembershipID == (identity.ID{}) {
-		return Result{}, apperror.New(apperror.InvalidInput, "membershipId", "tenant and membership are required")
+		return Result{}, apperror.New(apperror.InvalidInput, "membershipId", "Informe o acesso que será consultado.")
 	}
 	if len(query.Targets) == 0 {
-		return Result{}, apperror.New(apperror.InvalidInput, "targets", "at least one target is required")
+		return Result{}, apperror.New(apperror.InvalidInput, "targets", "Informe ao menos um recurso.")
 	}
 	if _, err := deps.Authorizer.Authorize(ctx, auth.AuthorizationRequest{
 		TenantID: query.TenantID,
@@ -139,10 +149,10 @@ func validateTargets(targets []Scope) error {
 	seen := make(map[Scope]struct{}, len(targets))
 	for _, target := range targets {
 		if target.ID == (identity.ID{}) || !knownScope(target.Kind) {
-			return apperror.New(apperror.InvalidInput, "targets", "unknown resource scope")
+			return apperror.New(apperror.InvalidInput, "targets", "O recurso informado não é válido.")
 		}
 		if _, exists := seen[target]; exists {
-			return apperror.New(apperror.InvalidInput, "targets", "duplicate resource scope")
+			return apperror.New(apperror.InvalidInput, "targets", "O recurso informado está repetido.")
 		}
 		seen[target] = struct{}{}
 	}
@@ -155,7 +165,7 @@ func loadMembership(ctx context.Context, db *gorm.DB, tenantID, membershipID ide
 		return tx.Where("tenant_id = ? AND id = ?", tenantID, membershipID).First(&membership).Error
 	})
 	if err == gorm.ErrRecordNotFound {
-		return database.Membership{}, apperror.New(apperror.NotFound, "membershipId", "membership not found")
+		return database.Membership{}, apperror.New(apperror.NotFound, "membershipId", "Acesso não encontrado.")
 	}
 	if err != nil {
 		return database.Membership{}, err

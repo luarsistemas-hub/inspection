@@ -152,7 +152,7 @@ func TestNotificationConfigurationUT013ToUT021(t *testing.T) {
 	}
 }
 
-func TestConfigAcceptsExactMultiProductOriginsAndAudiences(t *testing.T) {
+func TestTFE_UT_048ConfigAcceptsExactMultiProductOriginsAndAudiences(t *testing.T) {
 	c := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigins: []string{"https://admin.example", "https://dashboard.example", "https://capture.example"}, CaptureOrigin: "https://capture.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudiences: []string{"inspection-admin", "inspection-dashboard"}, SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
@@ -160,6 +160,42 @@ func TestConfigAcceptsExactMultiProductOriginsAndAudiences(t *testing.T) {
 	c.AllowedOrigins = append(c.AllowedOrigins, "https://admin.example")
 	if err := c.Validate(); err == nil {
 		t.Fatal("duplicate origin accepted")
+	}
+}
+
+func TestTFE_UT_049ConfigRejectsWildcardMalformedDuplicateAndInsecureProductionOrigins(t *testing.T) {
+	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigins: []string{"https://admin.example", "https://dashboard.example", "https://capture.example"}, CaptureOrigin: "https://capture.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudiences: []string{"inspection-admin", "inspection-dashboard"}, SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
+	if err := valid.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	withOrigins := func(origins ...string) Config {
+		c := valid
+		c.AllowedOrigins = append([]string(nil), origins...)
+		return c
+	}
+	for name, c := range map[string]Config{
+		"wildcard":           withOrigins("https://admin.example", "*", "https://capture.example"),
+		"wildcard subdomain": withOrigins("https://*.example", "https://dashboard.example", "https://capture.example"),
+		"malformed":          withOrigins("admin.example", "https://dashboard.example", "https://capture.example"),
+		"path":               withOrigins("https://admin.example/app", "https://dashboard.example", "https://capture.example"),
+		"query":              withOrigins("https://admin.example?x=1", "https://dashboard.example", "https://capture.example"),
+		"userinfo":           withOrigins("https://user@admin.example", "https://dashboard.example", "https://capture.example"),
+		"duplicate":          withOrigins("https://admin.example", "https://dashboard.example", "https://capture.example", "https://dashboard.example"),
+		"plain http":         withOrigins("https://admin.example", "http://dashboard.example", "https://capture.example"),
+	} {
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s origin configuration was accepted", name)
+		}
+	}
+	duplicateAudience := valid
+	duplicateAudience.OIDCAudiences = []string{"inspection-admin", "inspection-admin"}
+	if err := duplicateAudience.Validate(); err == nil {
+		t.Error("duplicate OIDC audience was accepted")
+	}
+	local := withOrigins("http://localhost:3000", "http://localhost:3002", "http://localhost:3003")
+	local.Environment, local.CaptureOrigin, local.AdminOrigin = "local", "http://localhost:3003", "http://localhost:3000"
+	if err := local.Validate(); err != nil {
+		t.Errorf("local plain-HTTP origins were rejected: %v", err)
 	}
 }
 

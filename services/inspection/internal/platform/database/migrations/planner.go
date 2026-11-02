@@ -2699,6 +2699,751 @@ $function$;
 REVOKE ALL ON FUNCTION usage.read_llm_usage_by_inspection_v1(uuid,timestamptz,timestamptz,text,text,text,text,text,text,text,boolean,timestamptz,boolean,uuid,integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION usage.read_llm_usage_by_inspection_v1(uuid,timestamptz,timestamptz,text,text,text,text,text,text,text,boolean,timestamptz,boolean,uuid,integer) TO inspection_runtime;
 `},
+		{Version: 99, Name: "transcription_contracts", Compatible: true, SQL: `
+CREATE SCHEMA IF NOT EXISTS transcription;
+CREATE SCHEMA IF NOT EXISTS inventory;
+
+CREATE TABLE IF NOT EXISTS transcription.tenant_policies (
+ tenant_id uuid PRIMARY KEY REFERENCES tenancy.tenants(id),
+ enabled boolean NOT NULL DEFAULT false,
+ tenant_note_limit integer,
+ tenant_audio_limit_ms bigint,
+ inspection_note_limit integer,
+ inspection_audio_limit_ms bigint,
+ version integer NOT NULL DEFAULT 1,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT chk_voice_policy_limits CHECK (
+  (tenant_note_limit IS NULL OR tenant_note_limit > 0) AND
+  (tenant_audio_limit_ms IS NULL OR tenant_audio_limit_ms > 0) AND
+  (inspection_note_limit IS NULL OR inspection_note_limit > 0) AND
+  (inspection_audio_limit_ms IS NULL OR inspection_audio_limit_ms > 0)),
+ CONSTRAINT chk_voice_policy_enabled CHECK (NOT enabled OR
+  (tenant_note_limit IS NOT NULL AND tenant_audio_limit_ms IS NOT NULL AND inspection_note_limit IS NOT NULL AND inspection_audio_limit_ms IS NOT NULL)),
+ CONSTRAINT chk_voice_policy_version CHECK (version > 0)
+);
+
+CREATE TABLE IF NOT EXISTS transcription.audio_notes (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ inspection_id uuid NOT NULL,
+ responsibility_id uuid NOT NULL,
+ client_note_id uuid NOT NULL,
+ requirement_key text NOT NULL,
+ consent_version text NOT NULL,
+ disclosure_version text NOT NULL,
+ target_kind varchar(24) NOT NULL,
+ photo_media_id uuid,
+ video_attempt_id uuid,
+ source_media_id uuid,
+ source_generation integer,
+ start_ms bigint,
+ end_ms bigint,
+ time_basis varchar(24),
+ duration_ms bigint NOT NULL,
+ content_sha256 varchar(64) NOT NULL,
+ content_type varchar(120) NOT NULL,
+ size_bytes bigint NOT NULL,
+ status varchar(24) NOT NULL,
+ anchor_status varchar(24) NOT NULL,
+ highlighted boolean NOT NULL DEFAULT false,
+ highlight_source varchar(24),
+ version integer NOT NULL DEFAULT 1,
+ current_revision_id uuid,
+ audio_deletion_status varchar(24) NOT NULL DEFAULT 'PENDING',
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,inspection_id,responsibility_id,client_note_id),
+ FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id),
+ FOREIGN KEY(tenant_id,responsibility_id) REFERENCES inspections.responsibilities(tenant_id,id),
+ FOREIGN KEY(tenant_id,photo_media_id) REFERENCES media.media_objects(tenant_id,id),
+ FOREIGN KEY(tenant_id,video_attempt_id) REFERENCES capture.video_attempts(tenant_id,id),
+ FOREIGN KEY(tenant_id,source_media_id) REFERENCES media.media_objects(tenant_id,id),
+ CONSTRAINT chk_audio_note_target CHECK (
+  (target_kind='PHOTO' AND photo_media_id IS NOT NULL AND video_attempt_id IS NULL AND start_ms IS NULL AND end_ms IS NULL AND time_basis IS NULL) OR
+  (target_kind='VIDEO_INTERVAL' AND photo_media_id IS NULL AND video_attempt_id IS NOT NULL AND start_ms IS NOT NULL AND end_ms IS NOT NULL AND time_basis='CAPTURE_CLOCK')),
+ CONSTRAINT chk_audio_note_interval CHECK (start_ms IS NULL OR (start_ms >= 0 AND end_ms > start_ms)),
+ CONSTRAINT chk_audio_note_media CHECK (duration_ms BETWEEN 500 AND 60000 AND size_bytes BETWEEN 1 AND 5242880 AND content_sha256 ~ '^[0-9a-f]{64}$'),
+ CONSTRAINT chk_audio_note_status CHECK (status IN ('UPLOADING','QUEUED','PROCESSING','RETRY_WAIT','COMPLETED','FAILED','CANCELED','EXPIRED')),
+ CONSTRAINT chk_audio_note_anchor CHECK (anchor_status IN ('PENDING','VALID','INVALID','UNAVAILABLE')),
+ CONSTRAINT chk_audio_note_deletion CHECK (audio_deletion_status IN ('PENDING','SCHEDULED','PROCESSING','DELETED','FAILED','EXPIRED')),
+ CONSTRAINT chk_audio_note_version CHECK (version > 0)
+);
+CREATE INDEX IF NOT EXISTS idx_audio_notes_inspection_environment ON transcription.audio_notes(tenant_id,inspection_id,requirement_key,created_at,id);
+CREATE INDEX IF NOT EXISTS idx_audio_notes_processing ON transcription.audio_notes(tenant_id,status,updated_at) WHERE status IN ('QUEUED','PROCESSING','RETRY_WAIT');
+
+CREATE TABLE IF NOT EXISTS transcription.jobs (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ note_id uuid NOT NULL,
+ generation integer NOT NULL,
+ profile_key varchar(80) NOT NULL,
+ profile_version integer NOT NULL,
+ profile_digest varchar(64) NOT NULL,
+ status varchar(24) NOT NULL,
+ attempts integer NOT NULL DEFAULT 0,
+ lease_token uuid,
+ lease_deadline timestamptz,
+ retry_at timestamptz,
+ safe_failure_code varchar(64),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,note_id,generation),
+ FOREIGN KEY(tenant_id,note_id) REFERENCES transcription.audio_notes(tenant_id,id),
+ CONSTRAINT chk_transcription_job_generation CHECK (generation > 0 AND profile_version > 0),
+ CONSTRAINT chk_transcription_job_attempts CHECK (attempts BETWEEN 0 AND 3),
+ CONSTRAINT chk_transcription_job_status CHECK (status IN ('QUEUED','PROCESSING','RETRY_WAIT','COMPLETED','FAILED','CANCELED','EXPIRED')),
+ CONSTRAINT chk_transcription_job_lease CHECK ((lease_token IS NULL) = (lease_deadline IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_transcription_jobs_due ON transcription.jobs(status,retry_at,lease_deadline,created_at);
+
+CREATE TABLE IF NOT EXISTS transcription.transcript_revisions (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ note_id uuid NOT NULL,
+ revision_number integer NOT NULL,
+ text text NOT NULL,
+ kind varchar(32) NOT NULL,
+ author_id uuid,
+ call_id uuid,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,note_id,revision_number),
+ UNIQUE(tenant_id,note_id,id),
+ FOREIGN KEY(tenant_id,note_id) REFERENCES transcription.audio_notes(tenant_id,id),
+ FOREIGN KEY(tenant_id,author_id) REFERENCES access.memberships(tenant_id,id),
+ FOREIGN KEY(tenant_id,call_id) REFERENCES usage.llm_calls(tenant_id,call_id),
+ CONSTRAINT chk_transcript_revision_number CHECK (revision_number > 0),
+ CONSTRAINT chk_transcript_revision_text CHECK (char_length(text) BETWEEN 1 AND 12000),
+ CONSTRAINT chk_transcript_revision_kind CHECK (kind IN ('MODEL','PARTICIPANT_DECLARATION','HUMAN_EDIT')),
+ CONSTRAINT chk_transcript_revision_source CHECK ((kind='MODEL') = (call_id IS NOT NULL))
+);
+ALTER TABLE transcription.audio_notes ADD CONSTRAINT fk_audio_note_current_revision
+ FOREIGN KEY(tenant_id,id,current_revision_id) REFERENCES transcription.transcript_revisions(tenant_id,note_id,id);
+CREATE OR REPLACE FUNCTION transcription.reject_revision_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'transcript revision is immutable'; END $$;
+CREATE TRIGGER immutable_transcript_revision BEFORE UPDATE OR DELETE ON transcription.transcript_revisions
+ FOR EACH ROW EXECUTE FUNCTION transcription.reject_revision_mutation();
+
+CREATE TABLE IF NOT EXISTS transcription.audio_deletions (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ note_id uuid NOT NULL,
+ object_generation integer NOT NULL,
+ object_key text NOT NULL,
+ derivative_keys jsonb NOT NULL DEFAULT '[]'::jsonb,
+ status varchar(24) NOT NULL,
+ lease_token uuid,
+ lease_deadline timestamptz,
+ retry_at timestamptz,
+ deleted_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,note_id,object_generation),
+ FOREIGN KEY(tenant_id,note_id) REFERENCES transcription.audio_notes(tenant_id,id),
+ CONSTRAINT chk_audio_deletion_generation CHECK (object_generation > 0),
+ CONSTRAINT chk_audio_deletion_derivatives CHECK (jsonb_typeof(derivative_keys)='array'),
+ CONSTRAINT chk_audio_deletion_status CHECK (status IN ('PENDING','PROCESSING','DELETED','FAILED','EXPIRED')),
+ CONSTRAINT chk_audio_deletion_lease CHECK ((lease_token IS NULL) = (lease_deadline IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_audio_deletions_due ON transcription.audio_deletions(status,retry_at,lease_deadline,created_at);
+
+CREATE TABLE IF NOT EXISTS analysis.catalog_note_manifests (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ inspection_id uuid NOT NULL,
+ requirement_key text NOT NULL,
+ catalog_generation integer NOT NULL,
+ note_revisions jsonb NOT NULL,
+ deadline_at timestamptz NOT NULL,
+ missing_count integer NOT NULL DEFAULT 0,
+ digest varchar(64) NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_catalog_note_manifest_scope UNIQUE(tenant_id,inspection_id,requirement_key,catalog_generation),
+ CONSTRAINT fk_catalog_note_manifest_inspection FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id),
+ CONSTRAINT chk_catalog_manifest_generation CHECK (catalog_generation > 0 AND missing_count >= 0),
+ CONSTRAINT chk_catalog_manifest_notes CHECK (jsonb_typeof(note_revisions)='array'),
+ CONSTRAINT chk_catalog_manifest_digest CHECK (digest ~ '^[0-9a-f]{64}$')
+);
+CREATE INDEX IF NOT EXISTS idx_catalog_note_manifests_due ON analysis.catalog_note_manifests(tenant_id,deadline_at) WHERE missing_count > 0;
+
+CREATE TABLE IF NOT EXISTS inventory.item_attribute_sources (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ item_id uuid NOT NULL,
+ origin_version_id uuid NOT NULL,
+ attribute_name varchar(64) NOT NULL,
+ source_kind varchar(24) NOT NULL,
+ note_id uuid,
+ revision_id uuid,
+ visual_evidence_id uuid,
+ reviewed_by uuid,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ CONSTRAINT uq_attribute_source_shape UNIQUE NULLS NOT DISTINCT (tenant_id,item_id,attribute_name,source_kind,note_id,revision_id,visual_evidence_id),
+ CONSTRAINT fk_attribute_source_item FOREIGN KEY(tenant_id,item_id) REFERENCES origins.inventory_items(tenant_id,id),
+ CONSTRAINT fk_attribute_source_origin FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id),
+ CONSTRAINT fk_attribute_source_revision FOREIGN KEY(tenant_id,note_id,revision_id) REFERENCES transcription.transcript_revisions(tenant_id,note_id,id),
+ CONSTRAINT fk_attribute_source_visual FOREIGN KEY(tenant_id,visual_evidence_id) REFERENCES origins.inventory_item_evidence(tenant_id,id),
+ CONSTRAINT fk_attribute_source_reviewer FOREIGN KEY(tenant_id,reviewed_by) REFERENCES access.memberships(tenant_id,id),
+ CONSTRAINT chk_attribute_source_kind CHECK (source_kind IN ('VISUAL','VOICE','HUMAN_REVIEW')),
+ CONSTRAINT chk_attribute_source_shape CHECK (
+  (source_kind='VOICE' AND note_id IS NOT NULL AND revision_id IS NOT NULL AND visual_evidence_id IS NULL) OR
+  (source_kind='VISUAL' AND note_id IS NULL AND revision_id IS NULL AND visual_evidence_id IS NOT NULL) OR
+  (source_kind='HUMAN_REVIEW' AND note_id IS NULL AND revision_id IS NULL AND reviewed_by IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_attribute_sources_item ON inventory.item_attribute_sources(tenant_id,item_id,attribute_name);
+CREATE INDEX IF NOT EXISTS idx_attribute_sources_revision ON inventory.item_attribute_sources(tenant_id,note_id,revision_id) WHERE source_kind='VOICE';
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS audio_duration_ms bigint;
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS audio_input_tokens bigint;
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS text_input_tokens bigint;
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS reasoning_tokens bigint;
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS audio_token_unit varchar(24);
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_audio_usage;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_audio_usage CHECK (
+ (audio_duration_ms IS NULL OR audio_duration_ms >= 0) AND
+ (audio_input_tokens IS NULL OR audio_input_tokens >= 0) AND
+ (text_input_tokens IS NULL OR text_input_tokens >= 0) AND
+ (reasoning_tokens IS NULL OR reasoning_tokens >= 0) AND
+ (audio_token_unit IS NULL OR audio_token_unit IN ('TOKENS','MILLISECONDS','SECONDS')));
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_comparison_mode;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_comparison_mode CHECK(comparison_mode IS NULL OR comparison_mode IN ('CURRENT_ONLY','COMPARE_ORIGIN_CURRENT','CHECKLIST_ONLY','FIXED_ORIGIN','PLANNED_STAGE','PREVIOUS_INSPECTION','BEFORE_AFTER','VIDEO_SCOPE','VIDEO_MATCH','VIDEO_CONDITION','VIDEO_VERIFY','INVENTORY_CATALOG','INVENTORY_MATCH','INVENTORY_COMPARE','TRANSCRIPTION'));
+
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY[
+  'transcription.tenant_policies','transcription.audio_notes','transcription.jobs','transcription.transcript_revisions',
+  'transcription.audio_deletions','analysis.catalog_note_manifests','inventory.item_attribute_sources'
+ ] LOOP
+  EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY',t);
+  EXECUTE format('CREATE POLICY tenant_isolation ON %s USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',t);
+ END LOOP;
+END $$;
+GRANT USAGE ON SCHEMA transcription, inventory TO inspection_runtime;
+GRANT SELECT,INSERT,UPDATE ON transcription.tenant_policies,transcription.audio_notes,transcription.jobs,transcription.audio_deletions TO inspection_runtime;
+GRANT SELECT,INSERT ON transcription.transcript_revisions,analysis.catalog_note_manifests,inventory.item_attribute_sources TO inspection_runtime;
+GRANT SELECT,INSERT,UPDATE ON transcription.audio_notes,transcription.jobs,transcription.audio_deletions TO inspection_worker;
+GRANT SELECT ON transcription.tenant_policies,transcription.transcript_revisions,analysis.catalog_note_manifests,inventory.item_attribute_sources TO inspection_worker;
+`},
+		{Version: 100, Name: "transcription_upload_receipts", Compatible: true, SQL: `
+ALTER TABLE transcription.audio_notes
+ ADD COLUMN IF NOT EXISTS upload_key text,
+ ADD COLUMN IF NOT EXISTS upload_id text,
+ ADD COLUMN IF NOT EXISTS idempotency_payload_digest varchar(64) NOT NULL DEFAULT '',
+ ADD CONSTRAINT chk_audio_note_upload_pair CHECK ((upload_key IS NULL) = (upload_id IS NULL));
+ALTER TABLE transcription.audio_notes ALTER COLUMN idempotency_payload_digest SET DEFAULT '';
+ALTER TABLE transcription.audio_notes ALTER COLUMN idempotency_payload_digest SET NOT NULL;
+`},
+		{Version: 101, Name: "transcription_mutation_receipts", Compatible: true, SQL: `
+CREATE TABLE IF NOT EXISTS transcription.mutation_receipts (
+ tenant_id uuid NOT NULL,
+ id uuid NOT NULL,
+ note_id uuid NOT NULL,
+ client_mutation_id varchar(200) NOT NULL,
+ operation varchar(40) NOT NULL,
+ payload_digest varchar(64) NOT NULL,
+ result_version integer NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,id),
+ UNIQUE(tenant_id,note_id,client_mutation_id),
+ FOREIGN KEY(tenant_id,note_id) REFERENCES transcription.audio_notes(tenant_id,id)
+);
+ALTER TABLE transcription.mutation_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transcription.mutation_receipts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON transcription.mutation_receipts;
+CREATE POLICY tenant_isolation ON transcription.mutation_receipts USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+GRANT SELECT,INSERT ON transcription.mutation_receipts TO inspection_runtime;
+`},
+		{Version: 102, Name: "transcription_text_review_state", Compatible: true, SQL: `
+ALTER TABLE transcription.audio_notes ADD COLUMN IF NOT EXISTS text_confirmed boolean NOT NULL DEFAULT false;
+ALTER TABLE transcription.audio_notes ALTER COLUMN text_confirmed SET DEFAULT false;
+ALTER TABLE transcription.audio_notes ALTER COLUMN text_confirmed SET NOT NULL;
+`},
+		{Version: 103, Name: "processing_acceptance_voice_consent", Compatible: true, SQL: `
+ALTER TABLE invitations.processing_acceptances ADD COLUMN IF NOT EXISTS voice_processing boolean NOT NULL DEFAULT false;
+ALTER TABLE invitations.processing_acceptances ALTER COLUMN voice_processing SET DEFAULT false;
+ALTER TABLE invitations.processing_acceptances ALTER COLUMN voice_processing SET NOT NULL;
+`},
+		{Version: 104, Name: "processing_acceptance_voice_consent_version", Compatible: true, SQL: `
+ALTER TABLE invitations.processing_acceptances ADD COLUMN IF NOT EXISTS voice_consent_version varchar(100) NOT NULL DEFAULT '';
+ALTER TABLE invitations.processing_acceptances ALTER COLUMN voice_consent_version SET DEFAULT '';
+ALTER TABLE invitations.processing_acceptances ALTER COLUMN voice_consent_version SET NOT NULL;
+`},
+		{Version: 105, Name: "transcription_policy_mutation_receipts", Compatible: true, SQL: `
+CREATE TABLE IF NOT EXISTS transcription.policy_mutation_receipts (
+ tenant_id uuid NOT NULL,
+ client_mutation_id varchar(200) NOT NULL,
+ payload_digest varchar(64) NOT NULL,
+ enabled boolean NOT NULL,
+ tenant_note_limit integer NOT NULL,
+ tenant_audio_limit_ms bigint NOT NULL,
+ inspection_note_limit integer NOT NULL,
+ inspection_audio_limit_ms bigint NOT NULL,
+ result_version integer NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,client_mutation_id),
+ FOREIGN KEY(tenant_id) REFERENCES tenancy.tenants(id)
+);
+ALTER TABLE transcription.policy_mutation_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transcription.policy_mutation_receipts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON transcription.policy_mutation_receipts;
+CREATE POLICY tenant_isolation ON transcription.policy_mutation_receipts USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+GRANT SELECT,INSERT ON transcription.policy_mutation_receipts TO inspection_runtime;
+`},
+		{Version: 106, Name: "transcription_note_result_projection", Compatible: true, SQL: `
+ALTER TABLE transcription.audio_notes ADD COLUMN IF NOT EXISTS no_speech boolean NOT NULL DEFAULT false;
+ALTER TABLE transcription.audio_notes ALTER COLUMN no_speech SET DEFAULT false;
+ALTER TABLE transcription.audio_notes ALTER COLUMN no_speech SET NOT NULL;
+ALTER TABLE transcription.audio_notes ADD COLUMN IF NOT EXISTS safe_failure_code varchar(64);
+DO $$ BEGIN
+ ALTER TABLE transcription.audio_notes ADD CONSTRAINT chk_audio_note_safe_failure_code CHECK (safe_failure_code IS NULL OR safe_failure_code ~ '^[A-Z0-9_]{1,64}$');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+`},
+		{Version: 107, Name: "internal_user_verified_email_recipient_channel", Compatible: true, SQL: `
+DELETE FROM notifications.recipient_channels AS duplicate
+USING (
+  SELECT id, ROW_NUMBER() OVER (
+    PARTITION BY tenant_id, recipient_membership_id, channel, destination
+    ORDER BY verified_at IS NULL, NOT selected, id
+  ) AS rn
+  FROM notifications.recipient_channels
+) AS ranked
+WHERE duplicate.id=ranked.id
+  AND ranked.rn > 1;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recipient_channel
+ ON notifications.recipient_channels(tenant_id, recipient_membership_id, channel, destination);
+INSERT INTO notifications.recipient_channels
+ (id, tenant_id, recipient_membership_id, channel, destination, verified_at, selected, version, created_at, updated_at)
+SELECT gen_random_uuid(), invitation.tenant_id, membership.id, 'EMAIL', lower(btrim(invitation.email, E' \t\r\n')), invitation.accepted_at, true, 1, invitation.accepted_at, invitation.accepted_at
+FROM access.user_invitations AS invitation
+JOIN access.memberships AS membership
+  ON membership.tenant_id=invitation.tenant_id AND membership.id=invitation.membership_id
+WHERE invitation.status='ACCEPTED'
+  AND invitation.accepted_at IS NOT NULL
+  AND membership.status='ACTIVE'
+  AND membership.role <> 'CUSTOMER_VIEWER'
+  AND lower(btrim(invitation.email, E' \t\r\n')) <> ''
+  AND NOT EXISTS (
+    SELECT 1 FROM notifications.recipient_channels AS existing_channel
+    WHERE existing_channel.tenant_id=membership.tenant_id
+      AND existing_channel.recipient_membership_id=membership.id
+      AND existing_channel.channel='EMAIL'
+  )
+ON CONFLICT (tenant_id, recipient_membership_id, channel, destination) DO NOTHING;
+`},
+		{Version: 108, Name: "transcription_audio_deletion_attempts", Compatible: true, SQL: `
+ALTER TABLE transcription.audio_deletions
+ ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0;
+DO $$ BEGIN
+ ALTER TABLE transcription.audio_deletions ADD CONSTRAINT chk_audio_deletion_attempts CHECK (attempts >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS idx_audio_notes_retention_due ON transcription.audio_notes(status,created_at)
+ WHERE status IN ('UPLOADING','QUEUED','RETRY_WAIT','FAILED');
+CREATE OR REPLACE FUNCTION transcription.discover_due_tenants(p_retention interval)
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT n.tenant_id FROM transcription.audio_notes n
+   WHERE n.status='UPLOADING' AND n.created_at<=now()-p_retention
+  UNION SELECT n.tenant_id FROM transcription.audio_notes n
+   JOIN transcription.jobs j ON j.tenant_id=n.tenant_id AND j.note_id=n.id AND j.generation=1
+   WHERE n.status IN ('QUEUED','RETRY_WAIT','FAILED') AND j.created_at<=now()-p_retention
+  UNION SELECT j.tenant_id FROM transcription.jobs j
+   WHERE (j.status='RETRY_WAIT' AND j.retry_at<=now()) OR (j.status='PROCESSING' AND j.lease_deadline<=now())
+  UNION SELECT d.tenant_id FROM transcription.audio_deletions d
+   WHERE (d.status IN ('PENDING','FAILED') AND (d.retry_at IS NULL OR d.retry_at<=now()))
+      OR (d.status='PROCESSING' AND d.lease_deadline<=now())
+$$;
+REVOKE ALL ON FUNCTION transcription.discover_due_tenants(interval) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION transcription.discover_due_tenants(interval) TO inspection_runtime;
+`},
+		{Version: 109, Name: "catalog_note_manifest_sealing", Compatible: true, SQL: `
+ALTER TABLE analysis.catalog_note_manifests ADD COLUMN IF NOT EXISTS sealed_at timestamptz;
+GRANT UPDATE (note_revisions, missing_count, digest, sealed_at) ON analysis.catalog_note_manifests TO inspection_runtime;
+CREATE OR REPLACE FUNCTION analysis.reject_sealed_catalog_manifest_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.sealed_at IS NOT NULL THEN RAISE EXCEPTION 'sealed catalog note manifest is immutable'; END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS sealed_catalog_manifest_immutable ON analysis.catalog_note_manifests;
+CREATE TRIGGER sealed_catalog_manifest_immutable BEFORE UPDATE ON analysis.catalog_note_manifests
+ FOR EACH ROW EXECUTE FUNCTION analysis.reject_sealed_catalog_manifest_change();
+`},
+		{Version: 110, Name: "report_publication_invalidated_by", Compatible: true, SQL: `
+ALTER TABLE reports.report_publications ADD COLUMN IF NOT EXISTS invalidated_by uuid;
+-- On a new database AutoMigrate creates reports.report_publications before
+-- migration 21, so its table-level UNIQUE constraints were never applied. The
+-- snapshot key is unique everywhere; the mutation key is unique only when set,
+-- because rows written before the key was required carry an empty one.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_publication_snapshot ON reports.report_publications (tenant_id, snapshot_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_publication_mutation ON reports.report_publications (tenant_id, client_mutation_id) WHERE client_mutation_id <> '';
+`},
+		{Version: 111, Name: "customer_membership_forbids_admin_entitlement", Compatible: true, SQL: `
+-- Customers are Dashboard-only. Normalize any pre-existing ADMIN entitlement
+-- before the guard becomes enforceable. Under FORCE ROW LEVEL SECURITY a role
+-- without BYPASSRLS would delete nothing and report success, so make the
+-- statement fail loudly instead of silently skipping rows.
+SET LOCAL row_security = off;
+DELETE FROM access.product_entitlements AS entitlement
+USING access.memberships AS membership
+WHERE membership.tenant_id=entitlement.tenant_id
+  AND membership.id=entitlement.membership_id
+  AND membership.role='CUSTOMER_VIEWER'
+  AND entitlement.product='ADMIN';
+-- A CHECK constraint cannot read another table, so the guard is a deferred
+-- constraint trigger on both sides of the relationship. Deferral lets one
+-- transaction change role, entitlements and scopes in any order and validates
+-- only the final state at commit.
+CREATE OR REPLACE FUNCTION access.forbid_customer_admin_entitlement() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'product_entitlements' THEN
+    IF NEW.product = 'ADMIN' AND EXISTS (
+      SELECT 1 FROM access.memberships AS membership
+      WHERE membership.tenant_id = NEW.tenant_id
+        AND membership.id = NEW.membership_id
+        AND membership.role = 'CUSTOMER_VIEWER'
+    ) THEN
+      RAISE EXCEPTION 'customer membership cannot hold the ADMIN product entitlement' USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF NEW.role = 'CUSTOMER_VIEWER' AND EXISTS (
+    SELECT 1 FROM access.product_entitlements AS entitlement
+    WHERE entitlement.tenant_id = NEW.tenant_id
+      AND entitlement.membership_id = NEW.id
+      AND entitlement.product = 'ADMIN'
+  ) THEN
+    RAISE EXCEPTION 'customer membership cannot hold the ADMIN product entitlement' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END $$;
+DROP TRIGGER IF EXISTS customer_admin_entitlement_guard ON access.product_entitlements;
+CREATE CONSTRAINT TRIGGER customer_admin_entitlement_guard
+  AFTER INSERT OR UPDATE OF product, membership_id ON access.product_entitlements
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION access.forbid_customer_admin_entitlement();
+DROP TRIGGER IF EXISTS customer_role_admin_entitlement_guard ON access.memberships;
+CREATE CONSTRAINT TRIGGER customer_role_admin_entitlement_guard
+  AFTER INSERT OR UPDATE OF role ON access.memberships
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION access.forbid_customer_admin_entitlement();
+`},
+		{Version: 112, Name: "inventory_attribute_source_lineage", Compatible: true, SQL: `
+-- Attribute sources follow the item and evidence they describe, so retention
+-- purges that remove evidence, items or versions keep working. The explicit
+-- DELETE grant lets catalog regeneration replace the VOICE and VISUAL sources
+-- of the pending suggestions it clears; HUMAN_REVIEW rows are append-only for
+-- direct deletes (a cascade from the item still removes them with the item).
+ALTER TABLE inventory.item_attribute_sources DROP CONSTRAINT IF EXISTS fk_attribute_source_item;
+ALTER TABLE inventory.item_attribute_sources ADD CONSTRAINT fk_attribute_source_item
+ FOREIGN KEY(tenant_id,item_id) REFERENCES origins.inventory_items(tenant_id,id) ON DELETE CASCADE;
+ALTER TABLE inventory.item_attribute_sources DROP CONSTRAINT IF EXISTS fk_attribute_source_origin;
+ALTER TABLE inventory.item_attribute_sources ADD CONSTRAINT fk_attribute_source_origin
+ FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id) ON DELETE CASCADE;
+ALTER TABLE inventory.item_attribute_sources DROP CONSTRAINT IF EXISTS fk_attribute_source_visual;
+ALTER TABLE inventory.item_attribute_sources ADD CONSTRAINT fk_attribute_source_visual
+ FOREIGN KEY(tenant_id,visual_evidence_id) REFERENCES origins.inventory_item_evidence(tenant_id,id) ON DELETE CASCADE;
+GRANT DELETE ON inventory.item_attribute_sources TO inspection_runtime;
+-- An explicit regeneration of a room's suggestions is audited with its own action.
+ALTER TABLE origins.inventory_decisions DROP CONSTRAINT IF EXISTS chk_inventory_decision_action;
+ALTER TABLE origins.inventory_decisions ADD CONSTRAINT chk_inventory_decision_action
+ CHECK(action IN ('ACCEPT','EDIT','REJECT','ADD','MERGE','SPLIT','REMOVE_ENVIRONMENT','ACTIVATE','DISCARD','REGENERATE'));
+CREATE OR REPLACE FUNCTION inventory.reject_human_review_source_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.source_kind='HUMAN_REVIEW' AND pg_trigger_depth()=1 THEN
+  RAISE EXCEPTION 'human review provenance is append-only';
+ END IF;
+ RETURN OLD;
+END $$;
+DROP TRIGGER IF EXISTS human_review_source_append_only ON inventory.item_attribute_sources;
+CREATE TRIGGER human_review_source_append_only BEFORE DELETE ON inventory.item_attribute_sources
+ FOR EACH ROW EXECUTE FUNCTION inventory.reject_human_review_source_delete();
+`},
+		{Version: 113, Name: "retention_clock_project_closure_and_class_purges", Compatible: true, SQL: `
+-- Project closure starts the retention clock of its inspections (US-031
+-- AC-2/EC-8/EC-9). Close sets closed_at and Reopen clears it. Projects that
+-- are already CLOSED fall back to their last update. The clock reads
+-- COALESCE(closed_at, updated_at), so a project closed by an older binary that
+-- does not write closed_at still yields a usable instant, and a reopened one is
+-- out of retention because its status is no longer CLOSED.
+ALTER TABLE projects.projects ADD COLUMN IF NOT EXISTS closed_at timestamptz;
+UPDATE projects.projects SET closed_at=updated_at WHERE status='CLOSED' AND closed_at IS NULL;
+-- Secrets scrubbed after expiry keep the invitation row as lineage.
+ALTER TABLE invitations.invitations ADD COLUMN IF NOT EXISTS secrets_purged_at timestamptz;
+-- The migrator runs each step in a transaction, so CREATE INDEX CONCURRENTLY is not
+-- available here; the indexes below are plain and cover small or empty predicates.
+CREATE INDEX IF NOT EXISTS idx_retention_policies_effective ON retention.policies(tenant_id, version DESC);
+CREATE INDEX IF NOT EXISTS idx_invitations_secrets_pending ON invitations.invitations(expires_at) WHERE secrets_purged_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_media_location_present ON media.media_objects(tenant_id, responsibility_id)
+  WHERE latitude_e6 IS NOT NULL OR longitude_e6 IS NOT NULL OR accuracy_mm IS NOT NULL OR distance_mm IS NOT NULL;
+-- The scheduler deduplicates purge_due events against the last 24 hours of the outbox.
+CREATE INDEX IF NOT EXISTS idx_outbox_retention_purge_due ON messaging.outbox(tenant_id, correlation_id, created_at) WHERE type='retention.purge_due.v1';
+-- The location class nulls the capture location of submitted evidence; only
+-- the retention job (app.retention_location) may do so, and no other column.
+CREATE OR REPLACE FUNCTION platform.reject_original_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE submitted boolean;
+BEGIN
+  IF OLD.status IN ('VERIFIED','SCREENED','READY','REJECTED','PURGED') AND
+     (NEW.object_key,NEW.content_type,NEW.sha256,NEW.size_bytes,NEW.tenant_id,NEW.responsibility_id,NEW.id,NEW.created_at)
+       IS DISTINCT FROM
+     (OLD.object_key,OLD.content_type,OLD.sha256,OLD.size_bytes,OLD.tenant_id,OLD.responsibility_id,OLD.id,OLD.created_at)
+  THEN RAISE EXCEPTION 'original media is immutable'; END IF;
+  SELECT EXISTS(SELECT 1 FROM capture.capture_drafts d WHERE d.tenant_id=OLD.tenant_id AND d.responsibility_id=OLD.responsibility_id AND d.status='SUBMITTED') INTO submitted;
+  IF submitted AND NEW.status <> 'PURGED' AND to_jsonb(NEW) IS DISTINCT FROM to_jsonb(OLD) AND
+     NOT (OLD.replaces_media_id IS NULL AND NEW.replaces_media_id IS NOT NULL AND (to_jsonb(NEW) - 'replaces_media_id') = (to_jsonb(OLD) - 'replaces_media_id')) AND
+     NOT (current_setting('app.retention_location', true) = 'on' AND
+          NEW.latitude_e6 IS NULL AND NEW.longitude_e6 IS NULL AND NEW.accuracy_mm IS NULL AND NEW.distance_mm IS NULL AND
+          (to_jsonb(NEW) - 'latitude_e6' - 'longitude_e6' - 'accuracy_mm' - 'distance_mm') = (to_jsonb(OLD) - 'latitude_e6' - 'longitude_e6' - 'accuracy_mm' - 'distance_mm')) AND
+     NOT (OLD.media_kind = 'VIDEO' AND NEW.media_kind = 'VIDEO' AND
+          OLD.status IN ('RECEIVED','VERIFIED','SCREENED') AND NEW.status IN ('VERIFIED','SCREENED','READY','REJECTED') AND
+          (to_jsonb(NEW) - 'status') = (to_jsonb(OLD) - 'status') AND
+          (NEW.status <> 'READY' OR EXISTS (
+            SELECT 1 FROM media.video_preparation_jobs p
+            WHERE p.tenant_id = OLD.tenant_id AND p.media_id = OLD.id AND p.status = 'READY'
+          )))
+  THEN RAISE EXCEPTION 'submitted evidence is immutable'; END IF;
+  RETURN NEW;
+END $$;
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz, p_terminal_updated_before timestamptz, p_deadline_before timestamptz
+) RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  WITH eff AS (SELECT DISTINCT ON (rp.tenant_id) rp.tenant_id, rp.evidence_days, rp.operational_days, rp.security_days FROM retention.policies rp ORDER BY rp.tenant_id, rp.version DESC)
+  SELECT s.tenant_id FROM schedules.schedules s WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION SELECT r.tenant_id FROM schedules.reminder_plans r WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  -- Terminal inspections whose class retention elapsed under the tenant's
+  -- effective policy (platform defaults without one), using the same closure
+  -- rule as retention/core ClosureSQL. p_terminal_updated_before stays in the
+  -- signature for compatibility and is no longer used: a short tenant policy
+  -- must be discovered long before the five-year default. The effective policy
+  -- is computed once per tenant (CTE eff) instead of once per inspection, and
+  -- the one-day policy floor pre-filters on updated_at (a project inspection's
+  -- closure is never earlier than its own updated_at).
+  UNION SELECT i.tenant_id FROM inspections.inspections i
+    LEFT JOIN eff e ON e.tenant_id=i.tenant_id
+    WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_now-interval '24 hours'
+      AND (CASE WHEN i.project_id IS NULL THEN i.updated_at ELSE (SELECT GREATEST(COALESCE(pr.closed_at, pr.updated_at), i.updated_at) FROM projects.projects pr WHERE pr.tenant_id=i.tenant_id AND pr.id=i.project_id AND pr.status='CLOSED') END) + COALESCE(e.evidence_days,1825) * interval '24 hours' <= p_now
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=i.tenant_id AND h.inspection_id=i.id AND h.active)
+      AND NOT EXISTS (SELECT 1 FROM retention.purge_runs pu WHERE pu.tenant_id=i.tenant_id AND pu.inspection_id=i.id)
+      AND NOT EXISTS (SELECT 1 FROM messaging.outbox o WHERE o.tenant_id=i.tenant_id AND o.type='retention.purge_due.v1' AND o.correlation_id='retention-'||i.id::text AND o.created_at>p_now-interval '24 hours')
+  UNION SELECT i.tenant_id FROM inspections.inspections i
+    LEFT JOIN eff e ON e.tenant_id=i.tenant_id
+    WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_now-interval '24 hours'
+      AND (CASE WHEN i.project_id IS NULL THEN i.updated_at ELSE (SELECT GREATEST(COALESCE(pr.closed_at, pr.updated_at), i.updated_at) FROM projects.projects pr WHERE pr.tenant_id=i.tenant_id AND pr.id=i.project_id AND pr.status='CLOSED') END) + COALESCE(e.operational_days,365) * interval '24 hours' <= p_now
+      AND EXISTS (SELECT 1 FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id
+        WHERE r.tenant_id=i.tenant_id AND r.inspection_id=i.id AND (m.latitude_e6 IS NOT NULL OR m.longitude_e6 IS NOT NULL OR m.accuracy_mm IS NOT NULL OR m.distance_mm IS NOT NULL))
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=i.tenant_id AND h.inspection_id=i.id AND h.active)
+      AND NOT EXISTS (SELECT 1 FROM retention.purge_runs pu WHERE pu.tenant_id=i.tenant_id AND pu.inspection_id=i.id)
+      AND NOT EXISTS (SELECT 1 FROM messaging.outbox o WHERE o.tenant_id=i.tenant_id AND o.type='retention.purge_due.v1' AND o.correlation_id='retention-operational-'||i.id::text AND o.created_at>p_now-interval '24 hours')
+  -- Invitation, OTP and session secrets past their own expiry plus the grace period.
+  UNION SELECT o.tenant_id FROM invitations.otp_challenges o LEFT JOIN eff e ON e.tenant_id=o.tenant_id
+    WHERE o.expires_at<=p_now AND o.expires_at + COALESCE(e.security_days,0) * interval '24 hours' <= p_now
+  UNION SELECT s.tenant_id FROM invitations.external_sessions s LEFT JOIN eff e ON e.tenant_id=s.tenant_id
+    WHERE s.expires_at<=p_now AND s.expires_at + COALESCE(e.security_days,0) * interval '24 hours' <= p_now
+  UNION SELECT inv.tenant_id FROM invitations.invitations inv LEFT JOIN eff e ON e.tenant_id=inv.tenant_id
+    WHERE inv.secrets_purged_at IS NULL AND inv.expires_at<=p_now AND inv.expires_at + COALESCE(e.security_days,0) * interval '24 hours' <= p_now
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION SELECT c.tenant_id FROM origins.counterparty_invitations c WHERE c.response='PENDING' AND c.deadline_at<=p_now
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE v.status='DELETING' AND (v.delete_lease_until IS NULL OR v.delete_lease_until<=p_now)
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE v.status='RETAINED' AND v.retention_anchor='FIXED' AND v.source_expiry_at<=p_now
+    AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=v.tenant_id AND h.active AND (h.source_media_id=v.media_id OR h.inspection_id IN (SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id WHERE m.tenant_id=v.tenant_id AND m.id=v.media_id)))
+    AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=v.tenant_id AND c.response='CONTESTED' AND c.resolution='OPEN' AND c.origin_version_id IN (
+      SELECT e.origin_version_id FROM origins.origin_evidence e WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id
+      UNION SELECT i.origin_version_id FROM origins.inventory_item_evidence e JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id JOIN origins.inventory_environments env ON env.tenant_id=i.tenant_id AND env.id=i.environment_id WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND i.decision IN ('ACCEPTED','EDITED','ADDED') AND i.merged_into_id IS NULL AND env.decision<>'REJECTED'
+      UNION SELECT ov.id FROM origins.origin_versions ov JOIN media.video_preparation_jobs p ON p.tenant_id=ov.tenant_id AND p.id=ov.video_preparation_id WHERE ov.tenant_id=v.tenant_id AND p.media_id=v.media_id))
+    AND NOT EXISTS (
+      SELECT 1 FROM origins.origin_evidence e JOIN origins.origin_versions ov ON ov.tenant_id=e.tenant_id AND ov.id=e.origin_version_id
+      WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND ov.status='ACTIVE'
+      UNION ALL
+      SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+      JOIN origins.origin_versions ov ON ov.tenant_id=it.tenant_id AND ov.id=it.origin_version_id
+      JOIN origins.inventory_environments env ON env.tenant_id=it.tenant_id AND env.id=it.environment_id
+      WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND it.decision IN ('ACCEPTED','EDITED','ADDED') AND it.merged_into_id IS NULL AND env.decision<>'REJECTED' AND ov.status='ACTIVE'
+      UNION ALL
+      SELECT 1 FROM media.video_preparation_jobs p JOIN origins.origin_versions ov ON ov.tenant_id=p.tenant_id AND ov.video_preparation_id=p.id
+      WHERE p.tenant_id=v.tenant_id AND p.media_id=v.media_id AND ov.status='ACTIVE'
+    )
+    AND NOT EXISTS (SELECT 1 FROM media.video_source_leases l WHERE l.tenant_id=v.tenant_id AND l.source_media_id=v.media_id AND l.lease_until>p_now)
+    AND NOT EXISTS (SELECT 1 FROM media.video_preparation_jobs p WHERE p.tenant_id=v.tenant_id AND p.media_id=v.media_id AND p.status='PROCESSING' AND p.lease_expires_at>p_now)
+  UNION SELECT d.tenant_id FROM retention.deletion_requests d WHERE d.status='REQUESTED' OR (d.status='BLOCKED' AND COALESCE(d.processed_at,d.requested_at)<=p_now-interval '5 minutes')
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+    WHERE ov.has_inventory AND ov.responsibility_id IS NULL AND ov.status IN ('SUPERSEDED','INVALIDATED','DISCARDED')
+      AND COALESCE(ov.superseded_at,ov.invalidated_at,ov.discarded_at,ov.activated_at,ov.created_at)
+        + (CASE WHEN ov.status='SUPERSEDED' THEN COALESCE(p.superseded_baseline_retention_days,365) ELSE COALESCE(p.current_retention_days,30) END) * interval '1 day' <= p_now
+      AND EXISTS (SELECT 1 FROM origins.inventory_items it WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active)
+      AND NOT EXISTS (
+        SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+        JOIN retention.legal_holds h ON h.tenant_id=e.tenant_id AND h.source_media_id=e.media_id AND h.active
+        WHERE e.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id
+      )
+      AND NOT EXISTS (SELECT 1 FROM schedules.schedules s WHERE s.tenant_id=ov.tenant_id AND s.status='ACTIVE' AND s.reference_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM inspections.reference_snapshots r JOIN inspections.inspections i ON i.tenant_id=r.tenant_id AND i.id=r.inspection_id WHERE r.tenant_id=ov.tenant_id AND r.reference_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+      AND NOT EXISTS (SELECT 1 FROM analysis.inventory_jobs j JOIN inspections.inspections i ON i.tenant_id=j.tenant_id AND i.id=j.inspection_id WHERE j.tenant_id=ov.tenant_id AND j.origin_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active AND (h.inspection_id=ov.source_inspection_id OR h.inspection_id IN (
+        SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id
+        JOIN origins.inventory_item_evidence e ON e.tenant_id=m.tenant_id AND e.media_id=m.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)))
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+    WHERE ov.media_kind='VIDEO' AND ov.status IN ('INVALIDATED','SUPERSEDED')
+      AND ov.video_preparation_id IS NOT NULL
+      AND (ov.status='INVALIDATED' OR (ov.superseded_at IS NOT NULL AND ov.superseded_at + COALESCE(p.superseded_baseline_retention_days,365) * interval '1 day' <= p_now))
+      AND EXISTS (SELECT 1 FROM media.video_frames f WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id)
+      AND NOT EXISTS (SELECT 1 FROM media.video_evidence_references r WHERE r.tenant_id=ov.tenant_id AND r.preparation_id=ov.video_preparation_id)
+      AND NOT EXISTS (SELECT 1 FROM origins.origin_versions active WHERE active.tenant_id=ov.tenant_id AND active.video_preparation_id=ov.video_preparation_id AND active.status='ACTIVE')
+      AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active AND h.origin_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM media.video_frames f JOIN origins.inventory_item_evidence e ON e.tenant_id=f.tenant_id AND e.frame_id=f.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id JOIN origins.origin_versions v ON v.tenant_id=it.tenant_id AND v.id=it.origin_version_id WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id AND v.status<>'DISCARDED')
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
+`},
+		{Version: 114, Name: "access_invitation_receipts", Compatible: true, SQL: `
+CREATE TABLE IF NOT EXISTS access.invitation_receipts (
+ tenant_id uuid NOT NULL,
+ client_mutation_id varchar(200) NOT NULL,
+ operation varchar(24) NOT NULL,
+ payload_digest varchar(64) NOT NULL,
+ membership_id uuid,
+ invitation_status varchar(24) NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY (tenant_id, client_mutation_id)
+);
+ALTER TABLE access.invitation_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access.invitation_receipts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON access.invitation_receipts;
+CREATE POLICY tenant_isolation ON access.invitation_receipts USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+GRANT SELECT, INSERT, UPDATE ON access.invitation_receipts TO inspection_runtime;
+`},
+		{Version: 115, Name: "llm_usage_audio_projection_and_late_cost", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.guard_llm_call_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF current_setting('app.retention_purge', true) <> 'on' THEN RAISE EXCEPTION 'LLM call deletion requires retention purge'; END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.state = 'FINISHED' THEN
+    IF OLD.reported_cost IS NULL AND OLD.cost_source = 'unknown' AND NEW.reported_cost IS NOT NULL
+       AND NEW.cost_source IN ('header','body')
+       AND (to_jsonb(NEW) - ARRAY['reported_cost','cost_source','updated_at']) = (to_jsonb(OLD) - ARRAY['reported_cost','cost_source','updated_at']) THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'finished LLM call is immutable';
+  END IF;
+  IF NEW.call_id IS DISTINCT FROM OLD.call_id OR NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR
+     NEW.inspection_id IS DISTINCT FROM OLD.inspection_id OR NEW.job_id IS DISTINCT FROM OLD.job_id OR
+     NEW.event_id IS DISTINCT FROM OLD.event_id OR NEW.execution_id IS DISTINCT FROM OLD.execution_id OR
+     NEW.correlation_id IS DISTINCT FROM OLD.correlation_id OR NEW.attempt IS DISTINCT FROM OLD.attempt OR
+     NEW.replay_generation IS DISTINCT FROM OLD.replay_generation OR NEW.mode IS DISTINCT FROM OLD.mode OR
+     NEW.comparison_mode IS DISTINCT FROM OLD.comparison_mode OR NEW.model_alias IS DISTINCT FROM OLD.model_alias OR
+     NEW.prompt_digest IS DISTINCT FROM OLD.prompt_digest OR NEW.started_at IS DISTINCT FROM OLD.started_at OR
+     NEW.state <> 'FINISHED' OR NEW.finished_at IS NULL OR NEW.technical_outcome = '' THEN
+    RAISE EXCEPTION 'LLM call identity is immutable';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP FUNCTION IF EXISTS usage.read_llm_usage_calls_v3(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean);
+CREATE FUNCTION usage.read_llm_usage_calls_v3(
+ p_from timestamptz,p_to timestamptz,p_tenant_id uuid,p_inspection_id uuid,p_without_inspection boolean,p_provider text,p_model text,
+ p_model_alias text,p_mode text,p_outcome text,p_state text,p_cost_state text,p_after_started_at timestamptz,
+ p_after_call_id uuid,p_limit integer,p_include_test_data boolean
+) RETURNS TABLE(call_id uuid,tenant_id uuid,tenant_name text,inspection_id uuid,job_id uuid,event_id uuid,
+ execution_id uuid,correlation_id varchar,attempt integer,replay_generation integer,mode varchar,
+ comparison_mode varchar,model_alias varchar,provider varchar,model varchar,gateway_request_id varchar,
+ state varchar,technical_outcome varchar,transport_delivered boolean,http_status bigint,input_tokens bigint,
+ output_tokens bigint,reported_cost numeric,duration_ms bigint,started_at timestamptz,finished_at timestamptz,
+ cached_input_tokens bigint,image_count integer,request_body_bytes bigint,gateway_call_id varchar,cost_source varchar,
+ reported_cost_decimal text,cost_state text,audio_input_tokens bigint,audio_duration_ms bigint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,tenancy,platform,pg_catalog AS $function$
+ SELECT l.call_id,l.tenant_id,t.name::text,l.inspection_id,l.job_id,l.event_id,l.execution_id,l.correlation_id,
+  l.attempt,l.replay_generation,l.mode,l.comparison_mode,l.model_alias,l.provider,l.model,l.gateway_request_id,
+  l.state,l.technical_outcome,l.transport_delivered,l.http_status,l.input_tokens,l.output_tokens,l.reported_cost,
+  l.duration_ms,l.started_at,l.finished_at,l.cached_input_tokens,l.image_count,l.request_body_bytes,l.gateway_call_id,l.cost_source,
+  l.reported_cost::text,usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source),l.audio_input_tokens,l.audio_duration_ms
+ FROM usage.llm_calls l JOIN tenancy.tenants t ON t.id=l.tenant_id
+ WHERE l.started_at>=p_from AND l.started_at<p_to AND (p_include_test_data OR l.provider IS DISTINCT FROM 'qa')
+  AND (p_tenant_id IS NULL OR l.tenant_id=p_tenant_id) AND (p_inspection_id IS NULL OR l.inspection_id=p_inspection_id) AND (NOT p_without_inspection OR l.inspection_id IS NULL)
+  AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%') AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%')
+  AND (p_model_alias IS NULL OR l.model_alias ILIKE '%'||p_model_alias||'%') AND (p_mode IS NULL OR l.mode=p_mode)
+  AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%') AND (p_state IS NULL OR l.state=p_state)
+  AND (p_cost_state IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost_state WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost_state END)
+  AND (p_after_started_at IS NULL OR l.started_at<p_after_started_at OR (l.started_at=p_after_started_at AND l.call_id<p_after_call_id))
+ ORDER BY l.started_at DESC,l.call_id DESC LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_calls_v3(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_calls_v3(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean) TO inspection_runtime;
+`},
+		{Version: 116, Name: "llm_usage_transcription_filter", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION usage.read_llm_cost_coverage_v2(
+ p_from timestamptz,p_to timestamptz,p_tenant_id uuid,p_inspection_id uuid,p_without_inspection boolean,
+ p_provider text,p_model text,p_model_alias text,p_mode text,p_outcome text,p_state text,p_cost_state text,
+ p_include_test_data boolean,p_comparison_mode text
+) RETURNS TABLE(attempted_calls bigint,delivered_calls bigint,incomplete_calls bigint,input_tokens bigint,
+ output_tokens bigint,cached_input_tokens bigint,cache_hit_calls bigint,known_cache_calls bigint,
+ unknown_cache_calls bigint,known_cost_decimal text,unknown_cost_calls bigint,uncertain_cost_calls bigint,
+ error_without_cost_calls bigint,unverified_cost_calls bigint,cost_coverage_started_at timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,platform,pg_catalog AS $function$
+ SELECT count(*)::bigint,count(*) FILTER (WHERE l.transport_delivered IS TRUE)::bigint,
+  count(*) FILTER (WHERE l.state='STARTED')::bigint,
+  coalesce(sum(l.input_tokens) FILTER (WHERE l.transport_delivered IS TRUE),0)::bigint,
+  coalesce(sum(l.output_tokens) FILTER (WHERE l.transport_delivered IS TRUE),0)::bigint,
+  coalesce(sum(l.cached_input_tokens) FILTER (WHERE l.transport_delivered IS TRUE),0)::bigint,
+  count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens>0),
+  count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens IS NOT NULL),
+  count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens IS NULL),
+  coalesce(sum(l.reported_cost) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='confirmed'),0)::text,
+  count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unknown'),
+  count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='uncertain'),
+  count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='error_without_cost'),
+  count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unverified'),
+  max(sm.applied_at)
+ FROM usage.llm_calls l LEFT JOIN platform.schema_migrations sm ON sm.version=96
+ WHERE l.started_at>=p_from AND l.started_at<p_to AND (p_include_test_data OR l.provider IS DISTINCT FROM 'qa')
+  AND (p_tenant_id IS NULL OR l.tenant_id=p_tenant_id) AND (p_inspection_id IS NULL OR l.inspection_id=p_inspection_id)
+  AND (NOT p_without_inspection OR l.inspection_id IS NULL)
+  AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%') AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%')
+  AND (p_model_alias IS NULL OR l.model_alias ILIKE '%'||p_model_alias||'%') AND (p_mode IS NULL OR l.mode=p_mode)
+  AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%') AND (p_state IS NULL OR l.state=p_state)
+  AND (p_comparison_mode IS NULL OR l.comparison_mode=p_comparison_mode)
+  AND (p_cost_state IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost_state WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost_state END)
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_cost_coverage_v2(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,boolean,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_cost_coverage_v2(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,boolean,text) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_calls_v4(
+ p_from timestamptz,p_to timestamptz,p_tenant_id uuid,p_inspection_id uuid,p_without_inspection boolean,p_provider text,p_model text,
+ p_model_alias text,p_mode text,p_outcome text,p_state text,p_cost_state text,p_after_started_at timestamptz,
+ p_after_call_id uuid,p_limit integer,p_include_test_data boolean,p_comparison_mode text
+) RETURNS TABLE(call_id uuid,tenant_id uuid,tenant_name text,inspection_id uuid,job_id uuid,event_id uuid,
+ execution_id uuid,correlation_id varchar,attempt integer,replay_generation integer,mode varchar,
+ comparison_mode varchar,model_alias varchar,provider varchar,model varchar,gateway_request_id varchar,
+ state varchar,technical_outcome varchar,transport_delivered boolean,http_status bigint,input_tokens bigint,
+ output_tokens bigint,reported_cost numeric,duration_ms bigint,started_at timestamptz,finished_at timestamptz,
+ cached_input_tokens bigint,image_count integer,request_body_bytes bigint,gateway_call_id varchar,cost_source varchar,
+ reported_cost_decimal text,cost_state text,audio_input_tokens bigint,audio_duration_ms bigint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,tenancy,platform,pg_catalog AS $function$
+ SELECT l.call_id,l.tenant_id,t.name::text,l.inspection_id,l.job_id,l.event_id,l.execution_id,l.correlation_id,
+  l.attempt,l.replay_generation,l.mode,l.comparison_mode,l.model_alias,l.provider,l.model,l.gateway_request_id,
+  l.state,l.technical_outcome,l.transport_delivered,l.http_status,l.input_tokens,l.output_tokens,l.reported_cost,
+  l.duration_ms,l.started_at,l.finished_at,l.cached_input_tokens,l.image_count,l.request_body_bytes,l.gateway_call_id,l.cost_source,
+  l.reported_cost::text,usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source),l.audio_input_tokens,l.audio_duration_ms
+ FROM usage.llm_calls l JOIN tenancy.tenants t ON t.id=l.tenant_id
+ WHERE l.started_at>=p_from AND l.started_at<p_to AND (p_include_test_data OR l.provider IS DISTINCT FROM 'qa')
+  AND (p_tenant_id IS NULL OR l.tenant_id=p_tenant_id) AND (p_inspection_id IS NULL OR l.inspection_id=p_inspection_id)
+  AND (NOT p_without_inspection OR l.inspection_id IS NULL)
+  AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%') AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%')
+  AND (p_model_alias IS NULL OR l.model_alias ILIKE '%'||p_model_alias||'%') AND (p_mode IS NULL OR l.mode=p_mode)
+  AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%') AND (p_state IS NULL OR l.state=p_state)
+  AND (p_comparison_mode IS NULL OR l.comparison_mode=p_comparison_mode)
+  AND (p_cost_state IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost_state WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost_state END)
+  AND (p_after_started_at IS NULL OR l.started_at<p_after_started_at OR (l.started_at=p_after_started_at AND l.call_id<p_after_call_id))
+ ORDER BY l.started_at DESC,l.call_id DESC LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_calls_v4(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_calls_v4(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean,text) TO inspection_runtime;
+`},
 	}
 }
 

@@ -16,25 +16,6 @@ body { background: var(--inspection-bg); }
 .onboarding-turnstile { min-inline-size: 0; overflow-x: auto; }
 .onboarding-turnstile-error { margin: 0; color: var(--inspection-danger); }
 .onboarding-actions { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: center; }
-.onboarding-upload-list { display: grid; gap: var(--inspection-space-3); }
-.onboarding-upload { display: grid; gap: var(--inspection-space-2); padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
-.onboarding-upload-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--inspection-space-2); }
-.onboarding-attention-toggle { min-inline-size: 3rem; min-block-size: 3rem; border: 0; border-radius: var(--inspection-radius); background: transparent; color: var(--inspection-muted); font-size: 1.15rem; letter-spacing: .1em; cursor: pointer; }
-.onboarding-attention-toggle:hover { background: var(--inspection-bg); color: var(--inspection-brand-strong); }
-.onboarding-attention-toggle:focus-visible, .onboarding-attention-items button:focus-visible { outline: 2px solid var(--inspection-brand-strong); outline-offset: 2px; }
-.onboarding-attention-toggle:disabled { cursor: not-allowed; opacity: .55; }
-.onboarding-attention-panel { display: grid; gap: var(--inspection-space-2); padding: var(--inspection-space-3); border-radius: var(--inspection-radius); background: var(--inspection-bg); }
-.onboarding-attention-panel p { margin: 0; color: var(--inspection-muted); }
-.onboarding-attention-add { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); }
-.onboarding-attention-add .inspection-input { flex: 1 1 12rem; }
-.onboarding-attention-error { color: var(--inspection-danger); }
-.onboarding-attention-items { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); padding: 0; margin: 0; list-style: none; }
-.onboarding-attention-items li { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .35rem .2rem .55rem; border-radius: 999px; background: var(--inspection-surface-raised); border: 1px solid var(--inspection-border); }
-.onboarding-attention-items button { min-inline-size: 3rem; min-block-size: 3rem; border: 0; padding: 0 .5rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.onboarding-attention-summary { color: var(--inspection-muted); }
-.onboarding-upload-preview { display: block; inline-size: 100%; block-size: auto; max-block-size: 18rem; object-fit: contain; border-radius: var(--inspection-radius); background: var(--inspection-bg); }
-.onboarding-upload-actions { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: center; }
-.onboarding-upload .inspection-status svg { inline-size: 1.25rem; block-size: 1.25rem; flex: none; }
 .onboarding-review { display: grid; gap: var(--inspection-space-3); }
 .onboarding-review dl { display: grid; grid-template-columns: minmax(8rem, .45fr) 1fr; gap: var(--inspection-space-2); margin: 0; }
 .onboarding-review dt { color: var(--inspection-muted); }

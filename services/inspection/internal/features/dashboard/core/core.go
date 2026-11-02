@@ -16,7 +16,7 @@ type Projection struct {
 	UpdatedAt                                                              time.Time
 }
 
-type Summary struct{ Critical, Attention, Normal int }
+type Summary struct{ Total, Critical, Attention, Normal, Pending, Invalidated int }
 
 // Reducer accepts a monotonic projection stream. A duplicate is harmless; a
 // gap is deferred instead of fabricating a counter that may conceal data.
@@ -57,8 +57,13 @@ func Order(rows []Projection) {
 func Summarize(rows []Projection) Summary {
 	var summary Summary
 	for _, row := range rows {
+		summary.Total++
 		if row.Invalidated {
+			summary.Invalidated++
 			continue
+		}
+		if row.Status != "COMPLETED" {
+			summary.Pending++
 		}
 		switch row.Classification {
 		case "CRITICAL":

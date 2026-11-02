@@ -187,7 +187,7 @@ func TestResolver_AnalysisPromptTaskRouting(t *testing.T) {
 func TestResolver_UT082InventoryDraftForbiddenRoles(t *testing.T) {
 	for _, role := range []string{auth.CustomerViewer, auth.Viewer} {
 		t.Run(role, func(t *testing.T) {
-			ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: identity.NewID(), Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: identity.NewID(), Roles: []string{role}}})
+			ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: identity.NewID(), Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: identity.NewID(), Roles: []string{role}, ProductEntitlements: auth.ProductsForRole(role)}})
 			meta, _ := requestctx.FromContext(ctx)
 			meta.Principal.TenantID = meta.TenantID
 			ctx = requestctx.WithMetadata(context.Background(), meta)

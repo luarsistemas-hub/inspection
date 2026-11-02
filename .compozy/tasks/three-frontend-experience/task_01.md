@@ -108,3 +108,13 @@ Cases assigned from `_tests.md`; read each full definition before implementation
 - Entitlement or scope revocation denies the next protected interaction without waiting for token expiry.
 - Cross-product and cross-tenant probes expose no protected data.
 - New access tables are RLS-enforced and schema-compatible across the declared deployment window.
+
+## Notas de implementação (tf1)
+
+- 1.4: `effectiveAccess` e `scopePreview` expostos no GraphQL pelo slice `access/explain_effective_access` (cursor estável, `inheritedFrom`, arquivados `historical`/não concedíveis).
+- 1.5: `inviteCustomerUser` (novo slice), `inviteInternalUser` com `productEntitlements` e todos os tipos de escopo, `assignMembershipAccess` atômico com `expectedVersion` obrigatório. O convite continua síncrono, com ativação por OTP; o link usa a origem do Admin.
+- 1.6 está SUPERADA (sem consumer/required-action do Keycloak): UT-021, UT-022, IT-199 e IT-225 não se aplicam; UT-052 e IT-202 também superados (ver notas em `_tests.md`).
+- 1.8: migration 111 impede `ADMIN` para `CUSTOMER_VIEWER` por constraint trigger deferido; IT-023 (limite por tenant) pendente de definição de produto.
+- 1.9: chamadores legados migrados para `AuthorizationRequest{Product}` onde a operação pertence a um único produto; os demais ficam presos ao produto da audiência verificada. Orquestração do servidor (sem audiência nem membership) não tem produto.
+- Correções da revisão de segurança (tf1fix): `assignRoleScopes` virou alias de `assignMembershipAccess` (slice legado removido); `disable_membership` e `assign_membership_access` aplicam `CanDelegateRole` ao papel do alvo, bloqueiam a própria desativação e protegem o último `TENANT_ADMIN` (lock consultivo por tenant); resolvers de dados autorizam por `Authorizer` (produto, audiência, entitlement recarregado) em vez de `internalRole`; convites têm idempotência durável (`access.invitation_receipts`, migration 114) e rate limit por tenant e e-mail; só `Internal: true` isenta a checagem de produto.
+- Pendências aceitas: cursor não assinado, OIDC multi-audiência e escopo arquivado (BAIXOS não tratados); operações compartilhadas (memberships, businessUnits, notificationDeliveries, publicationPolicy, videoPreparations, usageSummary, legal hold, deleção) ficam presas à audiência verificada, sem produto fixo, porque os papéis permitidos incluem Manager/Employee/Viewer.

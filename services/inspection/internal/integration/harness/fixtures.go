@@ -84,12 +84,19 @@ type fixtureRequirement struct {
 type VideoOriginFixture struct {
 	TenantID, AssetID, ResponsibilityID, OriginID, OriginVersionID identity.ID
 	MediaID, PreparationID, FrameID, ScopeItemID                   identity.ID
+	// VideoAttemptID is set when LinkVideoAttempt asked for the capture
+	// attempt that produced MediaID.
+	VideoAttemptID *identity.ID
 }
 
 // VideoOriginFixtureOptions controls the origin activation state for tests
 // which need to exercise draft activation.
 type VideoOriginFixtureOptions struct {
 	Active bool
+	// LinkVideoAttempt records the media as produced by a received capture
+	// attempt. Submitted evidence is immutable, so the link must exist from
+	// creation instead of being added by the test afterwards.
+	LinkVideoAttempt bool
 }
 
 // SeedVideoOriginFixture creates a VIDEO origin whose retained frames are
@@ -130,7 +137,15 @@ func (h *Harness) SeedVideoOriginFixture(ctx context.Context, options VideoOrigi
 		if err := tx.Create(&database.Origin{ID: f.OriginID, TenantID: f.TenantID, AssetID: f.AssetID, ActiveVersionID: activeVersion, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: "tenant/" + f.TenantID.String() + "/media/" + f.MediaID.String(), ContentType: "video/mp4", SHA256: frameDigest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
+		if options.LinkVideoAttempt {
+			attemptID := identity.NewID()
+			requirement := "video:main"
+			if err := tx.Create(&database.VideoAttempt{ID: attemptID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "CURRENT", RequirementKey: &requirement, PolicyVersion: 1, MaxDurationSeconds: 900, MaxBytes: 1 << 30, AcquisitionSource: "CAMERA", Status: "RECEIVED", IdempotencyKey: "video-origin-fixture-" + attemptID.String(), PayloadDigest: frameDigest, AdmittedAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+				return err
+			}
+			f.VideoAttemptID = &attemptID
+		}
+		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, VideoAttemptID: f.VideoAttemptID, ObjectKey: "tenant/" + f.TenantID.String() + "/media/" + f.MediaID.String(), ContentType: "video/mp4", SHA256: frameDigest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.VideoPreparationJob{ID: f.PreparationID, TenantID: f.TenantID, MediaID: f.MediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: frameDigest, ManifestDigest: frameDigest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearActivationProof, isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
+import { AdminLocalError, graphQLFailureText } from "@/graphql/client";
+import { activationErrorMessage, clearActivationProof, isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
 
 describe("C07 activation constraints", () => {
   it("requires six characters, an uppercase letter, a special character, and confirmation", () => {
@@ -56,9 +57,26 @@ describe("Admin activation transport", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors }), { status: 200 })));
 
-    await expect(requestActivationCode("invitation-token")).rejects.toThrow("activation failed");
+    await expect(requestActivationCode("invitation-token")).rejects.toThrow("Revise os dados informados e tente novamente.");
 
     expect(log).toHaveBeenCalledWith("[GraphQL] mutation RequestAdminActivationOtp failed", { errors });
     log.mockRestore();
+  });
+
+  it("IT-033 keeps activation-specific messages instead of the generic session text", () => {
+    expect(activationErrorMessage("SESSION_EXPIRED")).toBe("Este link de ativação é inválido, já foi utilizado ou expirou.");
+    expect(activationErrorMessage("CONFLICT")).toBe("Este convite já foi utilizado.");
+    expect(activationErrorMessage("RATE_LIMITED")).toBe("Muitas tentativas de ativação foram realizadas. Aguarde alguns minutos e tente novamente.");
+    expect(activationErrorMessage("FORBIDDEN")).toBe("Você não tem permissão para esta operação.");
+    expect(activationErrorMessage(undefined)).toBe("Não foi possível concluir a solicitação. Tente novamente.");
+  });
+
+  it("raises local activation failures that the page can display as-is", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "expired", extensions: { code: "SESSION_EXPIRED" } }] }))));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failure = await verifyActivationCode("123456").catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(AdminLocalError);
+    expect(graphQLFailureText(failure)).toBe("Este link de ativação é inválido, já foi utilizado ou expirou.");
+    vi.restoreAllMocks();
   });
 });

@@ -11,6 +11,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/ratelimit"
 	"inspection/services/inspection/internal/platform/security"
 
@@ -63,7 +64,7 @@ func invitationDB(t *testing.T) (*gorm.DB, string) {
 	if err := db.Exec(`ATTACH DATABASE ':memory:' AS platform`).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,reviewer_membership_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,kind text NOT NULL DEFAULT 'CAPTURE',counterparty_invitation_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob,disclosure_version text,photo_processing integer,video_processing integer NOT NULL DEFAULT 0,ai_analysis integer,gps_use integer,accepted_at datetime,unique(tenant_id,responsibility_id))`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`, `CREATE TABLE capture.capture_drafts (id blob primary key,tenant_id blob,responsibility_id blob unique,media_kind text,kind text)`} {
+	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,reviewer_membership_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,kind text NOT NULL DEFAULT 'CAPTURE',counterparty_invitation_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob,disclosure_version text,photo_processing integer,video_processing integer NOT NULL DEFAULT 0,voice_processing integer NOT NULL DEFAULT 0,voice_consent_version text NOT NULL DEFAULT '',ai_analysis integer,gps_use integer,accepted_at datetime,unique(tenant_id,responsibility_id))`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`, `CREATE TABLE capture.capture_drafts (id blob primary key,tenant_id blob,responsibility_id blob unique,media_kind text,kind text)`} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -123,6 +124,8 @@ func TestExternalAccessContractsIT141ToIT150(t *testing.T) {
 		}
 		if err := service.AcceptProcessing(context.Background(), session.Token, session.CSRF, ProcessingConsent{DisclosureVersion: PrivacyDisclosureVersion}); appCode(err) != apperror.InvalidInput {
 			t.Fatalf("partial consent accepted: %v", err)
+		} else if _, _, message := apperror.Public(err); message != "Aceite o uso dos dados, a análise por inteligência artificial e o uso da localização." {
+			t.Fatalf("partial consent message=%q", message)
 		}
 	})
 	t.Run("IT-143 OTP send and attempt limits fail closed", func(t *testing.T) {
@@ -268,6 +271,8 @@ func TestIT369IT383IT385InvitationSessionFlow(t *testing.T) {
 	}
 	if _, err := service.ValidateSession(context.Background(), session.Token, "wrong"); appCode(err) != apperror.Forbidden {
 		t.Fatalf("bad csrf: %v", err)
+	} else if code, field, message := apperror.Public(err); code != apperror.Forbidden || field != "csrf" || message != "Não foi possível validar esta solicitação. Atualize a página e tente novamente." {
+		t.Fatalf("bad csrf public error = %s/%q/%q", code, field, message)
 	}
 	if responsibility, err := service.ValidateSession(context.Background(), session.Token, session.CSRF); err != nil || responsibility != session.ResponsibilityID {
 		t.Fatalf("valid session: %v %v", responsibility, err)
@@ -275,6 +280,8 @@ func TestIT369IT383IT385InvitationSessionFlow(t *testing.T) {
 	now = session.ExpiresAt
 	if _, err := service.ValidateSession(context.Background(), session.Token, session.CSRF); appCode(err) != apperror.SessionExpired {
 		t.Fatalf("exact expiry accepted: %v", err)
+	} else if code, _, message := apperror.Public(err); code != apperror.SessionExpired || message != "Sua sessão expirou. Acesse o convite novamente." {
+		t.Fatalf("expired session public error = %s/%q", code, message)
 	}
 }
 func TestVerifyOTPRejectsInvitationWithoutInspectionResponsibility(t *testing.T) {
@@ -330,12 +337,61 @@ func TestIT370IT594IT596LimitsFailClosed(t *testing.T) {
 	service := Service{DB: db, Pepper: []byte("01234567890123456789012345678901"), Limits: &limitsStub{allowed: false}, Notifier: &notifierStub{}, Clock: func() time.Time { return time.Unix(1000, 0).UTC() }, Within: testWithin(db)}
 	if err := service.RequestOTP(context.Background(), token); appCode(err) != apperror.RateLimited {
 		t.Fatalf("limit bypass: %v", err)
+	} else if code, _, message := apperror.Public(err); code != apperror.RateLimited || message != "Aguarde um momento antes de tentar novamente." {
+		t.Fatalf("public rate limit message = code:%s message:%q", code, message)
 	}
 	service.Limits = &limitsStub{allowed: true, err: errors.New("dragonfly down")}
 	if err := service.RequestOTP(context.Background(), token); appCode(err) != apperror.DependencyUnavailable {
 		t.Fatalf("dependency exposed: %v", err)
 	}
 }
+
+func TestREOInvitationWithoutDeliveryChannelUsesPortugueseMessage(t *testing.T) {
+	db, token := invitationDB(t)
+	if err := db.Exec("UPDATE invitations.invitations SET delivery_intents = ?", []byte(`[]`)).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := Service{DB: db, Pepper: []byte("01234567890123456789012345678901"), Limits: &limitsStub{allowed: true}, Notifier: &notifierStub{}, Clock: func() time.Time { return time.Unix(1000, 0).UTC() }, Within: testWithin(db)}
+	err := service.RequestOTP(context.Background(), token)
+	if code, _, message := apperror.Public(err); code != apperror.InvalidState || message != "O convite não possui um canal de envio disponível." {
+		t.Fatalf("no delivery channel public contract = code:%s message:%q", code, message)
+	}
+}
+
+func TestREOB4RequestOTPPropagatesIntegrationDisabledFromNotifier(t *testing.T) {
+	db, token := invitationDB(t)
+	disabled := apperror.New(apperror.IntegrationDisabled, "channel", "Este canal de notificação está temporariamente indisponível.")
+	notifier := &notifierStub{err: disabled}
+	service := Service{DB: db, Pepper: []byte("01234567890123456789012345678901"), Limits: &limitsStub{allowed: true}, Notifier: notifier, Clock: func() time.Time { return time.Unix(1000, 0).UTC() }, Within: testWithin(db)}
+	err := service.RequestOTP(context.Background(), token)
+	if code, field, message := apperror.Public(err); code != apperror.IntegrationDisabled || field != "channel" || message != "Este canal de notificação está temporariamente indisponível." {
+		t.Fatalf("B4 RequestOTP public error = %s/%q/%q (err=%v)", code, field, message, err)
+	}
+	if notifier.code == "" || len(notifier.code) != 6 {
+		t.Fatalf("RequestOTP did not generate and pass an OTP to SendOTP: code=%q", notifier.code)
+	}
+}
+
+func TestREOB4RequestOTPThroughChannelNotifierWithoutSenderReturnsIntegrationDisabled(t *testing.T) {
+	db, token := invitationDB(t)
+	registry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := Service{DB: db, Pepper: []byte("01234567890123456789012345678901"), Limits: &limitsStub{allowed: true}, Notifier: ChannelNotifier{Registry: registry, Stage: "production"}, Clock: func() time.Time { return time.Unix(1000, 0).UTC() }, Within: testWithin(db)}
+	err = service.RequestOTP(context.Background(), token)
+	if code, field, message := apperror.Public(err); code != apperror.IntegrationDisabled || field != "channel" || message != "Este canal de notificação está temporariamente indisponível." {
+		t.Fatalf("B4 RequestOTP through ChannelNotifier = %s/%q/%q (err=%v)", code, field, message, err)
+	}
+	var challenges int64
+	if err := db.Table("invitations.otp_challenges").Count(&challenges).Error; err != nil {
+		t.Fatal(err)
+	}
+	if challenges != 1 {
+		t.Fatalf("RequestOTP did not reach SendOTP after persisting the challenge: challenges=%d", challenges)
+	}
+}
+
 func appCode(err error) apperror.Code {
 	var app *apperror.Error
 	if errors.As(err, &app) {

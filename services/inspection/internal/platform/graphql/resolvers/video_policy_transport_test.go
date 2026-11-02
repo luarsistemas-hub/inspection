@@ -674,7 +674,7 @@ func TestVideoUploadGraphQLUsesRealMediaSlicesAndPersistsReceiptIT624(t *testing
 	}
 	response = executeCaptureGraphQL(t, server, status, tenantID, credentials, true)
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"status":"RECEIVED"`) {
-		t.Fatalf("completed capture lost its authoritative receipt: %s", response)
+		t.Fatalf("video receipt status unavailable after submission revoked its capture session: %s", response)
 	}
 }
 
@@ -779,7 +779,7 @@ func (s policyTransportMembershipStore) Resolve(_ context.Context, tenantID, ide
 	if role == "" {
 		return requestctx.Principal{}, fmt.Errorf("membership unavailable")
 	}
-	return requestctx.Principal{IdentityID: identityID, TenantID: tenantID, MembershipID: identityID, Roles: []string{role}}, nil
+	return requestctx.Principal{IdentityID: identityID, TenantID: tenantID, MembershipID: identityID, Roles: []string{role}, ProductEntitlements: auth.ProductsForRole(role)}, nil
 }
 
 func policyTransportContext(tenantID, identityID identity.ID) context.Context {

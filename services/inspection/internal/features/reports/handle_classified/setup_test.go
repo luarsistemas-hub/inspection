@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"inspection/libs/identity"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
@@ -29,6 +30,27 @@ func TestB13LegacyReportFlagsFilterV2OnlyPrefixes(t *testing.T) {
 func TestSetupRequiresNotificationAndSnapshotAdapters(t *testing.T) {
 	if handler, err := Setup(Dependencies{}); err == nil || handler != nil {
 		t.Fatalf("Setup() returned handler=%t err=%v, want missing dependency error", handler != nil, err)
+	}
+}
+
+func TestCanceledInspectionDoesNotCreateTriageCase(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS inspections").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE inspections.inspections (id text primary key, tenant_id text not null, status text not null)").Error; err != nil {
+		t.Fatal(err)
+	}
+	tenantID, inspectionID := identity.NewID(), identity.NewID()
+	if err := db.Exec("INSERT INTO inspections.inspections (id, tenant_id, status) VALUES (?, ?, 'CANCELED')", inspectionID, tenantID).Error; err != nil {
+		t.Fatal(err)
+	}
+	err = UpsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, database.ClassificationRun{Classification: "CRITICAL"}, 1, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("canceled inspection should skip triage projection: %v", err)
 	}
 }
 

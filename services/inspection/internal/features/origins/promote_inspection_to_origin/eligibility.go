@@ -31,7 +31,7 @@ func status(ctx context.Context, d Dependencies, q Query) (StatusView, error) {
 		if err != nil {
 			return err
 		}
-		if _, err = d.Authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: state.asset.BusinessUnitID}, false); err != nil {
+		if _, err = d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: q.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: state.asset.BusinessUnitID}}); err != nil {
 			return gorm.ErrRecordNotFound
 		}
 		view = buildStatus(tx, q.TenantID, state)
@@ -166,8 +166,11 @@ func hasEvidence(tx *gorm.DB, tenantID identity.ID, s inspected) bool {
 		if s.plan == nil {
 			return false
 		}
-		var count int64
-		return tx.Table("analysis.video_plan_preparations pp").Joins("JOIN media.video_preparation_jobs p ON p.tenant_id=pp.tenant_id AND p.id=pp.preparation_id AND p.status='READY'").Joins("JOIN media.video_frames f ON f.tenant_id=pp.tenant_id AND f.preparation_id=pp.preparation_id").Where("pp.tenant_id=? AND pp.plan_id=? AND f.sha256<>'' AND f.object_key<>''", tenantID, s.plan.ID).Count(&count).Error == nil && count > 0
+		var frames, scopeItems int64
+		if err := tx.Table("analysis.video_plan_preparations pp").Joins("JOIN media.video_preparation_jobs p ON p.tenant_id=pp.tenant_id AND p.id=pp.preparation_id AND p.status='READY'").Joins("JOIN media.video_frames f ON f.tenant_id=pp.tenant_id AND f.preparation_id=pp.preparation_id").Where("pp.tenant_id=? AND pp.plan_id=? AND f.sha256<>'' AND f.object_key<>''", tenantID, s.plan.ID).Count(&frames).Error; err != nil || frames == 0 {
+			return false
+		}
+		return tx.Table("analysis.video_plan_preparations pp").Joins("JOIN media.video_preparation_jobs p ON p.tenant_id=pp.tenant_id AND p.id=pp.preparation_id AND p.status='READY'").Joins("JOIN media.video_scope_items si ON si.tenant_id=pp.tenant_id AND si.preparation_id=pp.preparation_id").Where("pp.tenant_id=? AND pp.plan_id=?", tenantID, s.plan.ID).Count(&scopeItems).Error == nil && scopeItems > 0
 	}
 	var count int64
 	return tx.Table("media.media_objects m").Joins("JOIN inspections.responsibilities r ON r.tenant_id=m.tenant_id AND r.id=m.responsibility_id").Joins("JOIN capture.capture_drafts d ON d.tenant_id=r.tenant_id AND d.responsibility_id=r.id AND d.status='SUBMITTED'").Where("m.tenant_id=? AND r.inspection_id=? AND m.status='READY' AND m.media_kind='PHOTO'", tenantID, s.inspection.ID).Count(&count).Error == nil && count > 0

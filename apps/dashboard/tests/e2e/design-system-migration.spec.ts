@@ -1,8 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { loginAsMockAdmin } from "./support/auth";
 
-type Reply = { data?: Record<string, unknown>; errors?: Array<{ message: string; extensions?: { code?: string } }> };
-type Call = { operation: string; variables: Record<string, unknown> };
+type Reply = { data?: Record<string, unknown>; errors?: Array<{ message: string; extensions?: { code?: string; correlationId?: string } }> };
+type Call = { operation: string; variables: Record<string, unknown>; membershipId?: string };
+type ContextReply = (operation: string, membershipId: string | undefined) => Reply | undefined;
 
 const pageInfo = (hasNextPage = false, endCursor: string | null = null) => ({ hasNextPage, endCursor });
 const emptyMutation = (name: string) => ({ data: { [name]: { userErrors: [], clientMutationId: "migration-fixture" } } });
@@ -73,21 +74,27 @@ function defaultReply(operation: string, role: string): Reply {
   }
 }
 
-async function installMocks(page: Page, role = "MANAGER") {
+async function installMocks(page: Page, role = "MANAGER", contextReply?: ContextReply) {
   const calls: Call[] = [];
+  const responded: Call[] = [];
   const queues = new Map<string, Reply[]>();
   const gates = new Map<string, Array<{ promise: Promise<void>; release: () => void }>>();
   await page.route("**/graphql", async (route: Route) => {
     const body = route.request().postDataJSON() as { query: string; variables?: Record<string, unknown> };
     const operation = body.query.match(/(?:query|mutation)\s+(\w+)/)?.[1] ?? "unknown";
-    calls.push({ operation, variables: body.variables ?? {} });
-    const queued = queues.get(operation)?.shift();
+    const membershipId = route.request().headers()["x-inspection-membership-id"];
+    const call = { operation, variables: body.variables ?? {}, membershipId };
+    calls.push(call);
+    const reply = queues.get(operation)?.shift() ?? contextReply?.(operation, membershipId) ?? defaultReply(operation, role);
     const gate = gates.get(operation)?.shift();
     if (gate) await gate.promise;
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(queued ?? defaultReply(operation, role)) });
+    // A held response may belong to a document that already navigated away.
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(reply) }).catch(() => undefined);
+    responded.push(call);
   });
   return {
     calls,
+    responded,
     enqueue(operation: string, ...replies: Reply[]) { queues.set(operation, replies); },
     hold(operation: string) {
       let release!: () => void;
@@ -98,8 +105,49 @@ async function installMocks(page: Page, role = "MANAGER") {
   };
 }
 
+const reportRow = (prefix: string, index: number) => ({ id: `${prefix}-report-${index}`, inspectionId: `${prefix}-inspection-${index}`, assetName: `${prefix} ${index}`, assetAddress: "Rua QA", assetExternalKey: `QA${index}`, participantName: "Ana QA", generatedAt: "2030-05-10T12:00:00Z", classification: "NORMAL", version: 1 });
+const reportPage = (prefix: string, count: number, hasNextPage = false, endCursor: string | null = null): Reply => ({ data: { reports: { nodes: Array.from({ length: count }, (_, index) => reportRow(prefix, index)), pageInfo: pageInfo(hasNextPage, endCursor) } } });
+const tokenEndpoint = /\/protocol\/openid-connect\/token(?:\?|$)/;
+const authorizeEndpoint = /\/protocol\/openid-connect\/auth(?:\?|$)/;
+
+/** Answers the OIDC token exchange and records each exchange body. */
+async function routeDashboardToken(page: Page): Promise<string[]> {
+  const exchanges: string[] = [];
+  await page.route(tokenEndpoint, (route) => {
+    exchanges.push(route.request().postData() ?? "");
+    return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ access_token: `dashboard-token-${exchanges.length}` }) });
+  });
+  return exchanges;
+}
+
+/** Stores the PKCE attempt that the callback is expected to consume. */
+async function storeDashboardAttempt(page: Page, state: string, returnTo: string): Promise<void> {
+  await page.addInitScript((attempt) => sessionStorage.setItem("inspection.dashboard.pkce", JSON.stringify(attempt)), { verifier: `${state}-verifier`, state, returnTo });
+}
+
+const contextMemberships = [
+  { id: "membership-internal", tenantId: "tenant-a", name: "Gestora QA", email: "gestora@example.test", role: "MANAGER", status: "ACTIVE" },
+  { id: "membership-customer", tenantId: "tenant-b", name: "Cliente QA", email: "cliente@example.test", role: "CUSTOMER_VIEWER", status: "ACTIVE" },
+];
+const internalOperations = ["Reports", "ReportWorkspace", "DashboardFormOptions", "Schedules", "Inspections", "InspectionDetail", "Projects", "TriageWorkspace", "OperationalOverview", "NotificationDeliveries", "DashboardReviewers"];
+
+/** Answers protected reads according to the membership header sent by the Dashboard client. */
+function membershipContextReply(operation: string, membershipId: string | undefined): Reply | undefined {
+  const customer = membershipId === "membership-customer";
+  const tenantId = customer ? "tenant-b" : "tenant-a";
+  switch (operation) {
+    case "DashboardMemberships": return { data: { me: { memberships: contextMemberships } } };
+    case "DashboardGate": return { data: { me: { tenantId, productEntitlements: ["DASHBOARD"], roles: [customer ? "CUSTOMER_VIEWER" : "MANAGER"], effectiveScopes: [{ kind: "Tenant", resourceId: tenantId }] }, tenant: { id: tenantId, name: customer ? "Cliente QA" : "Operação interna QA", status: "ACTIVE" } } };
+    case "MyNotifications": return { data: { myNotifications: { nodes: [{ id: customer ? "notice-customer" : "notice-internal", kind: "INSPECTION_UPDATED", title: customer ? "Laudo publicado para você" : "Aviso interno da operação", body: customer ? "Um laudo foi publicado." : "Revisão interna pendente.", resourceKind: "Inspection", resourceId: null, createdAt: "2030-05-10T12:00:00Z", readAt: null, action: "NONE", context: {}, priority: "NORMAL", dueAt: null }], unreadCount: customer ? 1 : 7, pageInfo: pageInfo() } } };
+    case "Reports": return customer ? undefined : reportPage("Imóvel interno sigiloso", 1);
+    case "DashboardFormOptions": return customer ? undefined : { data: { ...options.data, assets: { nodes: [{ ...options.data.assets.nodes[0], name: "Imóvel interno sigiloso" }], pageInfo: pageInfo() } } };
+    default: return undefined;
+  }
+}
+
 test.describe("Dashboard design-system migration deterministic integration", () => {
-  test.skip(process.env.INSPECTION_E2E_MOCKS !== "true", "run with INSPECTION_E2E_MOCKS=true and the local identity stack");
+  if (process.env.CI && process.env.INSPECTION_E2E_MOCKS !== "true") throw new Error("INSPECTION_E2E_MOCKS=true é obrigatório no CI.");
+  test.skip(process.env.INSPECTION_E2E_MOCKS !== "true", "execute com INSPECTION_E2E_MOCKS=true e a stack local");
 
   test("IT-081, IT-082, IT-083, IT-084, IT-085 and E2E-017 keep membership scope and viewer controls bounded", async ({ page }) => {
     const mocks = await installMocks(page, "VIEWER");
@@ -231,6 +279,53 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     await loginAsMockAdmin(page, "/triage");
     await expect(page.getByRole("heading", { name: "Triagem" })).toBeVisible();
     expect(mocks.calls.some(({ operation }) => operation === "TriageWorkspace")).toBe(true);
+  });
+
+  test("DSM IT-021 exercises report collection empty, search and recovery states", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("Reports", { data: { reports: { nodes: [], pageInfo: pageInfo() } } });
+    await loginAsMockAdmin(page, "/reports");
+    await expect(page.getByRole("status")).toContainText("Nenhum laudo");
+    expect(mocks.calls.find(({ operation }) => operation === "Reports")?.variables).toMatchObject({ first: 25, after: null });
+
+    mocks.enqueue("Reports", { data: { reports: { nodes: Array.from({ length: 25 }, (_, index) => ({ id: `report-${index}`, inspectionId: `inspection-${index}`, assetName: `Imóvel ${index}`, assetAddress: "Rua QA", assetExternalKey: `QA${index}`, participantName: "Ana QA", generatedAt: "2030-05-10T12:00:00Z", classification: "NORMAL", version: 1 })), pageInfo: pageInfo(true, "cursor-25") } } });
+    await page.getByRole("button", { name: "Atualizar" }).click();
+    await expect(page.getByText("Imóvel 24")).toBeVisible();
+    const calls = mocks.calls.filter(({ operation }) => operation === "Reports");
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.at(-1)?.variables).toMatchObject({ first: 25 });
+
+    mocks.enqueue("ReportWorkspace", { data: { report: null } });
+    await page.getByRole("button", { name: "Abrir detalhes do laudo de Imóvel 0" }).click();
+    await expect(page.getByRole("dialog", { name: "Laudo de vistoria" }).getByRole("alert")).toContainText("Este laudo ainda não está disponível");
+    await page.keyboard.press("Escape");
+
+    mocks.enqueue("Reports", { data: { reports: { nodes: [], pageInfo: pageInfo() } } });
+    await page.getByRole("searchbox", { name: "Buscar laudo" }).fill("sem-resultados");
+    await expect(page.getByRole("heading", { name: "Nenhum laudo encontrado" })).toBeVisible();
+    expect(mocks.calls.filter(({ operation }) => operation === "Reports").at(-1)?.variables).toMatchObject({ search: "sem-resultados" });
+
+    mocks.enqueue("Reports",
+      { data: { reports: { nodes: Array.from({ length: 25 }, (_, index) => ({ id: `next-${index}`, inspectionId: `next-inspection-${index}`, assetName: `Próximo imóvel ${index}`, assetAddress: "Rua QA", assetExternalKey: `NEXT${index}`, participantName: "Ana QA", generatedAt: "2030-05-10T12:00:00Z", classification: "NORMAL", version: 1 })), pageInfo: pageInfo(true, "cursor-next") } } },
+      { errors: [{ message: "Falha ao carregar a próxima página.", extensions: { code: "INTERNAL" } }] },
+    );
+    await page.getByRole("searchbox", { name: "Buscar laudo" }).fill("");
+    await expect(page.getByRole("button", { name: "Carregar mais" })).toBeVisible();
+    await page.getByRole("button", { name: "Carregar mais" }).click();
+    const listFailure = page.locator(".report-list-state[role=alert]");
+    await expect(listFailure).toContainText("Não foi possível concluir a solicitação. Tente novamente.");
+    await expect(listFailure).not.toContainText("Falha ao carregar a próxima página.");
+    await expect(page.getByText("Próximo imóvel 0")).toBeVisible();
+  });
+
+  test("DSM IT-196 renders a safe app-level GraphQL failure without an internal trace", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("Reports", { errors: [{ message: "Error: internal handler failed at report.ts:42", extensions: { code: "INTERNAL", correlationId: "corr-fixture" } }] });
+    await loginAsMockAdmin(page, "/reports");
+    const failure = page.locator(".report-list-state[role=alert]");
+    await expect(failure).toBeVisible();
+    await expect(failure).not.toContainText("report.ts:42");
+    await expect(failure).toContainText("Código de suporte: corr-fixture");
   });
 
   test("IT-121, IT-122, IT-123, IT-124, IT-125, E2E-025 and E2E-057 preserve report absence, publication and PDF readiness", async ({ page }) => {
@@ -502,4 +597,205 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     await expect(page.locator("button[aria-busy='true']")).toBeDisabled();
     release();
   });
+
+  test("DSM IT-022 describes a partial report page as displayed results", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("Reports", reportPage("Imóvel exibido", 25, true, "cursor-25"));
+    await loginAsMockAdmin(page, "/reports");
+    await expect(page.locator(".report-table tbody tr")).toHaveCount(25);
+    await expect(page.getByText("25 laudos exibidos · há mais laudos para carregar", { exact: true })).toBeVisible();
+    await expect(page.getByText(/laudos no total|total de laudos/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Carregar mais" })).toBeVisible();
+    expect(mocks.calls.filter(({ operation }) => operation === "Reports")).toHaveLength(1);
+  });
+
+  test("DSM IT-023 represents a revoked report as unavailable without its protected content", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("ReportWorkspace", { errors: [{ message: "report access revoked for membership-a at report_access.go:31", extensions: { code: "NOT_FOUND" } }] });
+    await loginAsMockAdmin(page, "/reports");
+    await page.getByRole("button", { name: "Abrir detalhes do laudo de Apartamento 101" }).click();
+    const dialog = page.getByRole("dialog", { name: "Laudo de vistoria" });
+    await expect(dialog.locator(".report-detail-state[role=alert]")).toContainText("Registro não encontrado ou sem acesso.");
+    await expect(dialog.locator(".report-visual")).toHaveCount(0);
+    await expect(dialog.getByText("Revisão recomendada")).toHaveCount(0);
+    await expect(dialog.getByText("Dados do imóvel e da vistoria")).toHaveCount(0);
+    await expect(page.getByText("report_access.go:31")).toHaveCount(0);
+    expect(mocks.calls.filter(({ operation }) => operation === "ReportWorkspace")).toHaveLength(1);
+  });
+
+  test("DSM IT-024 keeps the newer search when the older response arrives last", async ({ page }) => {
+    const mocks = await installMocks(page);
+    await loginAsMockAdmin(page, "/reports");
+    await expect(page.locator(".report-table")).toContainText("Apartamento 101");
+    const releaseOlderSearch = mocks.hold("Reports");
+    mocks.enqueue("Reports", reportPage("Busca antiga", 1), reportPage("Busca nova", 1));
+    const search = page.getByRole("searchbox", { name: "Buscar laudo" });
+    await search.fill("antiga");
+    await expect.poll(() => mocks.calls.some(({ operation, variables }) => operation === "Reports" && variables.search === "antiga")).toBe(true);
+    await search.fill("nova");
+    await expect(page.locator(".report-table")).toContainText("Busca nova 0");
+
+    const olderResponse = page.waitForResponse((response) => response.url().endsWith("/graphql") && (response.request().postData() ?? "").includes('"search":"antiga"'));
+    releaseOlderSearch();
+    await olderResponse;
+    await expect.poll(() => mocks.responded.filter(({ operation }) => operation === "Reports").length).toBe(3);
+    await page.waitForTimeout(250);
+    await expect(page.locator(".report-table tbody tr")).toHaveCount(1);
+    await expect(page.locator(".report-table")).toContainText("Busca nova 0");
+    await expect(page.getByText("Busca antiga 0")).toHaveCount(0);
+    await expect(search).toHaveValue("nova");
+  });
+
+  test("DSM IT-025 keeps loaded rows and does not append a failed next page", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("Reports", reportPage("Imóvel carregado", 25, true, "cursor-25"), { errors: [{ message: "next page failed at reports.go:88", extensions: { code: "INTERNAL" } }] });
+    await loginAsMockAdmin(page, "/reports");
+    const rows = page.locator(".report-table tbody tr");
+    await expect(rows).toHaveCount(25);
+    await page.getByRole("button", { name: "Carregar mais" }).click();
+    const failure = page.locator(".report-list-state[role=alert]");
+    await expect(failure).toContainText("Não foi possível concluir a solicitação. Tente novamente.");
+    await expect(page.getByText("reports.go:88")).toHaveCount(0);
+    await expect(rows).toHaveCount(25);
+    await expect(page.getByText("25 laudos exibidos · há mais laudos para carregar", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Carregar mais" })).toBeEnabled();
+    expect(mocks.calls.filter(({ operation }) => operation === "Reports").at(-1)?.variables).toMatchObject({ after: "cursor-25" });
+  });
+
+  test("DSM IT-026 rejects a callback whose state does not match the stored attempt", async ({ page }) => {
+    const mocks = await installMocks(page);
+    const exchanges = await routeDashboardToken(page);
+    await storeDashboardAttempt(page, "expected-state", "/reports");
+    await page.goto("/auth/callback?code=forged-code&state=forged-state");
+    await expect(page.getByRole("status")).toHaveText("Não foi possível validar a autenticação. Entre novamente.");
+    await expect(page.getByRole("button", { name: "Entrar novamente" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Painel" })).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe("/auth/callback");
+    expect(exchanges).toEqual([]);
+    expect(mocks.calls).toEqual([]);
+  });
+
+  test("DSM IT-026 keeps an external returnTo inside the Dashboard", async ({ page }) => {
+    await installMocks(page);
+    const exchanges = await routeDashboardToken(page);
+    const outsideRequests: string[] = [];
+    await page.route("**://outside.invalid/**", (route) => { outsideRequests.push(route.request().url()); return route.abort(); });
+    await storeDashboardAttempt(page, "outside-state", "https://outside.invalid/reports");
+    await page.goto("/auth/callback?code=outside-code&state=outside-state");
+    await expect(page).toHaveURL(/\/tenants\/current$/);
+    await expect(page.getByRole("heading", { name: "Início", level: 1 })).toBeVisible();
+    expect(new URL(page.url()).hostname).not.toBe("outside.invalid");
+    expect(outsideRequests).toEqual([]);
+    expect(exchanges).toHaveLength(1);
+  });
+
+  test("DSM IT-027 shows an explicit no-access state when the identity has no membership", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("DashboardMemberships", { data: { me: { memberships: [] } } });
+    await routeDashboardToken(page);
+    await storeDashboardAttempt(page, "empty-state", "/reports");
+    await page.goto("/auth/callback?code=empty-code&state=empty-state");
+    await expect(page).toHaveURL(/\/reports$/);
+    await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
+    await expect(page.getByRole("status")).toHaveText("Sua conta não possui acesso ativo ao Painel. Nenhum dado operacional foi carregado.");
+    await expect(page.getByRole("navigation", { name: "Painel" })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "Contexto de acesso" })).toHaveCount(0);
+    expect(mocks.calls.filter(({ operation }) => operation !== "DashboardMemberships")).toEqual([]);
+  });
+
+  test("DSM IT-028 keeps a CUSTOMER_VIEWER away from internal Dashboard content", async ({ page }) => {
+    const mocks = await installMocks(page, "CUSTOMER_VIEWER");
+    await loginAsMockAdmin(page, "/triage");
+    await expect(page.getByText("Imóveis, projetos e linha do tempo são exibidos apenas quando há conteúdo publicado no seu escopo.")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: "Triagem" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Abrir Administração" })).toHaveCount(0);
+    await expect(page.getByText("Apartamento 101")).toHaveCount(0);
+    expect(mocks.calls.filter(({ operation }) => internalOperations.includes(operation))).toEqual([]);
+  });
+
+  test("DSM IT-029 renders only the identity of the newest accepted session", async ({ page }) => {
+    const mocks = await installMocks(page);
+    const gateIdentity = (tenantName: string): Reply => ({ data: { me: { tenantId: "tenant-a", productEntitlements: ["DASHBOARD"], roles: ["MANAGER"], effectiveScopes: [{ kind: "Tenant", resourceId: "tenant-a" }] }, tenant: { id: "tenant-a", name: tenantName, status: "ACTIVE" } } });
+    mocks.enqueue("DashboardGate", gateIdentity("Imobiliária anterior"), gateIdentity("Imobiliária atual"));
+    const releasePreviousLookup = mocks.hold("DashboardGate");
+    await routeDashboardToken(page);
+    await storeDashboardAttempt(page, "previous-state", "/reports");
+    await page.goto("/auth/callback?code=previous-code&state=previous-state");
+    await expect.poll(() => mocks.calls.filter(({ operation }) => operation === "DashboardGate").length).toBe(1);
+
+    // A second callback is accepted in the same document while the first lookup is still pending.
+    await page.evaluate(() => {
+      sessionStorage.setItem("inspection.dashboard.pkce", JSON.stringify({ verifier: "current-verifier", state: "current-state", returnTo: "/reports" }));
+      (window as unknown as { next: { router: { push(href: string): void } } }).next.router.push("/auth/callback?code=current-code&state=current-state");
+    });
+    await expect(page.getByRole("button", { name: "Abrir perfil de Imobiliária atual" })).toBeVisible();
+    releasePreviousLookup();
+    await expect.poll(() => mocks.responded.filter(({ operation }) => operation === "DashboardGate").length).toBe(2);
+    await page.waitForTimeout(250);
+    await expect(page.getByRole("button", { name: "Abrir perfil de Imobiliária atual" })).toBeVisible();
+    await expect(page.getByText("Imobiliária anterior")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Abrir perfil de Imobiliária anterior" })).toHaveCount(0);
+  });
+
+  test("DSM IT-030 offers a new entry after the OIDC entry is canceled", async ({ page }) => {
+    const mocks = await installMocks(page);
+    let authorizeRequests = 0;
+    await page.route(authorizeEndpoint, async (route) => {
+      authorizeRequests += 1;
+      const request = new URL(route.request().url());
+      const callback = new URL(request.searchParams.get("redirect_uri") ?? "");
+      callback.searchParams.set("error", "access_denied");
+      callback.searchParams.set("state", request.searchParams.get("state") ?? "");
+      await route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><script>window.location.replace(${JSON.stringify(callback.toString())})</script>` });
+    });
+    const exchanges = await routeDashboardToken(page);
+    await page.goto("/reports");
+    await page.getByRole("button", { name: "Entrar no Painel" }).click();
+    await expect(page).toHaveURL(/\/auth\/callback\?/);
+    await expect(page.getByRole("status")).toHaveText("A autenticação foi recusada. Entre novamente.");
+    await expect(page.getByRole("button", { name: "Entrar novamente" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Painel" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Abrir perfil de/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sair da conta" })).toHaveCount(0);
+    expect(exchanges).toEqual([]);
+    expect(mocks.calls).toEqual([]);
+    await page.getByRole("button", { name: "Entrar novamente" }).click();
+    await expect.poll(() => authorizeRequests).toBe(2);
+  });
+
+  for (const scenario of [
+    { route: "/notifications", held: ["MyNotifications"] },
+    { route: "/reports", held: ["MyNotifications", "Reports"] },
+    { route: "/schedules", held: ["MyNotifications", "DashboardFormOptions"] },
+  ]) {
+    test(`DSM IT-197 discards internal reads pending on ${scenario.route} after switching to a customer membership`, async ({ page }) => {
+      await page.addInitScript(() => sessionStorage.setItem("inspection.dashboard.membership", "membership-internal"));
+      const mocks = await installMocks(page, "MANAGER", membershipContextReply);
+      const releases = scenario.held.map((operation) => mocks.hold(operation));
+      await loginAsMockAdmin(page, scenario.route);
+      const internalProfile = page.getByRole("button", { name: "Abrir perfil de Operação interna QA" });
+      await expect(internalProfile).toBeVisible();
+      await expect.poll(() => scenario.held.every((operation) => mocks.calls.some((call) => call.operation === operation && call.membershipId === "membership-internal"))).toBe(true);
+
+      const switchedAt = mocks.calls.length;
+      await internalProfile.click();
+      await page.getByRole("combobox", { name: "Contexto de acesso" }).selectOption("membership-customer");
+      await expect(page.getByRole("button", { name: "Abrir perfil de Cliente QA" })).toBeVisible();
+      for (const release of releases) release();
+      await expect.poll(() => scenario.held.every((operation) => mocks.responded.some((call) => call.operation === operation && call.membershipId === "membership-internal"))).toBe(true);
+      await page.waitForTimeout(250);
+
+      await expect(page.getByRole("button", { name: "Abrir perfil de Cliente QA" })).toBeVisible();
+      await expect(page.getByText("Aviso interno da operação")).toHaveCount(0);
+      await expect(page.getByText("Imóvel interno sigiloso")).toHaveCount(0);
+      await expect(page.getByText("Operação interna QA")).toHaveCount(0);
+      await expect(page.locator(".inspection-adaptive-navigation__badge").filter({ hasText: "7" })).toHaveCount(0);
+      if (scenario.route === "/notifications") await expect(page.getByRole("heading", { name: "Laudo publicado para você", level: 3 })).toBeVisible();
+
+      const afterSwitch = mocks.calls.slice(switchedAt);
+      expect(afterSwitch.length).toBeGreaterThan(0);
+      expect(afterSwitch.filter((call) => call.membershipId !== "membership-customer")).toEqual([]);
+      expect(afterSwitch.filter((call) => internalOperations.includes(call.operation))).toEqual([]);
+    });
+  }
 });

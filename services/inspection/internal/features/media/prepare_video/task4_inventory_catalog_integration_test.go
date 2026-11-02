@@ -189,6 +189,13 @@ func TestIT011VideoEnvironmentClipsPrepareWithProfileV2AndCatalogDraft(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The executor claims the oldest due job of any tenant, and the database is
+	// shared with other tests that leave PENDING jobs behind. Park the jobs of
+	// other tenants so that the two RunDue calls below can only work this
+	// test's CATALOG jobs.
+	if err := h.AdminDB.Model(&database.InventoryJob{}).Where("tenant_id<>? AND status='PENDING'", fixture.tenantID).Update("next_attempt_at", time.Now().UTC().Add(24*time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
 	inventory := &inventoryexecutor.Executor{DB: h.DB, ClaimDB: h.AdminDB, Processor: processor, Now: time.Now, HeartbeatInterval: time.Hour}
 	for i := 0; i < 2; i++ {
 		if worked, err := inventory.RunDue(ctx); err != nil || !worked {
@@ -202,7 +209,11 @@ func TestIT011VideoEnvironmentClipsPrepareWithProfileV2AndCatalogDraft(t *testin
 		t.Fatal(err)
 	}
 	if draft.DraftState == nil || *draft.DraftState != "READY" {
-		t.Fatalf("draft state = %v, want READY", draft.DraftState)
+		state := "<nil>"
+		if draft.DraftState != nil {
+			state = *draft.DraftState
+		}
+		t.Fatalf("draft state = %s (version=%+v), want READY", state, draft)
 	}
 	for _, call := range gateway.Calls("INVENTORY_CATALOG") {
 		if len(call.Images) == 0 || len(call.Images) > 12 || call.Images[0].Source != "VIDEO_FRAME" {

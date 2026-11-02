@@ -16,9 +16,6 @@ import (
 
 func TestManualVideoReportRequiresPublicationUT057(t *testing.T) {
 	db := task06ResolverDB(t)
-	if err := db.Exec(`CREATE TABLE reports.report_publications (id blob PRIMARY KEY, tenant_id blob NOT NULL, snapshot_id blob NOT NULL, inspection_id blob NOT NULL, policy_version integer, client_mutation_id text, status text NOT NULL, actor_id blob NOT NULL, reason text, version integer NOT NULL, published_at datetime, invalidated_at datetime, superseded_by blob, created_at datetime, updated_at datetime)`).Error; err != nil {
-		t.Fatal(err)
-	}
 	tenantID, inspectionID := identity.NewID(), identity.NewID()
 	planID, frameID := identity.NewID(), identity.NewID()
 	ptsMicros, timestampMS := int64(70123456), int64(70123)
@@ -49,7 +46,7 @@ func TestManualVideoReportRequiresPublicationUT057(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := task06GraphQLServer(db)
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: businessUnitID}}}})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: businessUnitID}}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}})
 	query := `query { customerReport(inspectionId:"` + inspectionID.String() + `") { snapshotId status } }`
 	if response := executeTask06GraphQL(t, server, query, ctx); strings.Contains(response, `"errors"`) || !strings.Contains(response, `"customerReport":null`) {
 		t.Fatalf("unpublished manual report was accessible or query failed: %s", response)

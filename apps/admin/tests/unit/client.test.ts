@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { graphql, graphqlIdentity, graphqlOptionalPermission } from "@/graphql/client";
+import { AdminLocalError, AdminUserError, graphQLFailureText, graphql, graphqlIdentity, graphqlOptionalPermission } from "@/graphql/client";
 import { clearProtectedContext, clearSession, getAccessToken, setMembershipContext, setSession } from "@/auth/session";
 import { AdminIdentityDocument } from "@/graphql/generated";
 
@@ -46,6 +46,31 @@ describe("Admin GraphQL transport", () => {
 
     expect(log).toHaveBeenCalledWith("[GraphQL] query AdminIdentity failed", { errors });
     log.mockRestore();
+  });
+  it("UT-193 hides internal and unknown server messages and retains a support code", async () => {
+    setSession("admin-token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "sql password leaked", extensions: { code: "INTERNAL", correlationId: "support-1" } }] }), { status: 200 })));
+    await expect(graphqlIdentity(AdminIdentityDocument)).rejects.toMatchObject({ message: "Não foi possível concluir a solicitação. Tente novamente.", code: "INTERNAL", correlationId: "support-1" });
+    expect(graphQLFailureText({ message: "Não foi possível concluir a solicitação. Tente novamente.", code: "INTERNAL", correlationId: "support-1" })).toBe("Não foi possível concluir a solicitação. Tente novamente. Código de suporte: support-1");
+  });
+  it("maps transport validation errors without exposing the server message", async () => {
+    setSession("admin-token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "Informe um e-mail válido.", extensions: { code: "INVALID_INPUT" } }] }), { status: 200 })));
+    await expect(graphqlIdentity(AdminIdentityDocument)).rejects.toMatchObject({ message: "Revise os dados informados e tente novamente." });
+  });
+  it("keeps business and local Admin messages while sanitizing internal transport failures", () => {
+    expect(graphQLFailureText(new AdminUserError("INVALID_INPUT", "Informe um e-mail válido."))).toBe("Informe um e-mail válido.");
+    expect(graphQLFailureText(new AdminLocalError("A versão atual ainda não foi carregada."))).toBe("A versão atual ainda não foi carregada.");
+    expect(graphQLFailureText({ code: "INTERNAL", message: "stack trace" })).toBe("Não foi possível concluir a solicitação. Tente novamente.");
+  });
+  it("maps known transport codes and ignores unavailable correlation IDs", () => {
+    expect(graphQLFailureText({ code: "NOT_FOUND", message: "english backend detail" })).toBe("Registro não encontrado ou sem acesso.");
+    expect(graphQLFailureText({ code: "CONFLICT", message: "english backend detail", correlationId: "unavailable" })).toBe("Os dados mudaram. Atualize e tente novamente.");
+  });
+  it("turns network TypeErrors into a stable Portuguese failure", async () => {
+    setSession("admin-token");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network trace with secret")));
+    await expect(graphqlIdentity(AdminIdentityDocument)).rejects.toMatchObject({ code: "NETWORK_ERROR", message: "Não foi possível concluir a solicitação. Tente novamente." });
   });
   it("renews an expiring Admin token before the protected query", async () => {
     vi.stubEnv("NEXT_PUBLIC_OIDC_TOKEN_URL", "https://id.example/token");

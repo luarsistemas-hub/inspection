@@ -770,6 +770,52 @@ func TestUT160ThreeEnvironmentPreparationsWaitForAllLinksAndKeepRoles(t *testing
 	}
 }
 
+func TestDLQV2PhotoInspectionWithEnvironmentClipIsPermanentlyRejected(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	tenant, inspectionID, responsibilityID := identity.NewID(), identity.NewID(), identity.NewID()
+	submissionID, mediaID, draftID := identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Exec("INSERT INTO inspections.inspections (id,tenant_id,asset_id,media_kind) VALUES (?,?,?,?)", inspectionID, tenant, identity.NewID(), "PHOTO").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO inspections.responsibilities (id,tenant_id,inspection_id) VALUES (?,?,?)", responsibilityID, tenant, inspectionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	clips := []events.CaptureVideoClip{{RequirementKey: "env:new:aa109e62-e8c1-50bf-94b1-31985a4531e4", MediaID: mediaID}}
+	immutable, err := json.Marshal(map[string]any{"clips": clips})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO capture.submission_versions (id,tenant_id,draft_id,responsibility_id,version_number,complete,payload,payload_digest,submitted_at) VALUES (?,?,?,?,?,?,?,?,?)", submissionID, tenant, draftID, responsibilityID, 1, true, immutable, "digest", time.Now().UTC()).Error; err != nil {
+		t.Fatal(err)
+	}
+	scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(events.CaptureVideoSubmittedV2Payload{InspectionID: inspectionID, ResponsibilityID: responsibilityID, SubmissionVersionID: submissionID, Clips: clips})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = scheduler.Handle(context.Background(), db, eventsEnvelope("capture.video_submitted.v2", payload, tenant))
+	if !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("photo inspection video submission error = %v, want permanent invalid event", err)
+	}
+	var plans int64
+	if err := db.Model(&database.VideoPlan{}).Count(&plans).Error; err != nil {
+		t.Fatal(err)
+	}
+	if plans != 0 {
+		t.Fatalf("photo inspection with environment clips created %d video plans", plans)
+	}
+	var preparations int64
+	if err := db.Model(&database.VideoPreparationJob{}).Count(&preparations).Error; err != nil {
+		t.Fatal(err)
+	}
+	if preparations != 0 {
+		t.Fatalf("photo inspection with environment clips created %d preparations", preparations)
+	}
+}
+
 func TestB3RunDueClaimsFailedAndCanceledPreparationsAndClassifiesThem(t *testing.T) {
 	for _, tc := range []struct {
 		status, errorCode, wantCode string

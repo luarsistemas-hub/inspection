@@ -88,7 +88,7 @@ func (r *queryResolver) triageWorkspace(ctx context.Context, first *int, after *
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	limit := intValue(first)
@@ -199,7 +199,7 @@ func (r *queryResolver) triageCase(ctx context.Context, inspectionID string) (*g
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	id, err := identity.ParseID(inspectionID)
@@ -244,7 +244,7 @@ func (r *queryResolver) triageAssignees(ctx context.Context, inspectionID string
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
 	}
 	id, err := identity.ParseID(inspectionID)
@@ -255,7 +255,7 @@ func (r *queryResolver) triageAssignees(ctx context.Context, inspectionID string
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("id=?", id).Take(&inspection).Error }); err != nil {
 		return nil, err
 	}
-	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, false); err != nil {
+	if _, err := r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}}); err != nil {
 		return nil, err
 	}
 	var members []database.Membership
@@ -289,7 +289,7 @@ func (r *mutationResolver) updateTriageCase(ctx context.Context, input graphql1.
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee); err != nil {
+	if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, true, auth.Manager, auth.Employee); err != nil {
 		return nil, err
 	}
 	id, err := identity.ParseID(input.InspectionID)
@@ -300,7 +300,7 @@ func (r *mutationResolver) updateTriageCase(ctx context.Context, input graphql1.
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("id=?", id).Take(&inspection).Error }); err != nil {
 		return nil, err
 	}
-	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, true); err != nil {
+	if _, err := r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee}, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, Mutate: true}); err != nil {
 		return nil, err
 	}
 	var assignee *identity.ID

@@ -43,7 +43,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		var inspection database.Inspection
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
 			return err
 		}
 		var class database.ClassificationRun
@@ -51,9 +51,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		now := deps.Now().UTC()
-		row := database.DashboardInspection{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, AssetID: inspection.AssetID, Classification: class.Classification, Status: inspection.Status, Invalidated: inspection.Status == "INVALIDATED", Sequence: now.UnixNano(), UpdatedAt: now}
+		invalidated := inspection.Status == "INVALIDATED" || inspection.Status == "CANCELED"
+		row := database.DashboardInspection{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, AssetID: inspection.AssetID, Classification: class.Classification, Status: inspection.Status, Invalidated: invalidated, Sequence: now.UnixNano(), UpdatedAt: now}
 		if err := UpsertDashboardInspection(tx.WithContext(ctx), row); err != nil {
 			return err
+		}
+		if invalidated {
+			return deps.InAppNotification(ctx, tx, envelope)
 		}
 		if err := deps.UpsertTriage(ctx, tx, envelope.TenantID, payload.InspectionID, class, snapshot.VersionNumber, now); err != nil {
 			return err
@@ -66,8 +70,14 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 func UpsertDashboardInspection(tx *gorm.DB, row database.DashboardInspection) error {
 	return tx.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "inspection_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"project_id", "asset_id", "classification", "status", "invalidated", "sequence", "updated_at",
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"project_id":     clause.Expr{SQL: "EXCLUDED.project_id"},
+			"asset_id":       clause.Expr{SQL: "EXCLUDED.asset_id"},
+			"classification": clause.Expr{SQL: "EXCLUDED.classification"},
+			"status":         clause.Expr{SQL: "EXCLUDED.status"},
+			"invalidated":    gorm.Expr("dashboard.inspections.invalidated OR EXCLUDED.invalidated"),
+			"sequence":       clause.Expr{SQL: "EXCLUDED.sequence"},
+			"updated_at":     clause.Expr{SQL: "EXCLUDED.updated_at"},
 		}),
 	}).Create(&row).Error
 }

@@ -116,7 +116,7 @@ func TestVV_IT_218RetriedGenerationKeepsOneSinkGuidanceEntry(t *testing.T) {
 			guidance = append(guidance, requirement.Instructions)
 		}
 	}
-	if len(guidance) != 1 || !strings.Contains(guidance[0], "kitchen — sink") || !strings.Contains(guidance[0], "vista wide") {
+	if len(guidance) != 1 || !strings.Contains(guidance[0], "kitchen — sink") || !strings.Contains(guidance[0], "vista ampla") {
 		t.Fatalf("sink guidance = %q, want one entry naming the sink and the requested view", guidance)
 	}
 }

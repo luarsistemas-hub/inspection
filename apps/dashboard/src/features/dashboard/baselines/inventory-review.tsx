@@ -9,11 +9,14 @@ import { ConfirmationDialog } from "../confirmation-dialog";
 import { FormDialog } from "../form-dialog";
 import { conditionLabel, conditionOptions, environmentTypeLabel, itemTypeLabel, itemTypeOptions, purposeOptions } from "../inventory-presentation";
 import { EvidenceStrip } from "./evidence-strip";
+import { AudioNoteReview } from "./audio-note-review";
 import { itemAttributes, ReadOnlyInventory } from "./read-only-inventory";
 import { EditItemForm, EnvironmentForm, MergeItemsForm, RejectItemForm, SplitItemForm } from "./review-forms";
 import { buildActivationSummary, buildReviewGroups, decisionLabel, failureText, formatEvidenceTime, isExpectedVersionConflict, isPreparingDraft, newClientMutationId, throwUserErrors, type InventoryDraft, type ReviewEnvironment, type ReviewItem } from "./review-model";
+import { shouldPollInspectionNotes } from "../voice-notes-model";
 
 const bulkMinimumConfidenceBps = 8500;
+const emptyVoiceSummary = { pendingVoiceItems: 0, conflictItems: 0, staleSuggestions: 0, notesWithoutItem: 0 };
 type Participant = G.DashboardCounterpartyOptionsQuery["participants"]["nodes"][number];
 
 /** InventoryReview is the internal review of one baseline draft. */
@@ -41,6 +44,8 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
   const [bulkEnvironment, setBulkEnvironment] = useState<ReviewEnvironment>();
   const [confirmActivation, setConfirmActivation] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [inspectionNotes, setInspectionNotes] = useState<G.DashboardAudioNotesQuery["audioNotes"]["nodes"]>([]);
+  const [selectedLateNoteIds, setSelectedLateNoteIds] = useState<string[]>([]);
 
   const refreshDraft = useCallback(async (updateStatus = true) => {
     const result = await graphql<G.DashboardInventoryDraftQuery, G.DashboardInventoryDraftQueryVariables>(G.DashboardInventoryDraftDocument, { originVersionId: reviewId });
@@ -62,6 +67,34 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
     setParticipantsHaveMore(result.participants.pageInfo.hasNextPage);
   }, []);
   useEffect(() => { void refreshDraft().catch((failure) => setError(failureText(failure))); }, [refreshDraft]);
+  useEffect(() => {
+    if (!draft?.warnings.includes("REGENERATION_RUNNING")) return;
+    const timer = window.setInterval(() => { void refreshDraft().catch(() => undefined); }, 2500);
+    return () => window.clearInterval(timer);
+  }, [draft?.warnings, refreshDraft]);
+  useEffect(() => {
+    const inspectionId = draft?.sourceInspectionId;
+    if (!inspectionId) { setInspectionNotes([]); return; }
+    let active = true;
+    let loadingNotes = false;
+    let timer: number | undefined;
+    const regenerationRunning = Boolean(draft?.warnings.includes("REGENERATION_RUNNING"));
+    const loadNotes = async () => {
+      if (loadingNotes) return;
+      loadingNotes = true;
+      try {
+        const result = await graphql<G.DashboardAudioNotesQuery, G.DashboardAudioNotesQueryVariables>(G.DashboardAudioNotesDocument, { inspectionId, environmentId: "", first: 100, after: null });
+        if (active) {
+          setInspectionNotes(result.audioNotes.nodes);
+          if (!shouldPollInspectionNotes(result.audioNotes.nodes, regenerationRunning) && timer !== undefined) window.clearInterval(timer);
+        }
+      } catch { /* Keep the last successful list available during transient failures. */ }
+      finally { loadingNotes = false; }
+    };
+    void loadNotes();
+    timer = window.setInterval(() => { void loadNotes(); }, 3000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [draft?.sourceInspectionId, draft?.warnings.includes("REGENERATION_RUNNING")]);
   useEffect(() => { void loadParticipants(null).catch((failure) => setError(failureText(failure))); }, [loadParticipants]);
   // Counterparties are offered from the draft's own asset unit.
   const assetId = draft?.assetId;
@@ -137,7 +170,28 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
     const result = await graphql<G.RetryInventoryDraftMutation, G.RetryInventoryDraftMutationVariables>(G.RetryInventoryDraftDocument, { input: { originVersionId: reviewId, clientMutationId: newClientMutationId() } });
     throwUserErrors(result.retryInventoryDraft.userErrors);
   });
+  const regenerateVoiceSuggestions = (environment: ReviewEnvironment) => run(async () => {
+    const voiceSources = environment.items
+      .filter((item) => item.decision === "PENDING")
+      .flatMap((item) => item.attributeSources ?? [])
+      .filter((source) => /VOICE|TRANSCRIPT/i.test(source.sourceKind) && source.noteId)
+      .reduce((sources, source) => sources.set(source.noteId!, source), new Map<string, (typeof environment.items)[number]["attributeSources"][number]>());
+    const lateNotes = inspectionNotes.filter((note) => note.requirementKey === environment.requirementKey && selectedLateNoteIds.includes(note.id));
+    const revisions = await Promise.all([...new Set([...voiceSources.keys(), ...lateNotes.map((note) => note.id)])].map(async (noteId) => {
+      const result = await graphql<G.DashboardAudioNoteQuery, G.DashboardAudioNoteQueryVariables>(G.DashboardAudioNoteDocument, { id: noteId });
+      return result.audioNote?.currentRevisionId;
+    }));
+    const revisionIds = [...new Set(revisions.filter((id): id is string => Boolean(id)))];
+    if (revisionIds.length === 0) throw Object.assign(new Error("Selecione uma nota sem item ou aguarde sugestões de voz pendentes neste ambiente."), { isUserError: true });
+    const result = await graphql<G.RegenerateInventorySuggestionsMutation, G.RegenerateInventorySuggestionsMutationVariables>(G.RegenerateInventorySuggestionsDocument, {
+      input: { originVersionId: reviewId, environmentId: environment.id, expectedVersion: draft?.version.originRevision ?? 0, revisionIds, clientMutationId: newClientMutationId() },
+    });
+    throwUserErrors(result.regenerateInventorySuggestions.userErrors);
+    setSelectedLateNoteIds([]);
+    setStatus("Atualização das sugestões de voz solicitada para este ambiente.");
+  });
   const activationSummary = draft ? buildActivationSummary(draft.environments.flatMap((environment) => environment.items), draft.progress.pending) : { included: 0, rejected: 0, notReviewed: 0 };
+  const voiceSummary = draft?.voiceSummary ?? emptyVoiceSummary;
   const eligibleCounterparties = participants.filter((participant) => participant.businessUnitId === businessUnitId);
   const reviewGroups = draft ? buildReviewGroups(draft) : [];
   const selectedEnvironment = reviewGroups.find((environment) => environment.id === selectedReviewEnvironmentId)
@@ -148,6 +202,8 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
     ?? selectedEnvironment?.items.find((item) => item.decision === "PENDING")
     ?? selectedEnvironment?.items[0];
   const selectedItemIndex = selectedEnvironment?.items.findIndex((item) => item.id === selectedReviewItem?.id) ?? -1;
+  const citedNoteIds = new Set(draft?.environments.flatMap((environment) => environment.items.flatMap((item) => (item.attributeSources ?? []).flatMap((source) => source.noteId ?? []))) ?? []);
+  const lateNotesByEnvironment = (environment: ReviewEnvironment) => inspectionNotes.filter((note) => note.requirementKey === environment.requirementKey && !citedNoteIds.has(note.id));
 
   return <section className="baseline-review" aria-labelledby="baseline-review-heading">
     <div className="baseline-review-heading">
@@ -162,6 +218,11 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
           : <>
             {draft.version.draftState === "FAILED" && <div role="alert"><p>Não foi possível preparar este inventário.</p><Button variant="secondary" disabled={busy} onClick={() => void retry()}>Tentar novamente</Button></div>}
             {draft.warnings.map((warning) => <p className="baseline-warning" key={warning}>{warning}</p>)}
+            {(voiceSummary.pendingVoiceItems + voiceSummary.conflictItems + voiceSummary.staleSuggestions + voiceSummary.notesWithoutItem > 0 || inspectionNotes.length > 0) && <section className="baseline-voice-summary" aria-label="Resumo das anotações de voz">
+              <h3>Resumo de voz</h3>
+              <dl><div><dt>Itens de voz pendentes</dt><dd>{voiceSummary.pendingVoiceItems}</dd></div><div><dt>Conflitos voz × imagem</dt><dd>{voiceSummary.conflictItems}</dd></div><div><dt>Sugestões baseadas em texto antigo</dt><dd>{voiceSummary.staleSuggestions}</dd></div><div><dt>Notas sem item</dt><dd>{voiceSummary.notesWithoutItem}</dd></div></dl>
+              {draft.environments.map((environment) => { const summary = environment.voiceSummary ?? emptyVoiceSummary; return <p key={environment.id}>{environment.name}: {summary.pendingVoiceItems} itens de voz pendentes · {summary.conflictItems} conflitos · {summary.staleSuggestions} sugestões antigas · {summary.notesWithoutItem} notas sem item</p>; })}
+            </section>}
             <div className="baseline-review-workspace">
               <aside className="baseline-review-rooms" aria-label="Navegação dos ambientes">
                 <div className="baseline-review-rooms-heading"><h3>Ambientes</h3><span>{reviewGroups.length}</span></div>
@@ -186,6 +247,8 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
                     <details className="baseline-room-actions">
                       <summary>Ações do ambiente</summary>
                       <div>
+                        {lateNotesByEnvironment(environment).length > 0 && <fieldset className="baseline-late-voice-notes"><legend>Notas sem item em {environment.name}</legend><p>Selecione notas para incluí-las em uma regeneração explícita. Itens já decididos não serão alterados.</p>{lateNotesByEnvironment(environment).map((note) => <label key={note.id}><input type="checkbox" checked={selectedLateNoteIds.includes(note.id)} onChange={(event) => setSelectedLateNoteIds((current) => event.target.checked ? [...current, note.id] : current.filter((id) => id !== note.id))} />{note.noSpeech ? "Nenhuma fala identificada" : note.revisions.find((revision) => revision.id === note.currentRevisionId)?.text || "Texto ainda indisponível"}</label>)}<Button variant="secondary" disabled={busy || !lateNotesByEnvironment(environment).some((note) => selectedLateNoteIds.includes(note.id))} onClick={() => void regenerateVoiceSuggestions(environment)}>Regenerar sugestões selecionadas</Button></fieldset>}
+                        {environment.items.some((item) => item.decision === "PENDING" && (item.attributeSources ?? []).some((source) => /VOICE|TRANSCRIPT/i.test(source.sourceKind) && source.noteId)) && <Button variant="secondary" disabled={busy} onClick={() => void regenerateVoiceSuggestions(environment)}>Atualizar sugestões de voz pendentes</Button>}
                         <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setBulkEnvironment(environment))}>Aceitar itens confiáveis</Button>
                         <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingEnvironment(environment))}>Editar ambiente</Button>
                         <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setRemovingEnvironment(environment))}>Remover ambiente</Button>
@@ -206,6 +269,12 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
                     <div className="baseline-item-detail">
                       <p>{itemTypeLabel(selectedReviewItem.typeCode)} · {conditionLabel(selectedReviewItem.condition)}</p>
                       <p>{itemAttributes(selectedReviewItem)}</p>
+                      {(selectedReviewItem.attributeSources ?? []).map((source) => /VOICE|TRANSCRIPT/i.test(source.sourceKind) ? <details key={source.id} className="baseline-voice-source">
+                        <summary>Informado por voz · {source.attributeName}</summary>
+                        {source.stale && <p role="status">Baseado em revisão anterior; a revisão citada permanece visível abaixo.</p>}
+                        {source.noteId && source.revisionId ? <AudioNoteReview noteId={source.noteId} revisionId={source.revisionId} attributeName={source.attributeName} /> : <p>A referência exata da anotação não está disponível.</p>}
+                      </details> : <p className="baseline-attribute-source" key={source.id}>{/VISUAL|IMAGE/i.test(source.sourceKind) ? "Observado visualmente" : source.reviewedBy ? "Revisado por operador" : "Fonte registrada"} · {source.attributeName}</p>)}
+                      {(selectedReviewItem.voiceConflicts ?? []).map((conflict, index) => <div className="baseline-voice-conflict" key={`${conflict.attributeName}-${index}`} role="status"><strong>Revisão necessária · {conflict.attributeName}</strong><div><span>Imagem: {conflict.visualValue || "sem valor"}</span><span>Voz: {conflict.voiceValue || "sem valor"}</span></div></div>)}
                       <p className="baseline-confidence">{selectedReviewItem.confidenceBps == null ? "Sem confiança informada" : `Confiança ${Math.round(selectedReviewItem.confidenceBps / 100)}%`} · {selectedReviewItem.declared ? "Declarado" : decisionLabel(selectedReviewItem.decision)}</p>
                       <details><summary>Definições das condições</summary><ul>{conditionOptions.map(([, definition]) => <li key={definition}>{definition}</li>)}</ul></details>
                     </div>

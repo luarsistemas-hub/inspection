@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// TestConcurrentRequestsForDifferentInspectionsOnOneAssetHaveSingleWinner covers IT-446.
 func TestConcurrentRequestsForDifferentInspectionsOnOneAssetHaveSingleWinner(t *testing.T) {
 	p := newPromotionFixtureWithOrigin(t, "COMPLETED")
 	secondInspection := cloneInspectionForSameAsset(t, p)

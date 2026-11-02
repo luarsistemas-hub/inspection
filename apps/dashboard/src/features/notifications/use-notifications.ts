@@ -76,6 +76,15 @@ export function useNotifications(enabled: boolean, includeDeliveries: boolean) {
   }, []);
 
   useEffect(() => {
+    if (enabled) return;
+    // Leaving a protected context discards its notifications and every response still in flight.
+    filterGeneration.current += 1;
+    deliveryRequest.current += 1;
+    loadedCount.current = PAGE_SIZE;
+    setState((current) => ({ ...current, items: [], unreadCount: 0, cursor: null, hasMoreNotifications: false, loadingMoreNotifications: false, deliveries: [], deliveryCursor: null, hasMoreDeliveries: false, loadingDeliveries: false, error: "" }));
+  }, [enabled]);
+
+  useEffect(() => {
     if (!enabled || !visible) return;
     void refresh();
     const interval = window.setInterval(() => void refresh(), 30_000);

@@ -60,7 +60,7 @@ func (s Service) Provision(ctx context.Context, input Input) (Result, error) {
 	input.BusinessUnitCode = strings.TrimSpace(input.BusinessUnitCode)
 	input.BusinessUnitName = strings.TrimSpace(input.BusinessUnitName)
 	if input.Name == "" || len([]rune(input.Name)) > 200 {
-		return Result{}, apperror.New(apperror.InvalidInput, "name", "invalid name")
+		return Result{}, apperror.New(apperror.InvalidInput, "name", "Informe um nome válido.")
 	}
 	if input.Language == "" {
 		input.Language = "pt-BR"
@@ -69,13 +69,13 @@ func (s Service) Provision(ctx context.Context, input Input) (Result, error) {
 		input.Timezone = "America/Sao_Paulo"
 	}
 	if _, err := time.LoadLocation(input.Timezone); err != nil {
-		return Result{}, apperror.New(apperror.InvalidInput, "timezone", "invalid timezone")
+		return Result{}, apperror.New(apperror.InvalidInput, "timezone", "Selecione um fuso horário válido.")
 	}
 	if input.BusinessUnitCode == "" || input.BusinessUnitName == "" {
-		return Result{}, apperror.New(apperror.InvalidInput, "businessUnit", "initial business unit is required")
+		return Result{}, apperror.New(apperror.InvalidInput, "businessUnit", "Informe os dados da unidade inicial.")
 	}
 	if input.Issuer == "" || input.Subject == "" || input.IdempotencyKey == "" {
-		return Result{}, apperror.New(apperror.InvalidInput, "identity", "identity and idempotency key are required")
+		return Result{}, apperror.New(apperror.InvalidInput, "identity", "Não foi possível concluir a solicitação. Tente novamente.")
 	}
 	identityID := identity.NewDeterministicID("inspection/oidc-identity", input.Issuer+"\x00"+input.Subject)
 	tenantID := identity.NewDeterministicID("inspection/onboarding-tenant", input.Issuer+"\x00"+input.Subject)
@@ -88,7 +88,7 @@ func (s Service) Provision(ctx context.Context, input Input) (Result, error) {
 		var prior database.BootstrapRequest
 		if err := tx.Where("subject_key=? AND idempotency_key=?", subjectKey, input.IdempotencyKey).First(&prior).Error; err == nil {
 			if prior.PayloadDigest != hex.EncodeToString(payloadDigest[:]) {
-				return apperror.New(apperror.Conflict, "idempotencyKey", "idempotency payload conflict")
+				return apperror.New(apperror.Conflict, "idempotencyKey", "Os dados foram alterados. Confira as informações e tente novamente.")
 			}
 			return json.Unmarshal(prior.Result, &result)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {

@@ -67,7 +67,7 @@ func Setup(d Dependencies) error {
 		})),
 		d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
 			c := raw.(Command)
-			if _, err := d.Authorizer.Authorize(ctx, c.TenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
+			if _, err := d.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: c.TenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, Mutate: true}); err != nil {
 				return nil, err
 			}
 			return configure(ctx, d.DB, d.Within, c)

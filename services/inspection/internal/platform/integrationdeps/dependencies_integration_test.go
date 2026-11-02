@@ -67,11 +67,16 @@ func testRabbitMQ(t *testing.T) {
 
 func testMinIO(t *testing.T) {
 	ctx := context.Background()
-	container, err := testcontainers.Run(ctx, "minio/minio:RELEASE.2025-04-22T22-12-26Z",
-		testcontainers.WithEnv(map[string]string{"MINIO_ROOT_USER": "inspection", "MINIO_ROOT_PASSWORD": "inspection-secret"}),
-		testcontainers.WithCmd("server", "/data"),
+	// The local stack serves the S3 API with RustFS (deploy/docker-compose.yml);
+	// the minio/minio image is no longer published to Docker Hub.
+	container, err := testcontainers.Run(ctx, "rustfs/rustfs:1.0.1",
+		testcontainers.WithEnv(map[string]string{
+			"RUSTFS_VOLUMES": "/data", "RUSTFS_ADDRESS": "0.0.0.0:9000", "RUSTFS_CONSOLE_ENABLE": "false",
+			"RUSTFS_ACCESS_KEY": "inspection", "RUSTFS_SECRET_KEY": "inspection-secret", "RUSTFS_OBS_LOGGER_LEVEL": "error",
+		}),
+		testcontainers.WithCmd("/data"),
 		testcontainers.WithExposedPorts("9000/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForHTTP("/minio/health/live").WithPort("9000/tcp").WithStartupTimeout(startupTimeout)))
+		testcontainers.WithWaitStrategy(wait.ForHTTP("/health").WithPort("9000/tcp").WithStartupTimeout(startupTimeout)))
 	testcontainers.CleanupContainer(t, container)
 	if err != nil {
 		t.Fatal(err)

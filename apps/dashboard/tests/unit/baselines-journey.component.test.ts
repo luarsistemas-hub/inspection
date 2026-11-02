@@ -7,7 +7,7 @@ import { BaselinesJourney } from "@/features/dashboard/baselines-journey";
 
 const navigation = vi.hoisted(() => ({ pathname: "/baselines/review/draft-a", push: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => navigation.pathname, useRouter: () => ({ push: navigation.push }) }));
-vi.mock("@/graphql/client", () => ({ graphql: vi.fn() }));
+vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql: vi.fn() }));
 vi.mock("@inspection/design-system", async () => {
   const React = await import("react");
   return {

@@ -3,7 +3,8 @@
 import { FormEvent, useRef, useState } from "react";
 import { Alert, Button, Field, Input, Recovery, Steps } from "@inspection/design-system";
 import { beginPKCE } from "@/auth/pkce";
-import { isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
+import { graphQLFailureText } from "@/graphql/client";
+import { activationErrorMessage, isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
 import { ActivationShell } from "./activation-shell";
 
 type Stage = "request" | "verify" | "password" | "ready";
@@ -20,9 +21,9 @@ export default function ActivatePage() {
     try {
       const activationToken = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("token");
       const errors = stage === "request" ? await requestActivationCode(activationToken) : stage === "verify" ? await verifyActivationCode(code) : await setInitialPassword(password);
-      if (errors.length) { setMessage(errors[0].message); return; }
+      if (errors.length) { setMessage(errors[0].message || activationErrorMessage(errors[0].code)); return; }
       setStage(stage === "request" ? "verify" : stage === "verify" ? "password" : "ready");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível concluir a ativação."); } finally { submitting.current = false; setBusy(false); }
+    } catch (error) { setMessage(graphQLFailureText(error)); } finally { submitting.current = false; setBusy(false); }
   };
   if (stage === "ready") return <ActivationShell title="Senha criada" description="Sua conta administrativa está pronta para uso."><Recovery kind="empty" title="Acesso ativado">Use sua nova senha para entrar na administração.</Recovery><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", "/organization")}>Entrar na administração</Button></ActivationShell>;
   return <ActivationShell title="Ative sua conta administrativa" description="Confirme um código exclusivo de ativação antes de criar sua senha."><form className="admin-form" onSubmit={submit} noValidate>

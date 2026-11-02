@@ -3,9 +3,13 @@
 package harness
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 	"time"
 
@@ -14,11 +18,15 @@ import (
 	classifyinspection "inspection/services/inspection/internal/features/analysis/classify_inspection"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
-	reportcore "inspection/services/inspection/internal/features/reports/core"
-	generate_snapshot "inspection/services/inspection/internal/features/reports/generate_snapshot"
+	mediaprocessverified "inspection/services/inspection/internal/features/media/process_verified"
+	notificationcore "inspection/services/inspection/internal/features/notifications/core"
+	"inspection/services/inspection/internal/features/reports/generate_snapshot"
+	handleclassified "inspection/services/inspection/internal/features/reports/handle_classified"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/objectstore"
+	"inspection/services/inspection/internal/platform/sensitivecontent"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"gorm.io/gorm"
@@ -30,6 +38,7 @@ func (photoWorkerStoppedGateway) CompleteStructured(context.Context, llm.Structu
 	return llm.StructuredResult{Provider: "integration-fake", Model: "photo-only", JSON: json.RawMessage(`{"noRelevantChange":null,"findings":[]}`)}, nil
 }
 
+// TestPhotoComparisonSchedulingDoesNotDependOnVideoPreparation covers IT-370.
 func TestPhotoComparisonSchedulingDoesNotDependOnVideoPreparation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -87,11 +96,27 @@ func TestPhotoComparisonSchedulingDoesNotDependOnVideoPreparation(t *testing.T) 
 	}
 }
 
-func TestPhotoFlowCompletesWhileVideoQueueHas100QueuedReceiptsIT366(t *testing.T) {
+func TestPhotoFlowCompletesWhileVideoQueueHas100QueuedReceiptsIT366AndIT370(t *testing.T) {
 	runPhotoFlow(t)
 }
 
+// photoFlowNotifications accepts internal alert requests made by the real
+// inspection.classified.v1 handler without delivering them.
+type photoFlowNotifications struct{}
+
+func (photoFlowNotifications) Send(context.Context, notificationcore.Notification) (notificationcore.NotificationResult, error) {
+	return notificationcore.NotificationResult{}, nil
+}
+
+// runPhotoFlow runs the PHOTO journey up to the report snapshot.
 func runPhotoFlow(t *testing.T) (*Harness, Task06Fixture) {
+	h, fixture, _ := runPhotoFlowWithClassified(t)
+	return h, fixture
+}
+
+// runPhotoFlowWithClassified also returns the real inspection.classified.v1
+// envelope consumed by the report handler.
+func runPhotoFlowWithClassified(t *testing.T) (*Harness, Task06Fixture, events.RawEnvelope) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	h, err := NewFromEnv(ctx)
@@ -168,6 +193,71 @@ func runPhotoFlow(t *testing.T) (*Harness, Task06Fixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The fixture stores a submitted draft with a READY PHOTO whose bytes are
+	// a header-only PNG. In the real journey triage runs while the draft is
+	// still OPEN, right after upload verification. Rewind the fixture to that
+	// point: OPEN draft, a decodable PNG uploaded as the original (RECEIVED)
+	// and then VERIFIED. The real media.verified.v1 consumer below derives the
+	// DISPLAY/ANALYSIS images, screens the media and moves it to READY.
+	photoBytes := photoFlowPNG(t)
+	if err := h.AdminDB.Model(&database.CaptureDraft{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.DraftID).Update("status", "OPEN").Error; err != nil {
+		t.Fatalf("reopen PHOTO draft for triage: %v", err)
+	}
+	var original database.MediaObject
+	if err := h.AdminDB.Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Take(&original).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := h.AdminDB.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Update("status", "RECEIVED").Error; err != nil {
+		t.Fatalf("rewind PHOTO media to RECEIVED: %v", err)
+	}
+	if err := h.Store.Client.Put(ctx, h.Store.Bucket, original.ObjectKey, bytes.NewReader(photoBytes), int64(len(photoBytes)), "image/png"); err != nil {
+		t.Fatalf("upload decodable PHOTO original: %v", err)
+	}
+	if err := h.AdminDB.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Updates(map[string]any{"sha256": digest(photoBytes), "size_bytes": int64(len(photoBytes))}).Error; err != nil {
+		t.Fatalf("record decodable PHOTO original: %v", err)
+	}
+	if err := h.AdminDB.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Update("status", "VERIFIED").Error; err != nil {
+		t.Fatalf("mark PHOTO media VERIFIED: %v", err)
+	}
+	verified, err := mediaprocessverified.Setup(mediaprocessverified.Dependencies{Store: objectstore.Store{Client: h.Store.Client, Bucket: h.Store.Bucket}, Detector: sensitivecontent.NewDisabledDetector()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedPayload, err := json.Marshal(map[string]any{"mediaId": fixture.MediaID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedEnvelope := events.RawEnvelope{ID: identity.NewID(), Type: "media.verified.v1", SchemaVersion: 1, OccurredAt: time.Now().UTC(), TenantID: fixture.TenantID, AggregateID: fixture.MediaID, CorrelationID: "photo-flow-verified-" + fixture.MediaID.String(), Payload: verifiedPayload}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		return verified(ctx, tx, verifiedEnvelope)
+	}); err != nil {
+		t.Fatalf("process verified PHOTO media: %v", err)
+	}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		var screenedMedia database.MediaObject
+		if err := tx.Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Take(&screenedMedia).Error; err != nil {
+			return err
+		}
+		var display, screening, screenedEvents int64
+		if err := tx.Model(&database.MediaDerivative{}).Where("tenant_id=? AND media_id=? AND kind='DISPLAY'", fixture.TenantID, fixture.MediaID).Count(&display).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.ScreeningRun{}).Where("tenant_id=? AND media_id=?", fixture.TenantID, fixture.MediaID).Count(&screening).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.OutboxIntent{}).Where("tenant_id=? AND type='media.screened.v1'", fixture.TenantID).Count(&screenedEvents).Error; err != nil {
+			return err
+		}
+		if screenedMedia.Status != "READY" || display != 1 || screening != 1 || screenedEvents != 1 {
+			t.Fatalf("PHOTO triage: status=%s display=%d screening=%d media.screened=%d; want READY, 1, 1, 1", screenedMedia.Status, display, screening, screenedEvents)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.AdminDB.Model(&database.CaptureDraft{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.DraftID).Update("status", "SUBMITTED").Error; err != nil {
+		t.Fatalf("resubmit PHOTO draft after triage: %v", err)
+	}
 	schedule, err := requestcomparisons.Setup(requestcomparisons.Dependencies{Now: time.Now})
 	if err != nil {
 		t.Fatal(err)
@@ -219,42 +309,23 @@ func runPhotoFlow(t *testing.T) (*Harness, Task06Fixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var classified struct {
-		InspectionID        identity.ID `json:"inspectionId"`
-		ClassificationRunID identity.ID `json:"classificationRunId"`
-		Classification      string      `json:"classification"`
-		ReasonCodes         []string    `json:"reasonCodes"`
-	}
+	var classified events.InspectionClassifiedPayload
 	if err := json.Unmarshal(classifiedEvent.Payload, &classified); err != nil || classified.InspectionID != fixture.InspectionID || classified.ClassificationRunID == (identity.ID{}) {
 		t.Fatalf("decode classified event: %v", err)
 	}
-	var inspection database.Inspection
-	var prompt database.AnalysisPromptSnapshot
-	var projectID *identity.ID
-	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND id=?", fixture.TenantID, fixture.InspectionID).Take(&inspection).Error; err != nil {
-			return err
-		}
-		return tx.Where("id=?", inspection.AnalysisPromptSnapshotID).Take(&prompt).Error
-	}); err != nil {
-		t.Fatal(err)
-	}
-	// The inspection.classified.v1 worker handler is a main-package closure; snapshot generation is verified through its feature slice.
-	projectID = inspection.ProjectID
 	createSnapshot, err := generate_snapshot.Setup(generate_snapshot.Dependencies{DB: h.DB, Now: time.Now})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = createSnapshot(ctx, generate_snapshot.Input{TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, ProjectID: projectID, Mode: "HISTORICAL", Classification: classified.Classification, TemplateVersionID: fixture.TemplateVersionID.String(), ReferenceVersionID: "reference-free", PromptDigest: prompt.CanonicalDigest, ReasonCodes: classified.ReasonCodes, Coverage: map[string]string{}, Context: reportcore.Context{
-		Asset:       reportcore.AssetContext{ID: fixture.AssetID.String(), Name: "Task 06 asset", ExternalKey: "task06-asset", Address: "Test address"},
-		Participant: reportcore.ParticipantContext{ID: fixture.ParticipantID.String(), Name: "Task 06 participant"},
-		Template:    reportcore.TemplateContext{ID: fixture.TemplateID.String(), Name: "Task 06 template", Version: 1},
-		Inspection:  reportcore.InspectionContext{ProjectID: fixture.ProjectID.String(), StageID: fixture.StageID.String(), GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano)},
-	}})
+	classifiedHandler, err := handleclassified.Setup(handleclassified.Dependencies{Notifications: photoFlowNotifications{}, CreateSnapshot: createSnapshot, Now: time.Now})
 	if err != nil {
-		t.Fatalf("generate PHOTO report snapshot: %v", err)
+		t.Fatal(err)
+	}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error { return classifiedHandler(ctx, tx, classifiedEvent) }); err != nil {
+		t.Fatalf("handle real inspection.classified.v1 event: %v", err)
 	}
 
+	var inspection database.Inspection
 	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
 		var jobs []database.ComparisonJob
 		if err := tx.Where("tenant_id=? AND inspection_id=?", fixture.TenantID, fixture.InspectionID).Find(&jobs).Error; err != nil {
@@ -304,7 +375,23 @@ func runPhotoFlow(t *testing.T) (*Harness, Task06Fixture) {
 	if after.Messages != queued.Messages {
 		t.Fatalf("PHOTO flow changed video queue depth from %d to %d", queued.Messages, after.Messages)
 	}
-	return h, fixture
+	return h, fixture, classifiedEvent
+}
+
+// photoFlowPNG encodes a small decodable PNG for the PHOTO triage step.
+func photoFlowPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 3))
+	for x := 0; x < 4; x++ {
+		for y := 0; y < 3; y++ {
+			img.Set(x, y, color.RGBA{R: uint8(60 * x), G: uint8(80 * y), B: 120, A: 255})
+		}
+	}
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, img); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
 }
 
 func loadOutboxEnvelope(ctx context.Context, h *Harness, tenantID identity.ID, eventType string) (events.RawEnvelope, error) {

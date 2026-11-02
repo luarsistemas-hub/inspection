@@ -39,7 +39,7 @@ func TestVideoPreparationEvidenceCursorStaysOnPreparation(t *testing.T) {
 		}
 	}
 	server := task06GraphQLServer(db)
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}}})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	otherPreparation := identity.NewID()
 	if err := db.Exec(`INSERT INTO media.video_preparation_jobs (id,tenant_id,media_id) VALUES (?,?,?)`, otherPreparation, tenantID, identity.NewID()).Error; err != nil {
 		t.Fatal(err)
@@ -94,12 +94,50 @@ func TestVideoPreparationEvidenceCursorStaysOnPreparation(t *testing.T) {
 	if !strings.Contains(unauthenticated, "UNAUTHENTICATED") {
 		t.Fatalf("unauthenticated request was accepted: %s", unauthenticated)
 	}
-	forbiddenCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}}})
+	forbiddenCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}})
 	forbidden := executeTask06GraphQL(t, server, fmt.Sprintf(`query { videoPreparationEvidence(preparationId:"%s") { nodes { id } } }`, preparationID), forbiddenCtx)
 	if !strings.Contains(forbidden, "FORBIDDEN") {
 		t.Fatalf("unauthorized role was accepted: %s", forbidden)
 	}
-	foreignCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: identity.NewID(), Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: identity.NewID(), Roles: []string{auth.TenantAdmin}}})
+	// A reader with the capability but without resource scope must receive the
+	// same NOT_FOUND projection used by reportDownload.
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS inspections.inspections (id blob primary key, tenant_id blob, business_unit_id blob, asset_id blob, project_id blob)`,
+		`CREATE TABLE IF NOT EXISTS inspections.responsibilities (id blob primary key, tenant_id blob, inspection_id blob, participant_id blob)`,
+		`CREATE TABLE IF NOT EXISTS media.media_objects (id blob primary key, tenant_id blob, responsibility_id blob)`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	mediaID, responsibilityID, inspectionID := identity.NewID(), identity.NewID(), identity.NewID()
+	assetID, businessUnitID := identity.NewID(), identity.NewID()
+	if err := db.Exec(`INSERT INTO inspections.inspections (id,tenant_id,business_unit_id,asset_id) VALUES (?,?,?,?)`, inspectionID, tenantID, businessUnitID, assetID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO inspections.responsibilities (id,tenant_id,inspection_id) VALUES (?,?,?)`, responsibilityID, tenantID, inspectionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO media.media_objects (id,tenant_id,responsibility_id) VALUES (?,?,?)`, mediaID, tenantID, responsibilityID).Error; err != nil {
+		t.Fatal(err)
+	}
+	preparationID = identity.NewID()
+	if err := db.Exec(`INSERT INTO media.video_preparation_jobs (id,tenant_id,media_id) VALUES (?,?,?)`, preparationID, tenantID, mediaID).Error; err != nil {
+		t.Fatal(err)
+	}
+	unscopedReader := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}, ProductEntitlements: auth.ProductsForRole(auth.Manager)}})
+	noScope := executeTask06GraphQL(t, server, fmt.Sprintf(`query { videoPreparationEvidence(preparationId:"%s") { nodes { id } } }`, preparationID), unscopedReader)
+	if !strings.Contains(noScope, "NOT_FOUND") || !strings.Contains(noScope, "Preparação não encontrada.") || !strings.Contains(noScope, "preparationId") {
+		t.Fatalf("out-of-scope preparation was not hidden: %s", noScope)
+	}
+	missing := executeTask06GraphQL(t, server, fmt.Sprintf(`query { videoPreparationEvidence(preparationId:"%s") { nodes { id } } }`, identity.NewID()), unscopedReader)
+	if !strings.Contains(missing, "NOT_FOUND") || !strings.Contains(missing, "Preparação não encontrada.") || !strings.Contains(missing, "preparationId") {
+		t.Fatalf("missing preparation did not use the same hidden-resource error: %s", missing)
+	}
+	if noScope != missing {
+		t.Fatalf("out-of-scope and missing preparations must be indistinguishable:\nout-of-scope=%s\nmissing=%s", noScope, missing)
+	}
+	foreignCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: identity.NewID(), Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: identity.NewID(), Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	foreign := executeTask06GraphQL(t, server, fmt.Sprintf(`query { videoPreparationEvidence(preparationId:"%s") { nodes { id } } }`, preparationID), foreignCtx)
 	if !strings.Contains(foreign, "NOT_FOUND") {
 		t.Fatalf("cross-tenant preparation was not hidden: %s", foreign)

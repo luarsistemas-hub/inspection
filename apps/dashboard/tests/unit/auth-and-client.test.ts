@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { beginPKCE, takePKCE } from "@/auth/pkce";
 import { safeDashboardPath } from "@/auth/return-path";
 import { accessTokenForRequest, clearSession, getAccessToken, getMembershipId, getProtectedStateGeneration, hasDashboardAccess, selectMembership, setSession } from "@/auth/session";
-import { graphql } from "@/graphql/client";
+import { graphQLFailureText, graphql, isStaleContextFailure } from "@/graphql/client";
 import { DashboardGateDocument } from "@/graphql/generated";
 
 describe("Dashboard auth and transport", () => {
@@ -22,6 +22,22 @@ describe("Dashboard auth and transport", () => {
   it("revocation immediately removes the local capability state", () => { setSession("token", { tenantId: "t", tenantName: "T", tenantStatus: "ACTIVE", entitlements: ["DASHBOARD"], roles: ["VIEWER"], scopes: [] }); expect(hasDashboardAccess()).toBe(true); clearSession(); expect(getAccessToken()).toBeUndefined(); expect(hasDashboardAccess()).toBe(false); });
   it("UT-072 persists the selected membership per tab and sends it with omitted credentials", async () => { setSession("dashboard-token"); selectMembership("membership-a"); setSession("dashboard-token-after-reload"); expect(getMembershipId()).toBe("membership-a"); expect(sessionStorage.getItem("inspection.dashboard.membership")).toBe("membership-a"); const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { me: { identityId: "1" } } }), { status: 200 })); vi.stubGlobal("fetch", fetch); await graphql(DashboardGateDocument, {}); expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ credentials: "omit", headers: expect.objectContaining({ Authorization: "Bearer dashboard-token-after-reload", "X-Inspection-Membership-ID": "membership-a" }) })); });
   it("clears protected state before a different membership can load", () => { setSession("dashboard-token", { tenantId: "t", tenantName: "T", tenantStatus: "ACTIVE", entitlements: ["DASHBOARD"], roles: ["VIEWER"], scopes: [] }); const before = getProtectedStateGeneration(); selectMembership("membership-a"); selectMembership("membership-b"); expect(getProtectedStateGeneration()).toBeGreaterThan(before); expect(hasDashboardAccess()).toBe(false); });
+  it("discards a response that arrives after the membership context changed", async () => {
+    setSession("dashboard-token");
+    selectMembership("membership-internal");
+    let respond!: (response: Response) => void;
+    const fetch = vi.fn().mockReturnValue(new Promise<Response>((resolve) => { respond = resolve; }));
+    vi.stubGlobal("fetch", fetch);
+    const pending = graphql(DashboardGateDocument, {});
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    selectMembership("membership-customer");
+    respond(new Response(JSON.stringify({ data: { me: { identityId: "internal-identity" } } }), { status: 200 }));
+    const failure = await pending.catch((error: unknown) => error);
+    expect(isStaleContextFailure(failure)).toBe(true);
+    expect(failure).not.toHaveProperty("data");
+    expect(graphQLFailureText(failure)).toBe("O contexto de acesso mudou. Os dados anteriores foram descartados.");
+    expect(getAccessToken()).toBe("dashboard-token");
+  });
   it("maps a non-JSON forbidden response without exposing parser details", async () => { setSession("dashboard-token"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("forbidden", { status: 403, headers: { "content-type": "text/plain" } }))); await expect(graphql(DashboardGateDocument, {})).rejects.toMatchObject({ code: "FORBIDDEN", message: "Você não tem permissão para esta operação." }); expect(getAccessToken()).toBeUndefined(); });
   it("logs GraphQL operation errors with their correlation details", async () => {
     setSession("dashboard-token");
@@ -33,6 +49,20 @@ describe("Dashboard auth and transport", () => {
 
     expect(log).toHaveBeenCalledWith("[GraphQL] query DashboardGate failed", { errors });
     log.mockRestore();
+  });
+  it("UT-196 hides internal and unknown server messages and includes the support code in alert text", async () => {
+    setSession("dashboard-token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "stack trace", extensions: { code: "INTERNAL", correlationId: "corr-test" } }] }), { status: 200 })));
+    await expect(graphql(DashboardGateDocument, {})).rejects.toMatchObject({ message: "Não foi possível concluir a solicitação. Tente novamente.", code: "INTERNAL", correlationId: "corr-test" });
+    expect(graphQLFailureText({ message: "Não foi possível concluir a solicitação. Tente novamente.", code: "INTERNAL", correlationId: "corr-test" })).toBe("Não foi possível concluir a solicitação. Tente novamente. Código de suporte: corr-test");
+    expect(graphQLFailureText(new TypeError("fetch failed with token"))).toBe("Não foi possível concluir a solicitação. Tente novamente.");
+    expect(graphQLFailureText({ code: "NOT_FOUND", message: "internal detail" })).toBe("Registro não encontrado ou sem acesso.");
+    expect(graphQLFailureText({ code: "CONFLICT", message: "internal detail", correlationId: "unavailable" })).toBe("Os dados mudaram. Atualize e tente novamente.");
+  });
+  it("turns network TypeErrors into a stable Portuguese failure", async () => {
+    setSession("dashboard-token");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network trace with secret")));
+    await expect(graphql(DashboardGateDocument, {})).rejects.toMatchObject({ code: "NETWORK_ERROR", message: "Não foi possível concluir a solicitação. Tente novamente." });
   });
   it("renews an expiring token once for concurrent requests and rotates the refresh token", async () => {
     vi.stubEnv("NEXT_PUBLIC_OIDC_TOKEN_URL", "https://id.example/token");

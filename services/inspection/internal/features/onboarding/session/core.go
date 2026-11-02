@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	assetaddress "inspection/services/inspection/internal/features/assets/address"
 	"inspection/services/inspection/internal/features/onboarding/coordinator"
 	"inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -39,8 +40,8 @@ const (
 	maxCheckpointPayloadBytes = 128 * 1024
 )
 
-var ErrPurposeMismatch = apperror.New(apperror.InvalidInput, "code", "invalid code")
-var ErrAttemptReplaced = apperror.New(apperror.SessionExpired, "session", "onboarding session replaced")
+var ErrPurposeMismatch = apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
+var ErrAttemptReplaced = apperror.New(apperror.SessionExpired, "session", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 
 type Owner struct {
 	Name, Email, Subject, Issuer string
@@ -163,21 +164,24 @@ func NormalizeEmail(value string) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(value))
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address != email || !strings.Contains(email, "@") {
-		return "", apperror.New(apperror.InvalidInput, "email", "invalid email")
+		return "", apperror.New(apperror.InvalidInput, "email", "Informe um e-mail válido.")
 	}
-	if len(email) > 320 {
-		return "", apperror.New(apperror.InvalidInput, "email", "invalid email")
+	if len(email) > 320 || !assetaddress.SafeText(email) {
+		return "", apperror.New(apperror.InvalidInput, "email", "Informe um e-mail válido.")
 	}
 	return email, nil
 }
 
 func ValidateOwner(name, email string) (Owner, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return Owner{}, apperror.New(apperror.InvalidInput, "name", "name is required")
+	name, safe := assetaddress.CleanText(name)
+	if name == "" && safe {
+		return Owner{}, apperror.New(apperror.InvalidInput, "name", "Informe seu nome.")
+	}
+	if !safe {
+		return Owner{}, apperror.New(apperror.InvalidInput, "name", "O nome contém caracteres não permitidos.")
 	}
 	if len([]rune(name)) > 200 {
-		return Owner{}, apperror.New(apperror.InvalidInput, "name", "name is too long")
+		return Owner{}, apperror.New(apperror.InvalidInput, "name", "O nome excede o limite permitido.")
 	}
 	normalized, err := NormalizeEmail(email)
 	if err != nil {
@@ -196,20 +200,20 @@ func (s Service) RequestOTP(ctx context.Context, name, email, ip, turnstileToken
 	}
 	ip = strings.TrimSpace(ip)
 	if ip == "" {
-		return RequestResult{}, apperror.New(apperror.InvalidInput, "", "client address required")
+		return RequestResult{}, apperror.New(apperror.InvalidInput, "", "Não foi possível iniciar a verificação.")
 	}
 	if s.enforcesRateLimit() {
 		for _, key := range requestOTPLimitKeys(owner.Email, ip) {
 			if result, err := s.Limits.AllowSend(ctx, key); err != nil {
 				return RequestResult{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 			} else if !result.Allowed {
-				return RequestResult{}, apperror.New(apperror.RateLimited, "", "retry later")
+				return RequestResult{}, apperror.New(apperror.RateLimited, "", "Aguarde antes de tentar novamente.")
 			}
 		}
 	}
 	if s.RequireCaptcha {
 		if s.Captcha == nil {
-			return RequestResult{}, apperror.New(apperror.DependencyUnavailable, "", "service temporarily unavailable")
+			return RequestResult{}, apperror.New(apperror.DependencyUnavailable, "", "Não foi possível concluir a solicitação. Tente novamente mais tarde.")
 		}
 		if err := s.Captcha.Verify(ctx, turnstileToken); err != nil {
 			return RequestResult{}, err
@@ -260,14 +264,14 @@ func (s Service) VerifyOTP(ctx context.Context, locator, code string) (Session, 
 		return Session{}, err
 	}
 	if strings.TrimSpace(locator) == "" {
-		return Session{}, apperror.New(apperror.InvalidInput, "sessionLocator", "invalid session")
+		return Session{}, apperror.New(apperror.InvalidInput, "sessionLocator", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	locatorDigest := digest(locator)
 	if s.enforcesRateLimit() {
 		if result, err := s.Limits.AllowAttempt(ctx, hex.EncodeToString(locatorDigest[:])); err != nil {
 			return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 		} else if !result.Allowed {
-			return Session{}, apperror.New(apperror.RateLimited, "", "retry later")
+			return Session{}, apperror.New(apperror.RateLimited, "", "Aguarde antes de tentar novamente.")
 		}
 	}
 	now := s.now()
@@ -280,22 +284,22 @@ func (s Service) VerifyOTP(ctx context.Context, locator, code string) (Session, 
 		var row database.OnboardingSession
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.InvalidInput, "code", "invalid code")
+				return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 			}
 			return err
 		}
 		if !security.Active(now, row.ExpiresAt, nil) || row.State != StatePending || row.ReplacedAt != nil {
-			return apperror.New(apperror.SessionExpired, "", "session expired")
+			return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 		}
 		var challenge database.OnboardingOTPChallenge
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_id=? AND purpose=? AND verified_at IS NULL", row.ID, PurposeOnboarding).Order("created_at DESC").First(&challenge).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.InvalidInput, "code", "invalid code")
+				return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 			}
 			return err
 		}
 		if !security.Active(now, challenge.ExpiresAt, nil) || challenge.Attempts >= 5 {
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 		}
 		if !s.acceptsOTPCode(code, challenge.CodeHMAC) {
 			if err := tx.Model(&challenge).UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error; err != nil {
@@ -347,14 +351,14 @@ func (s Service) VerifyOTP(ctx context.Context, locator, code string) (Session, 
 		return Session{}, err
 	}
 	if invalidCode {
-		return Session{}, apperror.New(apperror.InvalidInput, "code", "invalid code")
+		return Session{}, apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 	}
 	return result, nil
 }
 
 func (s Service) Load(ctx context.Context, locator string) (Session, error) {
 	if s.DB == nil || locator == "" {
-		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Session{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	now := s.now()
 	locatorDigest := digest(locator)
@@ -366,7 +370,7 @@ func (s Service) Load(ctx context.Context, locator string) (Session, error) {
 		return tx.Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error
 	})
 	if err != nil || !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending || row.State == StateReplaced || row.ReplacedAt != nil {
-		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Session{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	agency, err := s.loadAgency(ctx, row.ID, locator)
 	if err != nil {
@@ -380,7 +384,7 @@ func (s Service) Load(ctx context.Context, locator string) (Session, error) {
 // cannot read it even when the HttpOnly session cookie is sent by the browser.
 func (s Service) LoadAndRefreshCSRF(ctx context.Context, locator string) (Session, error) {
 	if s.DB == nil || len(s.Pepper) < 32 || locator == "" {
-		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Session{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	csrf, err := security.NewOpaqueToken()
 	if err != nil {
@@ -421,7 +425,7 @@ func (s Service) LoadAndRefreshCSRF(ctx context.Context, locator string) (Sessio
 		return nil
 	})
 	if err != nil {
-		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Session{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	agency, err := s.loadAgency(ctx, row.ID, locator)
 	if err != nil {
@@ -434,7 +438,7 @@ func (s Service) LoadAndRefreshCSRF(ctx context.Context, locator string) (Sessio
 // the session version or rotating the browser's CSRF proof.
 func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Session, error) {
 	if s.DB == nil || len(s.Pepper) < 32 || locator == "" || csrf == "" {
-		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Session{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	now := s.now()
 	locatorDigest := digest(locator)
@@ -445,7 +449,7 @@ func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Sessio
 		}
 		if err := tx.Where("session_locator_digest=?", locatorDigest[:]).First(&row).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.SessionExpired, "", "session expired")
+				return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 			}
 			return err
 		}
@@ -454,7 +458,7 @@ func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Sessio
 		}
 		proof, err := security.CSRFProof(locatorDigest, csrf, s.Pepper)
 		if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
-			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+			return apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar a solicitação. Atualize a página e tente novamente.")
 		}
 		return nil
 	})
@@ -468,7 +472,7 @@ func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Sessio
 // checkpoint records that make up the onboarding request.
 func (s Service) LoadSubmission(ctx context.Context, locator, csrf string) (Submission, error) {
 	if s.DB == nil || len(s.Pepper) < 32 || locator == "" {
-		return Submission{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Submission{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	now := s.now()
 	locatorDigest := digest(locator)
@@ -486,7 +490,7 @@ func (s Service) LoadSubmission(ctx context.Context, locator, csrf string) (Subm
 		}
 		proof, err := security.CSRFProof(locatorDigest, csrf, s.Pepper)
 		if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
-			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+			return apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar a solicitação. Atualize a página e tente novamente.")
 		}
 		var records []database.OnboardingStepRecord
 		if err := tx.Where("session_id = ?", row.ID).Order("version ASC").Find(&records).Error; err != nil {
@@ -526,7 +530,7 @@ func (s Service) MarkSubmitted(ctx context.Context, locator, csrf string) (Sessi
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "session", "stale onboarding session")
+			return apperror.New(apperror.Conflict, "session", "Os dados foram atualizados. Confira as informações e tente novamente.")
 		}
 		return nil
 	})
@@ -539,7 +543,7 @@ func (s Service) MarkSubmitted(ctx context.Context, locator, csrf string) (Sessi
 
 func (s Service) validateCurrentSession(tx *gorm.DB, row database.OnboardingSession, now time.Time) error {
 	if !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending || row.State == StateReplaced || row.ReplacedAt != nil {
-		return apperror.New(apperror.SessionExpired, "", "session expired")
+		return apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	var current bool
 	if err := tx.Raw(`SELECT onboarding.is_current_verified_session(?, ?)`, row.Email, row.ID).Scan(&current).Error; err != nil {
@@ -553,27 +557,27 @@ func (s Service) validateCurrentSession(tx *gorm.DB, row database.OnboardingSess
 
 func (s Service) Checkpoint(ctx context.Context, locator, csrf, step string, expectedVersion int64, payload map[string]any) (Session, error) {
 	if s.DB == nil || len(s.Pepper) < 32 || locator == "" {
-		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return Session{}, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	step = strings.ToUpper(strings.TrimSpace(step))
 	if step == StepIdentity || step == "" {
-		return Session{}, apperror.New(apperror.InvalidInput, "step", "invalid step")
+		return Session{}, apperror.New(apperror.InvalidInput, "step", "Esta etapa não está disponível. Atualize a página e tente novamente.")
 	}
 	now := s.now()
 	var result Session
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := s.validateCheckpoint(tx, locator, csrf, step, expectedVersion, payload, now)
+		row, canonical, err := s.validateCheckpoint(tx, locator, csrf, step, expectedVersion, payload, now)
 		if err != nil {
 			return err
 		}
-		raw, err := marshalCheckpointPayload(payload)
+		raw, err := marshalCheckpointPayload(canonical)
 		if err != nil {
 			return err
 		}
 		digestPayload := sha256.Sum256(raw)
 		record := database.OnboardingStepRecord{ID: s.id(), SessionID: row.ID, TenantID: row.TenantID, Step: step, Payload: raw, PayloadDigest: hex.EncodeToString(digestPayload[:]), Version: expectedVersion + 1, CompletedAt: now}
 		if err := tx.Where("session_id=? AND step=?", row.ID, step).First(&database.OnboardingStepRecord{}).Error; err == nil {
-			return apperror.New(apperror.Conflict, "step", "step already saved")
+			return apperror.New(apperror.Conflict, "step", "Esta etapa já foi confirmada.")
 		}
 		if err := tx.Create(&record).Error; err != nil {
 			return err
@@ -631,76 +635,96 @@ func (s Service) loadAgency(ctx context.Context, sessionID identity.ID, locator 
 
 // ValidateCheckpoint performs the session, CSRF, version, ordering, and
 // payload checks without persisting a checkpoint. It is used to reject stale
-// or invalid agency requests before external owner provisioning starts.
-func (s Service) ValidateCheckpoint(ctx context.Context, locator, csrf, step string, expectedVersion int64, payload map[string]any) error {
+// or invalid agency requests before external owner provisioning starts. It
+// returns the canonical payload that Checkpoint will persist, so callers act on
+// the same normalized values.
+func (s Service) ValidateCheckpoint(ctx context.Context, locator, csrf, step string, expectedVersion int64, payload map[string]any) (map[string]any, error) {
 	if s.DB == nil || len(s.Pepper) < 32 || locator == "" {
-		return apperror.New(apperror.SessionExpired, "", "session expired")
+		return nil, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	step = strings.ToUpper(strings.TrimSpace(step))
 	if step == StepIdentity || step == "" {
-		return apperror.New(apperror.InvalidInput, "step", "invalid step")
+		return nil, apperror.New(apperror.InvalidInput, "step", "Esta etapa não está disponível. Atualize a página e tente novamente.")
 	}
 	now := s.now()
-	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		_, err := s.validateCheckpoint(tx, locator, csrf, step, expectedVersion, payload, now)
+	var canonical coordinator.StepPayload
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		_, canonical, err = s.validateCheckpoint(tx, locator, csrf, step, expectedVersion, payload, now)
 		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any(canonical), nil
 }
 
-func (s Service) validateCheckpoint(tx *gorm.DB, locator, csrf, step string, expectedVersion int64, payload map[string]any, now time.Time) (database.OnboardingSession, error) {
+func (s Service) validateCheckpoint(tx *gorm.DB, locator, csrf, step string, expectedVersion int64, payload map[string]any, now time.Time) (database.OnboardingSession, coordinator.StepPayload, error) {
 	if _, err := marshalCheckpointPayload(payload); err != nil {
-		return database.OnboardingSession{}, err
+		return database.OnboardingSession{}, nil, err
 	}
 	if err := setSessionDigest(tx, digest(locator)); err != nil {
-		return database.OnboardingSession{}, err
+		return database.OnboardingSession{}, nil, err
 	}
 	locatorDigest := digest(locator)
 	var row database.OnboardingSession
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error; err != nil || !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending || row.State == StateReplaced || row.ReplacedAt != nil {
-		return database.OnboardingSession{}, apperror.New(apperror.SessionExpired, "", "session expired")
+		return database.OnboardingSession{}, nil, apperror.New(apperror.SessionExpired, "", "Sua sessão expirou. Confirme seu e-mail novamente para continuar.")
 	}
 	var current bool
 	if err := tx.Raw(`SELECT onboarding.is_current_verified_session(?, ?)`, row.Email, row.ID).Scan(&current).Error; err != nil {
-		return database.OnboardingSession{}, err
+		return database.OnboardingSession{}, nil, err
 	}
 	if !current {
-		return database.OnboardingSession{}, ErrAttemptReplaced
+		return database.OnboardingSession{}, nil, ErrAttemptReplaced
 	}
 	proof, err := security.CSRFProof(digest(locator), csrf, s.Pepper)
 	if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
-		return database.OnboardingSession{}, apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+		return database.OnboardingSession{}, nil, apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar a solicitação. Atualize a página e tente novamente.")
 	}
 	if expectedVersion != row.Version {
-		return database.OnboardingSession{}, apperror.New(apperror.Conflict, "expectedVersion", "stale onboarding session")
+		return database.OnboardingSession{}, nil, apperror.New(apperror.Conflict, "expectedVersion", "Os dados foram atualizados. Confira as informações e tente novamente.")
 	}
 	if err := coordinator.ValidateCheckpointOrder(row.CurrentStep, step); err != nil {
-		return database.OnboardingSession{}, err
+		return database.OnboardingSession{}, nil, err
 	}
 	if stepRank(step) < stepRank(row.CurrentStep) {
-		return database.OnboardingSession{}, apperror.New(apperror.InvalidState, "step", "step already completed")
+		return database.OnboardingSession{}, nil, apperror.New(apperror.InvalidState, "step", "Esta etapa já foi confirmada.")
 	}
 	if row.DefinitionVersion >= 5 && step == StepProperty {
 		if _, ok := payload["addressDetails"].(map[string]any); !ok {
-			return database.OnboardingSession{}, apperror.New(apperror.InvalidInput, "addressDetails", "structured address is required")
+			return database.OnboardingSession{}, nil, apperror.New(apperror.InvalidInput, "addressDetails", "Informe o endereço do imóvel.")
 		}
 	}
-	if err := coordinator.ValidateCheckpointPayload(step, coordinator.StepPayload(payload), now); err != nil {
-		return database.OnboardingSession{}, err
+	var completed []string
+	if err := tx.Model(&database.OnboardingStepRecord{}).Where("session_id = ?", row.ID).Pluck("step", &completed).Error; err != nil {
+		return database.OnboardingSession{}, nil, err
 	}
-	return row, nil
+	stored := make(map[string]bool, len(completed))
+	for _, name := range completed {
+		stored[strings.ToUpper(name)] = true
+	}
+	if err := coordinator.ValidateCheckpointPrerequisites(step, stored); err != nil {
+		return database.OnboardingSession{}, nil, err
+	}
+	canonical, err := coordinator.CanonicalCheckpointPayload(step, coordinator.StepPayload(payload), now)
+	if err != nil {
+		return database.OnboardingSession{}, nil, err
+	}
+	return row, canonical, nil
 }
 
 func marshalCheckpointPayload(payload map[string]any) ([]byte, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil || len(raw) > maxCheckpointPayloadBytes {
-		return nil, apperror.New(apperror.InvalidInput, "payload", "invalid step payload")
+		return nil, apperror.New(apperror.InvalidInput, "payload", "Não foi possível validar esta etapa.")
 	}
 	return raw, nil
 }
 
 func (s Service) BindOwner(ctx context.Context, locator, issuer, subject string, tenantID identity.ID) error {
 	if s.DB == nil || locator == "" || issuer == "" || subject == "" || tenantID == (identity.ID{}) {
-		return apperror.New(apperror.InvalidInput, "identity", "verified owner identity is required")
+		return apperror.New(apperror.InvalidInput, "identity", "Confirme seu e-mail para continuar.")
 	}
 	locatorDigest := digest(locator)
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -712,7 +736,7 @@ func (s Service) BindOwner(ctx context.Context, locator, issuer, subject string,
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Unauthenticated, "session", "verified onboarding session required")
+			return apperror.New(apperror.Unauthenticated, "session", "Confirme seu e-mail para continuar.")
 		}
 		var current bool
 		if err := tx.Raw(`SELECT onboarding.is_current_verified_session((SELECT email FROM onboarding.sessions WHERE session_locator_digest = ?), (SELECT id FROM onboarding.sessions WHERE session_locator_digest = ?))`, locatorDigest[:], locatorDigest[:]).Scan(&current).Error; err != nil {

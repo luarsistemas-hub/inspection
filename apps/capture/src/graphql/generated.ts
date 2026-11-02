@@ -10,7 +10,13 @@ export type AcceptProcessingInput = {
   gpsUse: boolean;
   photoProcessing: boolean;
   videoProcessing: boolean | null | undefined;
+  voiceConsentVersion: string | null | undefined;
+  voiceProcessing: boolean | null | undefined;
 };
+
+export type AudioNoteRevisionKind =
+  | 'HUMAN_EDIT'
+  | 'PARTICIPANT_DECLARATION';
 
 export type BeginVideoCaptureInput = {
   acquisitionSource: string;
@@ -27,6 +33,12 @@ export type CaptureGpsInput = {
   windowStartedAt: string;
 };
 
+export type CompleteAudioNoteUploadInput = {
+  clientMutationId: string;
+  noteId: string | number;
+  uploadProof: string;
+};
+
 export type CompleteMediaUploadInput = {
   clientMutationId: string;
   mediaId: string | number;
@@ -38,6 +50,12 @@ export type CompletedPartInput = {
   partNumber: number;
 };
 
+export type ConfirmAudioNoteTextInput = {
+  clientMutationId: string;
+  expectedVersion: number;
+  noteId: string | number;
+};
+
 export type ContestBaselineInput = {
   clientMutationId: string;
   statement: string;
@@ -45,6 +63,23 @@ export type ContestBaselineInput = {
 
 export type CounterpartyResponseInput = {
   clientMutationId: string;
+};
+
+export type CreateAudioNoteUploadInput = {
+  clientMutationId: string;
+  clientNoteId: string | number;
+  consentVersion: string;
+  contentSha256: string;
+  contentType: string;
+  disclosureVersion: string;
+  durationMs: number;
+  endMs: number | null | undefined;
+  photoMediaId: string | number | null | undefined;
+  requirementKey: string;
+  sizeBytes: number;
+  startMs: number | null | undefined;
+  timeBasis: string | null | undefined;
+  videoAttemptId: string | number | null | undefined;
 };
 
 export type CreateMediaUploadInput = {
@@ -73,6 +108,12 @@ export type DeclareCaptureImpossibilityInput = {
   requirementKey: string;
 };
 
+export type DiscardAudioNoteInput = {
+  clientMutationId: string;
+  expectedVersion: number;
+  noteId: string | number;
+};
+
 export type PresignMediaPartsInput = {
   clientMutationId: string;
   mediaId: string | number;
@@ -96,6 +137,20 @@ export type RequestInvitationOtpInput = {
   linkToken: string;
 };
 
+export type RetryAudioNoteInput = {
+  clientMutationId: string;
+  expectedVersion: number;
+  noteId: string | number;
+};
+
+export type ReviseAudioNoteInput = {
+  clientMutationId: string;
+  expectedVersion: number;
+  noteId: string | number;
+  revisionKind: AudioNoteRevisionKind | null | undefined;
+  text: string;
+};
+
 export type RevokeInvitationInput = {
   clientMutationId: string;
   linkToken: string;
@@ -110,6 +165,13 @@ export type SaveCaptureMetadataInput = {
   mediaId: string | number;
   replacesMediaId: string | number | null | undefined;
   requirementKey: string;
+};
+
+export type SetAudioNoteHighlightInput = {
+  clientMutationId: string;
+  expectedVersion: number;
+  highlighted: boolean;
+  noteId: string | number;
 };
 
 export type SubmitCaptureInput = {
@@ -139,6 +201,18 @@ export type ExternalCaptureBootstrapQueryVariables = Exact<{ [key: string]: neve
 
 
 export type ExternalCaptureBootstrapQuery = { externalCapture: { responsibilityId: string, recaptureRequestId: string | null, recaptureDeadlineAt: string | null, replacementDeadlineAt: string | null, status: string, confirmationOnly: boolean, kind: string, mediaKind: string, disclosureVersion: string, captureLayout: string | null, reference: Record<string, unknown>, policy: Record<string, unknown>, environments: Array<{ requirementKey: string, identityId: string, typeCode: string, name: string, expected: boolean, addedDuringCapture: boolean, mediaCount: number, status: string }>, reviewHandoff: { inspectionId: string, originVersionId: string | null } | null, referenceItems: Array<{ mediaId: string, evidenceId: string | null, sourceMediaId: string | null, timestampMs: number | null, environment: string | null, component: string | null, view: string | null, ambiguous: boolean | null, gap: boolean | null, requirementKey: string, description: string, reason: string | null, availability: string, imageUrl: string | null, imageUrlExpiresAt: string | null }>, requirements: Array<{ key: string, section: string, label: string, instructions: string | null, required: boolean, minimumMedia: number, maximumMedia: number, descriptionRequired: boolean, captureSourcePolicy: string, comparisonTarget: string, impossibilityAllowed: boolean, environmentIdentityId: string | null, environmentTypeCode: string | null, environmentName: string | null, expected: boolean | null, addedDuringCapture: boolean | null }>, answers: Array<{ requirementKey: string, mediaIds: Array<string>, impossibilityReason: string | null, version: number }> } };
+
+export type CaptureVoicePolicyQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type CaptureVoicePolicyQuery = { voicePolicy: { enabled: boolean, tenantNoteLimit: number | null, tenantAudioLimitMs: number | null, inspectionNoteLimit: number | null, inspectionAudioLimitMs: number | null, version: number } | null };
+
+export type CaptureAudioNoteQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type CaptureAudioNoteQuery = { audioNote: { id: string, environmentId: string, requirementKey: string, targetKind: string, photoMediaId: string | null, videoAttemptId: string | null, startMs: number | null, endMs: number | null, durationMs: number, status: string, anchorStatus: string, highlighted: boolean, version: number, currentRevisionId: string | null, textConfirmed: boolean, noSpeech: boolean, failureCode: string | null, audioAvailability: string, audioDeletionStatus: string, revisions: Array<{ id: string, revisionNumber: number, text: string, kind: string, createdAt: string }> } | null };
 
 export type RequestInvitationOtpMutationVariables = Exact<{
   input: RequestInvitationOtpInput;
@@ -181,6 +255,55 @@ export type BeginVideoCaptureMutationVariables = Exact<{
 
 
 export type BeginVideoCaptureMutation = { beginVideoCapture: { clientMutationId: string, attempt: { id: string, kind: string, acquisitionSource: string, maxDurationSeconds: number, maxBytes: number, policyVersion: number, admittedAt: string, expiresAt: string, status: string } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CreateAudioNoteUploadMutationVariables = Exact<{
+  input: CreateAudioNoteUploadInput;
+}>;
+
+
+export type CreateAudioNoteUploadMutation = { createAudioNoteUpload: { noteId: string | null, clientMutationId: string, upload: { url: string, method: string, headers: Record<string, unknown>, expiresAt: string } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CompleteAudioNoteUploadMutationVariables = Exact<{
+  input: CompleteAudioNoteUploadInput;
+}>;
+
+
+export type CompleteAudioNoteUploadMutation = { completeAudioNoteUpload: { clientMutationId: string, note: { id: string, status: string, version: number, audioDeletionStatus: string } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type RetryAudioNoteMutationVariables = Exact<{
+  input: RetryAudioNoteInput;
+}>;
+
+
+export type RetryAudioNoteMutation = { retryAudioNote: { clientMutationId: string, note: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type ReviseAudioNoteMutationVariables = Exact<{
+  input: ReviseAudioNoteInput;
+}>;
+
+
+export type ReviseAudioNoteMutation = { reviseAudioNote: { clientMutationId: string, note: { id: string, status: string, version: number, currentRevisionId: string | null, revisions: Array<{ id: string, revisionNumber: number, text: string, kind: string, createdAt: string }> } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type DiscardAudioNoteMutationVariables = Exact<{
+  input: DiscardAudioNoteInput;
+}>;
+
+
+export type DiscardAudioNoteMutation = { discardAudioNote: { clientMutationId: string, note: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type SetAudioNoteHighlightMutationVariables = Exact<{
+  input: SetAudioNoteHighlightInput;
+}>;
+
+
+export type SetAudioNoteHighlightMutation = { setAudioNoteHighlight: { clientMutationId: string, note: { id: string, highlighted: boolean, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type ConfirmAudioNoteTextMutationVariables = Exact<{
+  input: ConfirmAudioNoteTextInput;
+}>;
+
+
+export type ConfirmAudioNoteTextMutation = { confirmAudioNoteText: { clientMutationId: string, note: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
 
 export type VideoUploadStatusQueryVariables = Exact<{
   mediaId: string | number;
@@ -287,12 +410,21 @@ export type ContestBaselineMutation = { contestBaseline: { response: string, res
 
 
 export const ExternalCaptureBootstrapDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ExternalCaptureBootstrap"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"externalCapture"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"responsibilityId"}},{"kind":"Field","name":{"kind":"Name","value":"recaptureRequestId"}},{"kind":"Field","name":{"kind":"Name","value":"recaptureDeadlineAt"}},{"kind":"Field","name":{"kind":"Name","value":"replacementDeadlineAt"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"confirmationOnly"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"mediaKind"}},{"kind":"Field","name":{"kind":"Name","value":"disclosureVersion"}},{"kind":"Field","name":{"kind":"Name","value":"captureLayout"}},{"kind":"Field","name":{"kind":"Name","value":"reference"}},{"kind":"Field","name":{"kind":"Name","value":"policy"}},{"kind":"Field","name":{"kind":"Name","value":"environments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requirementKey"}},{"kind":"Field","name":{"kind":"Name","value":"identityId"}},{"kind":"Field","name":{"kind":"Name","value":"typeCode"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"expected"}},{"kind":"Field","name":{"kind":"Name","value":"addedDuringCapture"}},{"kind":"Field","name":{"kind":"Name","value":"mediaCount"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}},{"kind":"Field","name":{"kind":"Name","value":"reviewHandoff"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"originVersionId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"referenceItems"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mediaId"}},{"kind":"Field","name":{"kind":"Name","value":"evidenceId"}},{"kind":"Field","name":{"kind":"Name","value":"sourceMediaId"}},{"kind":"Field","name":{"kind":"Name","value":"timestampMs"}},{"kind":"Field","name":{"kind":"Name","value":"environment"}},{"kind":"Field","name":{"kind":"Name","value":"component"}},{"kind":"Field","name":{"kind":"Name","value":"view"}},{"kind":"Field","name":{"kind":"Name","value":"ambiguous"}},{"kind":"Field","name":{"kind":"Name","value":"gap"}},{"kind":"Field","name":{"kind":"Name","value":"requirementKey"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}},{"kind":"Field","name":{"kind":"Name","value":"availability"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrlExpiresAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"requirements"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"section"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"instructions"}},{"kind":"Field","name":{"kind":"Name","value":"required"}},{"kind":"Field","name":{"kind":"Name","value":"minimumMedia"}},{"kind":"Field","name":{"kind":"Name","value":"maximumMedia"}},{"kind":"Field","name":{"kind":"Name","value":"descriptionRequired"}},{"kind":"Field","name":{"kind":"Name","value":"captureSourcePolicy"}},{"kind":"Field","name":{"kind":"Name","value":"comparisonTarget"}},{"kind":"Field","name":{"kind":"Name","value":"impossibilityAllowed"}},{"kind":"Field","name":{"kind":"Name","value":"environmentIdentityId"}},{"kind":"Field","name":{"kind":"Name","value":"environmentTypeCode"}},{"kind":"Field","name":{"kind":"Name","value":"environmentName"}},{"kind":"Field","name":{"kind":"Name","value":"expected"}},{"kind":"Field","name":{"kind":"Name","value":"addedDuringCapture"}}]}},{"kind":"Field","name":{"kind":"Name","value":"answers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requirementKey"}},{"kind":"Field","name":{"kind":"Name","value":"mediaIds"}},{"kind":"Field","name":{"kind":"Name","value":"impossibilityReason"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}}]}}]}}]} as unknown as DocumentNode<ExternalCaptureBootstrapQuery, ExternalCaptureBootstrapQueryVariables>;
+export const CaptureVoicePolicyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CaptureVoicePolicy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"voicePolicy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"enabled"}},{"kind":"Field","name":{"kind":"Name","value":"tenantNoteLimit"}},{"kind":"Field","name":{"kind":"Name","value":"tenantAudioLimitMs"}},{"kind":"Field","name":{"kind":"Name","value":"inspectionNoteLimit"}},{"kind":"Field","name":{"kind":"Name","value":"inspectionAudioLimitMs"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}}]}}]} as unknown as DocumentNode<CaptureVoicePolicyQuery, CaptureVoicePolicyQueryVariables>;
+export const CaptureAudioNoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CaptureAudioNote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"audioNote"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"environmentId"}},{"kind":"Field","name":{"kind":"Name","value":"requirementKey"}},{"kind":"Field","name":{"kind":"Name","value":"targetKind"}},{"kind":"Field","name":{"kind":"Name","value":"photoMediaId"}},{"kind":"Field","name":{"kind":"Name","value":"videoAttemptId"}},{"kind":"Field","name":{"kind":"Name","value":"startMs"}},{"kind":"Field","name":{"kind":"Name","value":"endMs"}},{"kind":"Field","name":{"kind":"Name","value":"durationMs"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"anchorStatus"}},{"kind":"Field","name":{"kind":"Name","value":"highlighted"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"currentRevisionId"}},{"kind":"Field","name":{"kind":"Name","value":"textConfirmed"}},{"kind":"Field","name":{"kind":"Name","value":"noSpeech"}},{"kind":"Field","name":{"kind":"Name","value":"failureCode"}},{"kind":"Field","name":{"kind":"Name","value":"audioAvailability"}},{"kind":"Field","name":{"kind":"Name","value":"audioDeletionStatus"}},{"kind":"Field","name":{"kind":"Name","value":"revisions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"revisionNumber"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]}}]} as unknown as DocumentNode<CaptureAudioNoteQuery, CaptureAudioNoteQueryVariables>;
 export const RequestInvitationOtpDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RequestInvitationOtp"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RequestInvitationOtpInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requestInvitationOtp"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<RequestInvitationOtpMutation, RequestInvitationOtpMutationVariables>;
 export const VerifyInvitationOtpDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"VerifyInvitationOtp"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"VerifyInvitationOtpInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"verifyInvitationOtp"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"csrfToken"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<VerifyInvitationOtpMutation, VerifyInvitationOtpMutationVariables>;
 export const AcceptProcessingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AcceptProcessing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AcceptProcessingInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"acceptProcessing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<AcceptProcessingMutation, AcceptProcessingMutationVariables>;
 export const RevokeInvitationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RevokeInvitation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RevokeInvitationInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"revokeInvitation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<RevokeInvitationMutation, RevokeInvitationMutationVariables>;
 export const CreateMediaUploadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateMediaUpload"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateMediaUploadInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createMediaUpload"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"upload"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mediaId"}},{"kind":"Field","name":{"kind":"Name","value":"uploadId"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"partSizeBytes"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CreateMediaUploadMutation, CreateMediaUploadMutationVariables>;
 export const BeginVideoCaptureDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"BeginVideoCapture"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BeginVideoCaptureInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beginVideoCapture"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"attempt"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"acquisitionSource"}},{"kind":"Field","name":{"kind":"Name","value":"maxDurationSeconds"}},{"kind":"Field","name":{"kind":"Name","value":"maxBytes"}},{"kind":"Field","name":{"kind":"Name","value":"policyVersion"}},{"kind":"Field","name":{"kind":"Name","value":"admittedAt"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<BeginVideoCaptureMutation, BeginVideoCaptureMutationVariables>;
+export const CreateAudioNoteUploadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateAudioNoteUpload"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateAudioNoteUploadInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createAudioNoteUpload"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"noteId"}},{"kind":"Field","name":{"kind":"Name","value":"upload"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"url"}},{"kind":"Field","name":{"kind":"Name","value":"method"}},{"kind":"Field","name":{"kind":"Name","value":"headers"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CreateAudioNoteUploadMutation, CreateAudioNoteUploadMutationVariables>;
+export const CompleteAudioNoteUploadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CompleteAudioNoteUpload"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CompleteAudioNoteUploadInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"completeAudioNoteUpload"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"note"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"audioDeletionStatus"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CompleteAudioNoteUploadMutation, CompleteAudioNoteUploadMutationVariables>;
+export const RetryAudioNoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RetryAudioNote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RetryAudioNoteInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"retryAudioNote"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"note"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<RetryAudioNoteMutation, RetryAudioNoteMutationVariables>;
+export const ReviseAudioNoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ReviseAudioNote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ReviseAudioNoteInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reviseAudioNote"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"note"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"currentRevisionId"}},{"kind":"Field","name":{"kind":"Name","value":"revisions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"revisionNumber"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<ReviseAudioNoteMutation, ReviseAudioNoteMutationVariables>;
+export const DiscardAudioNoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DiscardAudioNote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"DiscardAudioNoteInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"discardAudioNote"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"note"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<DiscardAudioNoteMutation, DiscardAudioNoteMutationVariables>;
+export const SetAudioNoteHighlightDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetAudioNoteHighlight"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SetAudioNoteHighlightInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setAudioNoteHighlight"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"note"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"highlighted"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<SetAudioNoteHighlightMutation, SetAudioNoteHighlightMutationVariables>;
+export const ConfirmAudioNoteTextDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ConfirmAudioNoteText"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ConfirmAudioNoteTextInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"confirmAudioNoteText"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"note"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<ConfirmAudioNoteTextMutation, ConfirmAudioNoteTextMutationVariables>;
 export const VideoUploadStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"VideoUploadStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"mediaId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"videoUploadStatus"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"mediaId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"mediaId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mediaId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"receivedParts"}},{"kind":"Field","name":{"kind":"Name","value":"confirmedParts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"partNumber"}},{"kind":"Field","name":{"kind":"Name","value":"etag"}},{"kind":"Field","name":{"kind":"Name","value":"sizeBytes"}}]}},{"kind":"Field","name":{"kind":"Name","value":"missingParts"}}]}}]}}]} as unknown as DocumentNode<VideoUploadStatusQuery, VideoUploadStatusQueryVariables>;
 export const VideoPreparationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"VideoPreparation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"mediaId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"videoPreparation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"mediaId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"mediaId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mediaId"}},{"kind":"Field","name":{"kind":"Name","value":"stage"}},{"kind":"Field","name":{"kind":"Name","value":"errorCode"}},{"kind":"Field","name":{"kind":"Name","value":"retryable"}},{"kind":"Field","name":{"kind":"Name","value":"processedFrames"}},{"kind":"Field","name":{"kind":"Name","value":"sourceAvailable"}}]}}]}}]} as unknown as DocumentNode<VideoPreparationQuery, VideoPreparationQueryVariables>;
 export const PresignMediaPartsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PresignMediaParts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"PresignMediaPartsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"presignMediaParts"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"parts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"partNumber"}},{"kind":"Field","name":{"kind":"Name","value":"url"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<PresignMediaPartsMutation, PresignMediaPartsMutationVariables>;

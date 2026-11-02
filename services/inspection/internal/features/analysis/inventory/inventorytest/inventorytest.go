@@ -39,12 +39,12 @@ func Open(t testing.TB) *gorm.DB {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	for _, schema := range []string{"inspections", "templates", "capture", "origins", "analysis", "media", "messaging", "assets", "reports", "audit"} {
+	for _, schema := range []string{"inspections", "templates", "capture", "origins", "analysis", "media", "messaging", "transcription", "inventory", "audit"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	models := []any{&database.Inspection{}, &database.TemplateVersion{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.Responsibility{}, &database.ReferenceSnapshot{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}, &database.InventoryJob{}, &database.InventoryEvidencePair{}, &database.InventoryItemResult{}, &database.AnalysisPromptSnapshot{}, &database.MediaObject{}, &database.MediaDerivative{}, &database.VideoPreparationJob{}, &database.VideoFrame{}, &database.VideoSource{}, &database.OutboxIntent{}, &database.AnalysisRun{}, &database.FindingRecord{}, &database.ComparisonJob{}, &database.ClassificationRun{}, &database.AuditEvent{}}
+	models := []any{&database.Inspection{}, &database.TemplateVersion{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.Responsibility{}, &database.ReferenceSnapshot{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}, &database.InventoryJob{}, &database.InventoryEvidencePair{}, &database.InventoryItemResult{}, &database.AnalysisPromptSnapshot{}, &database.MediaObject{}, &database.MediaDerivative{}, &database.VideoPreparationJob{}, &database.VideoFrame{}, &database.VideoSource{}, &database.OutboxIntent{}, &database.AnalysisRun{}, &database.FindingRecord{}, &database.ComparisonJob{}, &database.ClassificationRun{}, &database.AuditEvent{}, &database.CatalogNoteManifest{}, &database.TranscriptRevision{}, &database.InventoryItemAttributeSource{}}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatalf("migrate %T: %v", model, err)
@@ -58,6 +58,8 @@ func Open(t testing.TB) *gorm.DB {
 		"CREATE UNIQUE INDEX analysis.uq_inventory_result_item ON inventory_item_results(tenant_id, job_id, item_identity_id)",
 		"CREATE UNIQUE INDEX origins.uq_inventory_environment_identity ON inventory_environments(tenant_id, origin_version_id, identity_id)",
 		"CREATE UNIQUE INDEX origins.uq_inventory_item_identity ON inventory_items(tenant_id, origin_version_id, identity_id)",
+		"CREATE UNIQUE INDEX analysis.uq_catalog_note_manifest ON catalog_note_manifests(tenant_id, inspection_id, requirement_key, catalog_generation)",
+		audioNotesDDL,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatalf("%s: %v", statement, err)

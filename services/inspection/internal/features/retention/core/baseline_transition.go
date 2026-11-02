@@ -52,7 +52,7 @@ func (t BaselineTransition) Transition(_ context.Context, tx *gorm.DB, tenantID 
 			return err
 		}
 		if source.Status == "DELETING" {
-			return apperror.New(apperror.Conflict, "videoSourceId", "video source deletion is in progress; retry later")
+			return apperror.New(apperror.Conflict, "videoSourceId", "A exclusão da fonte de vídeo está em andamento; tente novamente mais tarde.")
 		}
 		if source.Status != "RETAINED" {
 			continue

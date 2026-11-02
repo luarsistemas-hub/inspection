@@ -82,7 +82,7 @@ func TestIT226AllFailedDeliveryRemainsVisibleForRetry(t *testing.T) {
 	}
 	err = deliver(context.Background(), registry, tenantID, invitationID, "opaque-token", []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "owner@example.com"}}, "recapture", time.Now().UTC(), within)
 	code, _, public := apperror.Public(err)
-	if code != apperror.DependencyUnavailable || strings.Contains(public, "provider endpoint") {
+	if code != apperror.DependencyUnavailable || public != "Não foi possível enviar o convite agora. Tente novamente." || strings.Contains(public, "provider endpoint") {
 		t.Fatalf("unsafe delivery error: code=%s public=%q", code, public)
 	}
 	var aggregate database.Delivery
@@ -92,6 +92,13 @@ func TestIT226AllFailedDeliveryRemainsVisibleForRetry(t *testing.T) {
 	var attempt database.ChannelAttempt
 	if err := db.Where("delivery_id=?", aggregate.ID).First(&attempt).Error; err != nil || attempt.Status != "FAILED" || attempt.LastError == "" {
 		t.Fatalf("failed channel was not retryable: %+v %v", attempt, err)
+	}
+}
+
+func TestDeliverInvalidInputUsesPortuguesePublicMessage(t *testing.T) {
+	err := Deliver(context.Background(), nil, nil, identity.NewID(), identity.NewID(), "token", []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "owner@example.test"}}, "capture")
+	if code, field, message := apperror.Public(err); code != apperror.InvalidInput || field != "delivery" || message != "Informe um envio de convite válido." {
+		t.Fatalf("invalid delivery public contract = code:%s field:%q message:%q", code, field, message)
 	}
 }
 

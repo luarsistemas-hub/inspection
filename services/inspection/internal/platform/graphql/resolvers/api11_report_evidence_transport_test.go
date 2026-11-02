@@ -56,7 +56,7 @@ func TestReportEvidenceGraphQLProjectsSnapshotVideoLineageAndPaginates(t *testin
 		t.Fatal(err)
 	}
 	server := task06GraphQLServer(db)
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}}})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	response := executeTask06GraphQL(t, server, `query { report(inspectionId:"`+inspectionID.String()+`") { evidence(first:1) { nodes { id evidenceKind frameId timestampMs ptsMicros preparationId planId sourceMediaId sourceAvailability } pageInfo { endCursor hasNextPage } } } }`, ctx)
 	var decoded struct {
 		Data struct {

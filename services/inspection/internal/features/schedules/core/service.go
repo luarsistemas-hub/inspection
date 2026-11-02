@@ -120,7 +120,7 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	if document.DefaultComparisonMode == catalog.FixedOrigin && mode == catalog.ChecklistOnly {
 		return database.Schedule{}, apperror.New(apperror.InvalidInput, "comparisonMode", "template requires a fixed origin")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
 		return database.Schedule{}, err
 	}
 	if mode == catalog.FixedOrigin && in.ReferenceVersionID != nil {
@@ -165,7 +165,7 @@ func (s Service) Update(ctx context.Context, in UpdateInput) (database.Schedule,
 	if current.Status == "CANCELED" {
 		return database.Schedule{}, apperror.New(apperror.InvalidState, "scheduleId", "schedule is canceled")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, Mutate: true}); err != nil {
 		return database.Schedule{}, err
 	}
 	recurrence, err := ParseRecurrence(in.RRule, in.Timezone, in.StartsAt)
@@ -206,7 +206,7 @@ func (s Service) Cancel(ctx context.Context, tenantID, scheduleID identity.ID, e
 	if current.Status == "CANCELED" {
 		return current, nil
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, Mutate: true}); err != nil {
 		return database.Schedule{}, err
 	}
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -232,7 +232,7 @@ func (s Service) List(ctx context.Context, tenantID identity.ID, first int, afte
 	if first > 100 {
 		return ListResult{}, apperror.New(apperror.InvalidInput, "first", "page size cannot exceed 100")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}}); err != nil {
 		return ListResult{}, err
 	}
 	var rows []database.Schedule
@@ -435,7 +435,7 @@ func (s Service) prerequisites(ctx context.Context, tenantID, assetID, participa
 	if participant.Participant.Status != "ACTIVE" || len(participant.Selected) == 0 {
 		return database.Asset{}, templateresolve.Result{}, apperror.New(apperror.InvalidState, "participantId", "participant requires an active verified delivery channel")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
 		return database.Asset{}, templateresolve.Result{}, err
 	}
 	templateRaw, err := s.Bus.Ask(ctx, templateresolve.Query{TenantID: tenantID, TemplateID: templateID})

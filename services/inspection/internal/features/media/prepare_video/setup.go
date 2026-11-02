@@ -1326,6 +1326,9 @@ func (e *Executor) discoverAndSeal(ctx context.Context, r reservation, m databas
 	if err != nil {
 		return err
 	}
+	if len(observations) == 0 && attempt.Kind == "ORIGIN" {
+		return errNoScope
+	}
 	if len(observations) > maxScopeObservations {
 		return video.ErrResourceLimit
 	}

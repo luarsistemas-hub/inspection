@@ -18,4 +18,20 @@ func TestChannelNotifierReportsDisabledChannel(t *testing.T) {
 	if !apperror.Is(err, apperror.IntegrationDisabled) {
 		t.Fatalf("expected INTEGRATION_DISABLED, got %v", err)
 	}
+	if code, field, message := apperror.Public(err); code != apperror.IntegrationDisabled || field != "channel" || message != "Este canal de notificação está temporariamente indisponível." {
+		t.Fatalf("disabled channel public contract = code:%s field:%q message:%q", code, field, message)
+	}
+}
+
+func TestDependencyOrPublicPreservesNotifierPublicErrors(t *testing.T) {
+	public := apperror.New(apperror.IntegrationDisabled, "channel", "Este canal de notificação está temporariamente indisponível.")
+	got := dependencyOrPublic(public)
+	code, field, message := apperror.Public(got)
+	if code != apperror.IntegrationDisabled || field != "channel" || message != "Este canal de notificação está temporariamente indisponível." {
+		t.Fatalf("public notifier error was wrapped: code=%s field=%q message=%q", code, field, message)
+	}
+	internal := dependencyOrPublic(apperror.New(apperror.Internal, "", "segredo do provider"))
+	if code, _, _ := apperror.Public(internal); code != apperror.DependencyUnavailable {
+		t.Fatalf("internal notifier failure was not classified as dependency unavailable: %s", code)
+	}
 }

@@ -135,6 +135,13 @@ describe("Capture drafts and transport", () => {
     expect(getCaptureCsrfToken()).toBeUndefined(); expect(getCaptureLinkToken()).toBe("invite-token");
     vi.unstubAllGlobals();
   });
+  it("preserves capture CSRF after an unauthenticated optional GraphQL read", async () => {
+    setCaptureCsrfToken("csrf-proof");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "auth required", extensions: { code: "UNAUTHENTICATED" } }] }), { status: 200 })));
+    await expect(graphql(ExternalCaptureBootstrapDocument)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(getCaptureCsrfToken()).toBe("csrf-proof");
+    vi.unstubAllGlobals();
+  });
   it("logs GraphQL operation errors with the operation name and correlation details", async () => {
     const errors = [{ message: "requirement media limit reached", extensions: { code: "INVALID_STATE", field: "requirementKey", correlationId: "correlation-3" } }];
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);

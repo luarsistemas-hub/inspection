@@ -81,7 +81,7 @@ func TestExpiredSourceWithoutFramesRejectsRetryIT153(t *testing.T) {
 	f := seedRetryFixture(t, h, "FAILED", 4, true)
 	_, err = f.bus.Send(f.context(), RetryCommand{TenantID: f.tenantID, MediaID: f.mediaID, ExpectedPreparationVersion: 4, MutationID: "expired-retry"})
 	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || !strings.Contains(appErr.Safe, "replacement") {
+	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || !strings.Contains(appErr.Safe, "substituto") {
 		t.Fatalf("expired source retry = %v, want INVALID_STATE with replacement guidance", err)
 	}
 	if err := h.WithinTenant(context.Background(), f.tenantID, func(tx *gorm.DB) error {

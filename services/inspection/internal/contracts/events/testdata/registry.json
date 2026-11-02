@@ -29,6 +29,8 @@
     "counterparty.responded.v1",
     "report.snapshot_created.v1",
     "report.ready.v1",
+    "report.published.v1",
+    "report.publication_invalidated.v1",
     "notification.delivery_requested.v2",
     "notification.delivery_terminal.v1",
     "project.stage_changed.v1",

@@ -58,7 +58,7 @@ func (s Service) Register(ctx context.Context, in Input) (View, error) {
 	if in.TenantID == (identity.ID{}) || in.BusinessUnitID == (identity.ID{}) || in.SegmentVersionID == (identity.ID{}) || in.IdempotencyKey == "" {
 		return View{}, apperror.New(apperror.InvalidInput, "input", "tenant, business unit, segment, and idempotency key are required")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: in.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Roles: []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: in.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
 		return View{}, err
 	}
 	if s.Bus == nil {

@@ -55,6 +55,9 @@ func (p *testProvider) SetInitialPassword(_ context.Context, _, password string)
 
 func TestInvitationActivationRequiresDeliveredCodeAndPreservesExistingPassword(t *testing.T) {
 	service, db, token, notifier, provider, tenantID, membershipID := activationFixture(t, false)
+	if err := db.Model(&database.UserInvitation{}).Where("tenant_id=? AND membership_id=?", tenantID, membershipID).Update("email", " Ada@Example.Test ").Error; err != nil {
+		t.Fatal(err)
+	}
 	claim, err := service.ClaimInvitation(context.Background(), token)
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +78,9 @@ func TestInvitationActivationRequiresDeliveredCodeAndPreservesExistingPassword(t
 	if _, err := service.VerifyOTP(context.Background(), claim.Locator, claim.CSRF, notifier.code); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Create(&database.RecipientChannel{ID: identity.NewID(), TenantID: tenantID, RecipientMembershipID: membershipID, Channel: "EMAIL", Destination: "ada@example.test", Selected: false, Version: 1, CreatedAt: service.now(), UpdatedAt: service.now()}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if _, err := service.Complete(context.Background(), claim.Locator, claim.CSRF, "ignored"); err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +93,13 @@ func TestInvitationActivationRequiresDeliveredCodeAndPreservesExistingPassword(t
 	}
 	if provider.verified != "subject-1" || provider.password != "" {
 		t.Fatalf("unexpected Keycloak operations: %+v", provider)
+	}
+	var recipientChannels []database.RecipientChannel
+	if err := db.Where("tenant_id=? AND recipient_membership_id=? AND channel='EMAIL'", tenantID, membershipID).Find(&recipientChannels).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(recipientChannels) != 1 || recipientChannels[0].Destination != "ada@example.test" || !recipientChannels[0].Selected || recipientChannels[0].VerifiedAt == nil || !recipientChannels[0].VerifiedAt.Equal(service.now()) {
+		t.Fatalf("activation recipient channels = %+v, want verified selected email at activation time", recipientChannels)
 	}
 }
 
@@ -120,6 +133,92 @@ func TestNewInvitationCreatesPasswordOnlyAfterCodeAndRejectsExpiredLink(t *testi
 	}
 }
 
+func TestActivationDoesNotCreateSecondEmailChannelForMembership(t *testing.T) {
+	service, db, token, notifier, _, tenantID, membershipID := activationFixture(t, false)
+	now := service.now()
+	if err := db.Create(&database.RecipientChannel{ID: identity.NewID(), TenantID: tenantID, RecipientMembershipID: membershipID, Channel: "EMAIL", Destination: "existing@example.test", Selected: true, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	claim, err := service.ClaimInvitation(context.Background(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RequestOTP(context.Background(), claim.Locator, claim.CSRF); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.VerifyOTP(context.Background(), claim.Locator, claim.CSRF, notifier.code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Complete(context.Background(), claim.Locator, claim.CSRF, "ignored"); err != nil {
+		t.Fatal(err)
+	}
+	var channels []database.RecipientChannel
+	if err := db.Where("tenant_id=? AND recipient_membership_id=? AND channel='EMAIL'", tenantID, membershipID).Find(&channels).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(channels) != 1 || channels[0].Destination != "existing@example.test" {
+		t.Fatalf("activation recipient channels=%+v; existing email channel must be preserved without adding another", channels)
+	}
+}
+
+func TestActivationNormalizesEmailLikeMigration107(t *testing.T) {
+	service, db, token, _, _, tenantID, membershipID := activationFixture(t, false)
+	if err := db.Model(&database.UserInvitation{}).Where("tenant_id=? AND membership_id=?", tenantID, membershipID).Update("email", "\t Ada@Example.Test\r\n").Error; err != nil {
+		t.Fatal(err)
+	}
+	completeActivation(t, service, token)
+	var channels []database.RecipientChannel
+	if err := db.Where("tenant_id=? AND recipient_membership_id=? AND channel='EMAIL'", tenantID, membershipID).Find(&channels).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(channels) != 1 || channels[0].Destination != "ada@example.test" || !channels[0].Selected || channels[0].VerifiedAt == nil {
+		t.Fatalf("activation recipient channels=%+v, want one verified selected normalized email", channels)
+	}
+	if got := normalizeEmail(" \t\r\nAda@Example.Test\n\r\t "); got != "ada@example.test" {
+		t.Fatalf("normalizeEmail=%q, want lower(btrim(email, E' \\t\\r\\n'))", got)
+	}
+}
+
+func TestActivationDoesNotCreateEmailChannelForCustomerViewer(t *testing.T) {
+	service, db, token, _, _, tenantID, membershipID := activationFixture(t, false)
+	if err := db.Model(&database.Membership{}).Where("tenant_id=? AND id=?", tenantID, membershipID).Update("role", "CUSTOMER_VIEWER").Error; err != nil {
+		t.Fatal(err)
+	}
+	completeActivation(t, service, token)
+	var membership database.Membership
+	if err := db.Where("tenant_id=? AND id=?", tenantID, membershipID).First(&membership).Error; err != nil {
+		t.Fatal(err)
+	}
+	if membership.Status != "ACTIVE" {
+		t.Fatalf("customer viewer not activated: %+v", membership)
+	}
+	var channels int64
+	if err := db.Model(&database.RecipientChannel{}).Where("tenant_id=? AND recipient_membership_id=?", tenantID, membershipID).Count(&channels).Error; err != nil {
+		t.Fatal(err)
+	}
+	if channels != 0 {
+		t.Fatalf("customer viewer recipient channels=%d, want none", channels)
+	}
+}
+
+func completeActivation(t *testing.T, service Service, token string) {
+	t.Helper()
+	notifier := service.Notifier.(*testNotifier)
+	claim, err := service.ClaimInvitation(context.Background(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RequestOTP(context.Background(), claim.Locator, claim.CSRF); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.VerifyOTP(context.Background(), claim.Locator, claim.CSRF, notifier.code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Complete(context.Background(), claim.Locator, claim.CSRF, "ignored"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func activationFixture(t *testing.T, newIdentity bool) (Service, *gorm.DB, string, *testNotifier, *testProvider, identity.ID, identity.ID) {
 	t.Helper()
 	const driverName = "sqlite3_activation_test"
@@ -149,6 +248,8 @@ func activationFixture(t *testing.T, newIdentity bool) (Service, *gorm.DB, strin
 	for _, statement := range []string{
 		`CREATE TABLE access.user_invitations (id blob primary key, tenant_id blob, membership_id blob, issuer text, subject text, email text, name text, new_identity boolean, status text, token_digest blob, expires_at datetime, claimed_at datetime, session_digest blob, csrf_digest blob, session_expires_at datetime, password_set_at datetime, accepted_at datetime, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE access.user_invitation_otp_challenges (id blob primary key, tenant_id blob, invitation_id blob, code_hmac blob, attempts integer, expires_at datetime, verified_at datetime, created_at datetime)`,
+		`ATTACH DATABASE ':memory:' AS notifications`,
+		`CREATE TABLE notifications.recipient_channels (id blob, tenant_id blob, recipient_membership_id blob, channel text, destination text, verified_at datetime, selected boolean, version integer, created_at datetime, updated_at datetime, UNIQUE(tenant_id, recipient_membership_id, channel, destination))`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)

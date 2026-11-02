@@ -39,6 +39,7 @@ import (
 	generatesnapshot "inspection/services/inspection/internal/features/reports/generate_snapshot"
 	handleclassified "inspection/services/inspection/internal/features/reports/handle_classified"
 	handlereportready "inspection/services/inspection/internal/features/reports/handle_report_ready"
+	handlestatechanged "inspection/services/inspection/internal/features/reports/handle_state_changed"
 	renderpdf "inspection/services/inspection/internal/features/reports/render_pdf"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	purgedata "inspection/services/inspection/internal/features/retention/purge_data"
@@ -62,7 +63,12 @@ import (
 // workerQueueDefinitions are the durable queues of the ordinary worker and
 // the event each one receives. Video condition requests are deliberately
 // absent: they belong to the dedicated video worker queue.
-var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"inventory-draft-ready", "inventory.draft_ready.v1"}, {"inventory-version-activated", "inventory.version_activated.v1"}, {"counterparty-responded", "counterparty.responded.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"inspection-origin-promotion", "origin.inspection_promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"capture-environment-removal", "capture.environment_removed.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
+var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"inventory-draft-ready", "inventory.draft_ready.v1"}, {"inventory-version-activated", "inventory.version_activated.v1"}, {"counterparty-responded", "counterparty.responded.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"inspection-origin-promotion", "origin.inspection_promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"capture-environment-removal", "capture.environment_removed.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"report-published", "report.published.v1"}, {"report-publication-invalidated", "report.publication_invalidated.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
+
+// acknowledgeReportPublication consumes the release lifecycle events so the
+// outbox can route them. The customer-facing notice is raised by report.ready
+// when the customer PDF is rendered; these events carry only identifiers.
+func acknowledgeReportPublication(context.Context, *gorm.DB, events.RawEnvelope) error { return nil }
 
 // ordinaryQueueContracts drops the dedicated video condition queue: the
 // ordinary worker declares it for topology but never consumes video payloads.
@@ -94,6 +100,10 @@ func resolveClassifiedVideoPlan(tx *gorm.DB, tenantID, inspectionID identity.ID,
 
 func run() error {
 	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	stateChangedHandler, err := handlestatechanged.Setup(handlestatechanged.Dependencies{Now: time.Now})
 	if err != nil {
 		return err
 	}
@@ -167,6 +177,13 @@ func run() error {
 		}
 		contracts = append(contracts, contract)
 	}
+	// Room catalogs coordinate with voice notes: transcription results and
+	// inventory readiness re-evaluate the note manifest and its bounded wait.
+	catalogContracts, err := messaging.CatalogQueueContracts()
+	if err != nil {
+		return err
+	}
+	contracts = append(contracts, catalogContracts...)
 	if err := messaging.DeclareTopology(channel, contracts); err != nil {
 		return fmt.Errorf("rabbitmq topology: %w", err)
 	}
@@ -246,10 +263,6 @@ func run() error {
 		return err
 	}
 	inAppNotification := recordinapp.Setup()
-	createReport, err := generatesnapshot.Setup(generatesnapshot.Dependencies{DB: db, Now: time.Now})
-	if err != nil {
-		return err
-	}
 	render, err := renderpdf.Setup(renderpdf.Dependencies{Now: time.Now})
 	if err != nil {
 		return err
@@ -309,7 +322,9 @@ func run() error {
 		}
 		return promoteorigin.Process(ctx, runtimeDB, promotionDeps, envelope.TenantID, id)
 	}
-	classifiedHandler, err := handleclassified.Setup(handleclassified.Dependencies{Notifications: notificationService, CreateSnapshot: createReport, Now: time.Now})
+	classifiedHandler, err := handleclassified.Setup(handleclassified.Dependencies{Notifications: notificationService, CreateSnapshotInTx: func(ctx context.Context, tx *gorm.DB, input generatesnapshot.Input) (generatesnapshot.Result, error) {
+		return generatesnapshot.CreateInTx(ctx, tx, input, time.Now())
+	}, Now: time.Now})
 	if err != nil {
 		return err
 	}
@@ -323,36 +338,8 @@ func run() error {
 		return purgedata.HandleDueEvent(ctx, tx, privateStore, envelope)
 	}
 	handlers := map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error{
-		"inspection.created.v1": inspectionCreatedHandler(inAppNotification),
-		"inspection.state_changed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-			var payload struct {
-				InspectionID identity.ID `json:"inspectionId"`
-			}
-			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
-				return messaging.ErrPermanent
-			}
-			var inspection database.Inspection
-			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).Take(&inspection).Error; err != nil {
-				return err
-			}
-			if inspection.Status != "CANCELED" && inspection.Status != "INVALIDATED" {
-				return nil
-			}
-			var triage database.TriageCase
-			if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Take(&triage).Error; err == gorm.ErrRecordNotFound {
-				return nil
-			} else if err != nil {
-				return err
-			}
-			if triage.Status == "ARCHIVED" {
-				return nil
-			}
-			now := time.Now().UTC()
-			if err := tx.WithContext(ctx).Model(&triage).Updates(map[string]any{"status": "ARCHIVED", "assignee_id": nil, "version": triage.Version + 1, "updated_at": now}).Error; err != nil {
-				return err
-			}
-			return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "ARCHIVED", Body: "Vistoria cancelada ou invalidada.", CreatedAt: now}).Error
-		},
+		"inspection.created.v1":                 inspectionCreatedHandler(inAppNotification),
+		"inspection.state_changed.v1":           stateChangedHandler,
 		"origin.invitation_requested.v1":        invitationHandler,
 		"origin.promotion_requested.v1":         legacyPromotionHandler,
 		"media.upload_completed.v1":             uploadCompletedHandler,
@@ -423,6 +410,11 @@ func run() error {
 			}
 			return nil
 		},
+		// MSG02/MSG03/MSG05: re-evaluate the room note manifest and release the
+		// catalog job when its notes are resolved (idempotent).
+		"transcription.completed.v1":               requestInventoryJobs,
+		"transcription.failed.v1":                  requestInventoryJobs,
+		"inventory.job_requested.v1":               requestInventoryJobs,
 		"origin.inspection_promotion_requested.v1": promotionHandler,
 		"inventory.draft_ready.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 			if err := inAppNotification(ctx, tx, envelope); err != nil {
@@ -458,6 +450,8 @@ func run() error {
 		"inspection.classified.v1":           classifiedHandler,
 		"report.snapshot_created.v1":         render,
 		"report.ready.v1":                    reportReadyHandler,
+		"report.published.v1":                acknowledgeReportPublication,
+		"report.publication_invalidated.v1":  acknowledgeReportPublication,
 		"notification.delivery_requested.v2": consumedelivery.Setup(),
 		"notification.delivery_terminal.v1":  terminalAlert,
 		"retention.purge_due.v1":             retentionHandler,

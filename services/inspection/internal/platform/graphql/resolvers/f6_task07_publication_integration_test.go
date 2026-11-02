@@ -200,7 +200,7 @@ func TestVV_IT_271CustomerEvidencePaginationReachesAll200Findings(t *testing.T) 
 
 func TestVV_IT_272ViewerCannotPublish(t *testing.T) {
 	fx := newAPI11Fixture(t)
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-272"})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-272"})
 	assertAPI11Rejected(t, executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api12Query(fx, "publishReport", "vv-it-272", fx.snapshotID, 0), viewer, "", ""), "FORBIDDEN")
 	if p := api12CurrentPublication(t, fx); p.Status != "PUBLISHED" || p.Version != 1 {
 		t.Fatalf("viewer mutated publication: %+v", p)

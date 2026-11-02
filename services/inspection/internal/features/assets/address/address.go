@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 var digits = regexp.MustCompile(`\D`)
@@ -33,7 +36,8 @@ var states = map[string]struct{}{
 }
 
 // Normalize trims fields, fixes the Brazilian country code and normalizes CEP
-// and UF without changing accents or the user's letter case in place names.
+// and UF without changing the user's letter case in place names. Text is
+// composed to Unicode NFC so equal addresses compare and persist identically.
 func Normalize(value Details) Details {
 	value.CountryCode = "BR"
 	value.PostalCode = digits.ReplaceAllString(value.PostalCode, "")
@@ -51,6 +55,11 @@ func Normalize(value Details) Details {
 // Validate checks all required fields and lengths for a complete address.
 func Validate(input Details) (Details, error) {
 	value := Normalize(input)
+	for _, text := range []string{value.Street, value.Number, value.Complement, value.District, value.City, value.State, value.Reference} {
+		if !SafeText(text) {
+			return Details{}, fmt.Errorf("o endereço contém caracteres não permitidos")
+		}
+	}
 	if !postalCodePattern.MatchString(strings.TrimSpace(input.PostalCode)) || len(value.PostalCode) != 8 {
 		return Details{}, fmt.Errorf("CEP deve conter oito dígitos")
 	}
@@ -102,8 +111,36 @@ func Format(value Details) string {
 	return strings.Join(parts, " — ")
 }
 
-func clean(value string) string { return strings.Join(strings.Fields(strings.TrimSpace(value)), " ") }
-func size(value string) int     { return utf8.RuneCountInString(value) }
+func clean(value string) string {
+	return norm.NFC.String(strings.Join(strings.Fields(value), " "))
+}
+
+// CleanText returns single-line text in canonical form: runs of whitespace are
+// collapsed and the result is composed to NFC. It reports false when the value
+// is not valid UTF-8 or carries control (Cc) or format (Cf, such as bidi
+// overrides and zero-width) code points, which must never be persisted.
+func CleanText(value string) (string, bool) {
+	if !utf8.ValidString(value) {
+		return "", false
+	}
+	value = clean(value)
+	return value, SafeText(value)
+}
+
+// SafeText reports whether value is valid UTF-8 without control (Cc) or format
+// (Cf) code points.
+func SafeText(value string) bool {
+	if !utf8.ValidString(value) {
+		return false
+	}
+	for _, r := range value {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return false
+		}
+	}
+	return true
+}
+func size(value string) int { return utf8.RuneCountInString(value) }
 func nonEmpty(values ...string) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {

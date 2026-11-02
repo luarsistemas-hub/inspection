@@ -15,6 +15,7 @@ Documentos baseados no código atual do Inspection. Stubs WireMock e Mailpit sã
 - [Limitações](limitations.md): escopo dos stubs, artefatos residuais e lacunas conhecidas.
 - [Estudo de vistoria por vídeo](estudo-vistoria-video.md): captura pelo link web, coexistência com fotos, comparação de ambientes, tecnologias, custos e armazenamento.
 - [Estudo de inventário do imóvel](estudo-inventario-imovel.md): inventário estruturado como linha de base, cobertura, revisão humana, prompts, comparação entre modalidades e estratégia de produto.
+- [Estudo de checklist e laudo](estudo-checklist-laudo-flashvistoria.md): investigação de uma vistoria e PDF de referência, diagnóstico do fluxo atual e proposta de prompts, cobertura e laudo descritivo; análise dos menus com 15 capturas, prioridades, justificativas e propostas de implementação.
 - [Transcrição de voz para checklist](estudo-transcricao-checklist.md): proposta de anotações vinculadas a fotos e intervalos de vídeo, dinâmica de gravação, processamento assíncrono, integração ao inventário, custos e plano de implementação.
 - [Uso do design system](design-system/usage.md): padrões comuns, limites de domínio e exceções de composição.
 - [Inventário de migração](design-system/migration-inventory.json): rotas, estados, responsáveis e evidências da migração atual.

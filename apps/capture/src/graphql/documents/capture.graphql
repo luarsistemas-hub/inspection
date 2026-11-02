@@ -9,6 +9,9 @@ query ExternalCaptureBootstrap {
   }
 }
 
+query CaptureVoicePolicy { voicePolicy { enabled tenantNoteLimit tenantAudioLimitMs inspectionNoteLimit inspectionAudioLimitMs version } }
+query CaptureAudioNote($id: ID!) { audioNote(id: $id) { id environmentId requirementKey targetKind photoMediaId videoAttemptId startMs endMs durationMs status anchorStatus highlighted version currentRevisionId textConfirmed noSpeech failureCode audioAvailability audioDeletionStatus revisions { id revisionNumber text kind createdAt } } }
+
 mutation RequestInvitationOtp($input: RequestInvitationOtpInput!) { requestInvitationOtp(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 
 mutation VerifyInvitationOtp($input: VerifyInvitationOtpInput!) { verifyInvitationOtp(input: $input) { status csrfToken expiresAt userErrors { code field message correlationId } clientMutationId } }
@@ -20,6 +23,14 @@ mutation RevokeInvitation($input: RevokeInvitationInput!) { revokeInvitation(inp
 mutation CreateMediaUpload($input: CreateMediaUploadInput!) { createMediaUpload(input: $input) { upload { mediaId uploadId expiresAt partSizeBytes } userErrors { code field message correlationId } clientMutationId } }
 
 mutation BeginVideoCapture($input: BeginVideoCaptureInput!) { beginVideoCapture(input: $input) { attempt { id kind acquisitionSource maxDurationSeconds maxBytes policyVersion admittedAt expiresAt status } userErrors { code field message correlationId } clientMutationId } }
+
+mutation CreateAudioNoteUpload($input: CreateAudioNoteUploadInput!) { createAudioNoteUpload(input: $input) { noteId upload { url method headers expiresAt } userErrors { code field message correlationId } clientMutationId } }
+mutation CompleteAudioNoteUpload($input: CompleteAudioNoteUploadInput!) { completeAudioNoteUpload(input: $input) { note { id status version audioDeletionStatus } userErrors { code field message correlationId } clientMutationId } }
+mutation RetryAudioNote($input: RetryAudioNoteInput!) { retryAudioNote(input: $input) { note { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation ReviseAudioNote($input: ReviseAudioNoteInput!) { reviseAudioNote(input: $input) { note { id status version currentRevisionId revisions { id revisionNumber text kind createdAt } } userErrors { code field message correlationId } clientMutationId } }
+mutation DiscardAudioNote($input: DiscardAudioNoteInput!) { discardAudioNote(input: $input) { note { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation SetAudioNoteHighlight($input: SetAudioNoteHighlightInput!) { setAudioNoteHighlight(input: $input) { note { id highlighted version } userErrors { code field message correlationId } clientMutationId } }
+mutation ConfirmAudioNoteText($input: ConfirmAudioNoteTextInput!) { confirmAudioNoteText(input: $input) { note { id status version } userErrors { code field message correlationId } clientMutationId } }
 
 query VideoUploadStatus($mediaId: ID!) { videoUploadStatus(mediaId: $mediaId) { mediaId status expiresAt receivedParts confirmedParts { partNumber etag sizeBytes } missingParts } }
 

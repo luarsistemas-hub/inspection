@@ -221,7 +221,7 @@ func seedReanalysis(t *testing.T, db *gorm.DB) reanalysisFixture {
 }
 
 func reanalysisContext(f reanalysisFixture) context.Context {
-	principal := requestctx.Principal{IdentityID: identity.NewID(), TenantID: f.tenantID, Roles: []string{auth.Manager}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: f.businessUnitID}}}
+	principal := requestctx.Principal{IdentityID: identity.NewID(), TenantID: f.tenantID, Roles: []string{auth.Manager}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: f.businessUnitID}, {Kind: "INSPECTION", ID: f.inspectionID}}}
 	return requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: f.tenantID, Principal: principal, CorrelationID: "test-reanalyze"})
 }
 

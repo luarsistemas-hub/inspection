@@ -56,6 +56,11 @@ func (s Service) InventoryDraft(ctx context.Context, tenantID, versionID identit
 				}
 			}
 		}
+		warnings, err := voiceWarnings(tx, tenantID, out.Version)
+		if err != nil {
+			return err
+		}
+		out.Warnings = append(out.Warnings, warnings...)
 		var envs []database.InventoryEnvironment
 		if err := tx.Where("tenant_id=? AND origin_version_id=? AND decision<>'REJECTED'", tenantID, versionID).Order("position,id").Find(&envs).Error; err != nil {
 			return err
@@ -179,6 +184,14 @@ func loadInventoryViews(tx *gorm.DB, tenant identity.ID, envs []database.Invento
 			return err
 		}
 	}
+	var sources map[identity.ID][]database.InventoryItemAttributeSource
+	if !customer {
+		// Provenance is internal: customer-safe views never carry it.
+		var err error
+		if sources, err = LoadAttributeSources(tx, tenant, itemIDs); err != nil {
+			return err
+		}
+	}
 	availability, err := LoadEvidenceAvailability(tx, tenant, evidence)
 	if err != nil {
 		return err
@@ -228,7 +241,7 @@ func loadInventoryViews(tx *gorm.DB, tenant identity.ID, envs []database.Invento
 			})
 		}
 		for _, item := range group {
-			view := ItemView{Item: item, Evidence: evidenceByItem[item.ID]}
+			view := ItemView{Item: item, Evidence: evidenceByItem[item.ID], Sources: sources[item.ID]}
 			if customer {
 				view.Item.Suggested = nil
 				view.Item.ConfidenceBps = nil
@@ -237,6 +250,9 @@ func loadInventoryViews(tx *gorm.DB, tenant identity.ID, envs []database.Invento
 			if draft != nil {
 				if item.Decision == "PENDING" {
 					draft.Pending++
+					if awaitsVoiceReview(view.Sources) {
+						draft.VoicePending++
+					}
 				} else {
 					draft.Decided++
 				}
@@ -250,4 +266,20 @@ func loadInventoryViews(tx *gorm.DB, tenant identity.ID, envs []database.Invento
 		*baseline = views
 	}
 	return nil
+}
+
+// awaitsVoiceReview reports whether a voice-declared attribute has no human review among the sources.
+func awaitsVoiceReview(sources []database.InventoryItemAttributeSource) bool {
+	reviewed := map[string]bool{}
+	for _, source := range sources {
+		if source.SourceKind == SourceHumanReview {
+			reviewed[source.AttributeName] = true
+		}
+	}
+	for _, source := range sources {
+		if source.SourceKind == SourceVoice && !reviewed[source.AttributeName] {
+			return true
+		}
+	}
+	return false
 }

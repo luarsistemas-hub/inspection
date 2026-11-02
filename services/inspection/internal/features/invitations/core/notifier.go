@@ -33,7 +33,7 @@ func (n ChannelNotifier) SendOTP(ctx context.Context, tenantID, invitationID ide
 	}
 	if len(intents) == 0 {
 		if disabled {
-			return apperror.New(apperror.IntegrationDisabled, "channel", "This notification channel is temporarily unavailable")
+			return apperror.New(apperror.IntegrationDisabled, "channel", "Este canal de notificação está temporariamente indisponível.")
 		}
 		return nil
 	}

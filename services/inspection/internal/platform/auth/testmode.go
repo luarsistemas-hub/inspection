@@ -34,6 +34,14 @@ func TestMetadataFromHeaders(r *http.Request) (requestctx.Metadata, error) {
 	if len(roles) == 0 {
 		return requestctx.Metadata{}, fmt.Errorf("test authentication: roles are required")
 	}
+	products := make([]string, 0, 2)
+	for _, role := range roles {
+		for _, product := range ProductsForRole(role) {
+			if !contains(products, product) {
+				products = append(products, product)
+			}
+		}
+	}
 	correlationID := strings.TrimSpace(r.Header.Get("X-Correlation-ID"))
 	if correlationID == "" {
 		correlationID = "test-" + identity.NewID().String()
@@ -43,13 +51,14 @@ func TestMetadataFromHeaders(r *http.Request) (requestctx.Metadata, error) {
 		CorrelationID: correlationID,
 		StartedAt:     time.Now().UTC(),
 		Principal: requestctx.Principal{
-			IdentityID:        identityID,
-			MembershipID:      membershipID,
-			MembershipVersion: 1,
-			TenantID:          tenantID,
-			Issuer:            "task06-test",
-			Subject:           identityID.String(),
-			Roles:             roles,
+			IdentityID:          identityID,
+			MembershipID:        membershipID,
+			MembershipVersion:   1,
+			TenantID:            tenantID,
+			Issuer:              "task06-test",
+			Subject:             identityID.String(),
+			Roles:               roles,
+			ProductEntitlements: products,
 		},
 	}, nil
 }

@@ -558,3 +558,45 @@ hr { inline-size: 100%; border: 0; border-block-start: 1px solid var(--inspectio
   .capture-camera-preview { min-block-size: 62dvh; }
   .capture-camera-controls { justify-content: center; }
 }
+
+/* Voice notes: hold-to-speak control, photo chooser and per-note review. */
+.capture-voice-notes { display: grid; gap: .7rem; padding: .9rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); color: var(--inspection-ink); }
+.capture-voice-notes h3, .capture-voice-notes h4 { margin: 0; font-size: .95rem; }
+.capture-voice-notes p { margin: 0; color: var(--inspection-muted); font-size: .8rem; line-height: 1.45; }
+.capture-voice-notes--compact { padding: .5rem; border: 0; background: transparent; justify-items: center; }
+.capture-voice-notes--compact .capture-voice-notes__status { padding: .3rem .6rem; border-radius: 999px; background: #0d1824d9; color: #fff; }
+.capture-voice-notes__button { min-block-size: 3.25rem; inline-size: 100%; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.capture-voice-notes__button[aria-disabled="true"] { cursor: not-allowed; opacity: .6; }
+.capture-voice-notes__button:focus-visible { outline: var(--inspection-focus-ring); outline-offset: 3px; }
+.capture-voice-notes__pulse { display: inline-block; inline-size: .6rem; block-size: .6rem; margin-inline-end: .5rem; border-radius: 50%; background: currentColor; }
+@media (prefers-reduced-motion: no-preference) { .capture-voice-notes__pulse { animation: video-camera-pulse 1.2s ease-in-out infinite; } }
+.capture-voice-notes__status:empty, .capture-voice-notes__notice:empty { display: none; }
+.capture-voice-notes__list { display: grid; gap: .5rem; }
+.capture-voice-notes__list:focus { outline: none; }
+.capture-voice-notes__list ul { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.capture-voice-note { display: grid; gap: .45rem; padding: .7rem .8rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-bg); }
+.capture-voice-note:focus-visible { outline: var(--inspection-focus-ring); outline-offset: 2px; }
+.capture-voice-note__summary { display: flex; flex-wrap: wrap; gap: .4rem .7rem; align-items: baseline; }
+.capture-voice-note__status { color: var(--inspection-muted); font-size: .8rem; }
+.capture-voice-note__status--success { color: var(--inspection-success); }
+.capture-voice-note__status--warning { color: var(--inspection-warning); }
+.capture-voice-note__status--danger { color: var(--inspection-danger); }
+.capture-voice-note__actions, .capture-voice-note__confirm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.capture-voice-note__review summary { cursor: pointer; font-size: .85rem; font-weight: 600; }
+.capture-voice-note__review { display: grid; gap: .6rem; }
+.capture-voice-note__review > * + * { margin-block-start: .6rem; }
+.capture-voice-note__review textarea { inline-size: 100%; min-block-size: 5rem; }
+.capture-voice-photos { display: grid; gap: .5rem; margin: 0; padding: 0; border: 0; }
+.capture-voice-photos legend { padding: 0; font-size: .85rem; font-weight: 600; }
+.capture-voice-photos__grid { display: flex; flex-wrap: wrap; gap: .6rem; }
+.capture-voice-photo { position: relative; display: grid; gap: .3rem; inline-size: 6.5rem; padding: .35rem; border: 2px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-bg); font-size: .7rem; cursor: pointer; }
+.capture-voice-photo--selected { border-color: var(--inspection-brand); }
+.capture-voice-photo input { position: absolute; inset-block-start: .5rem; inset-inline-start: .5rem; inline-size: 1.1rem; block-size: 1.1rem; }
+.capture-voice-photo img { inline-size: 100%; block-size: 4.5rem; border-radius: calc(var(--inspection-radius) / 2); object-fit: cover; }
+.capture-voice-photo:has(input:focus-visible) { outline: var(--inspection-focus-ring); outline-offset: 2px; }
+.capture-voice-photos:disabled .capture-voice-photo { cursor: not-allowed; opacity: .85; }
+.capture-voice-optin__details { display: grid; gap: .6rem; }
+.capture-voice-optin__error { color: var(--inspection-danger); }
+.capture-voice-summary { display: grid; gap: .5rem; padding: .8rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
+.capture-voice-summary h3 { margin: 0; font-size: .95rem; }
+.capture-voice-summary p, .capture-voice-summary li { color: var(--inspection-muted); font-size: .8rem; }

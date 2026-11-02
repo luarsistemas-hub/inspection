@@ -176,11 +176,23 @@ func (s *Scheduler) handleSubmissionV2(ctx context.Context, tx *gorm.DB, envelop
 	if err := json.Unmarshal(submission.Payload, &immutable); err != nil || len(immutable.Clips) != len(payload.Clips) {
 		return permanent(fmt.Errorf("%w: v2 event differs from immutable submission", ErrInvalidEvent))
 	}
-	preparations := make([]database.VideoPreparationJob, 0, len(payload.Clips))
 	for i, clip := range payload.Clips {
 		if immutable.Clips[i] != clip || !strings.HasPrefix(clip.RequirementKey, "env:") || clip.MediaID == (identity.ID{}) {
 			return permanent(fmt.Errorf("%w: v2 event differs from immutable submission", ErrInvalidEvent))
 		}
+	}
+	var inspection database.Inspection
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return permanent(fmt.Errorf("%w: unknown v2 inspection", ErrInvalidEvent))
+		}
+		return err
+	}
+	if inspection.MediaKind != "VIDEO" {
+		return permanent(fmt.Errorf("%w: v2 event for non-video inspection", ErrInvalidEvent))
+	}
+	preparations := make([]database.VideoPreparationJob, 0, len(payload.Clips))
+	for _, clip := range payload.Clips {
 		var preparation database.VideoPreparationJob
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=? AND submission_id=? AND requirement_key=?", envelope.TenantID, clip.MediaID, submission.ID, clip.RequirementKey).Order("created_at DESC,id DESC").Take(&preparation).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -189,10 +201,6 @@ func (s *Scheduler) handleSubmissionV2(ctx context.Context, tx *gorm.DB, envelop
 			return err
 		}
 		preparations = append(preparations, preparation)
-	}
-	var inspection database.Inspection
-	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND media_kind='VIDEO'", envelope.TenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil {
-		return err
 	}
 	if err := s.ensurePlan(ctx, tx, envelope.TenantID, inspection, submission, preparations[0]); err != nil {
 		return err

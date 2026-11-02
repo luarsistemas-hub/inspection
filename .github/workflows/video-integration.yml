@@ -119,7 +119,6 @@ jobs:
       - name: Run required video integration tests
         env:
           INSPECTION_ENV: local
-          INSPECTION_TEST_AUTH_ENABLED: "true"
           INSPECTION_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable
           INSPECTION_TEST_MIGRATION_DATABASE_URL: postgres://inspection_migrator:inspection-migrator-ci@localhost:5432/inspection?sslmode=disable
           INSPECTION_TEST_RUNTIME_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-ci@localhost:5432/inspection?sslmode=disable
@@ -135,7 +134,7 @@ jobs:
           INSPECTION_TEST_TIMEOUT: 3m
           INSPECTION_ALLOWED_ORIGINS: http://localhost:3000
           INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
-          INSPECTION_OIDC_AUDIENCES: inspection-api
+          INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
           INSPECTION_SUPER_ADMIN_ISSUER: ci
           INSPECTION_SUPER_ADMIN_SUBJECT: ci
           INSPECTION_SUPER_ADMIN_PASSWORD: ci
@@ -155,6 +154,15 @@ jobs:
             TestVV_IT_515RetentionMutationsPreserveOneExplicitVideoScope
             TestExpirySerializesPlaybackLeaseAndLegalHoldIT604
             TestVV_IT_354PhotoAnalysisCompletesWithVideoWorkerStopped
+            TestVV_IT_353PhotoJourneyPublishesWithReusedEvidence
+            TestVV_IT_149PreparationExecutorMapsProviderCredentialFailureSafely
+            TestVV_IT_149ProviderConfigurationFailureIsSafeAndRetryableProjection
+            TestVV_IT_147CaptureAndOperationsReadEveryPreparationPhase
+            TestVV_IT_300TwoHundredVideoFindingsPaginateWithReadableCaptions
+            TestVV_IT_614MultiPagePDFKeepsImagesCaptionsAndLimitationsInsidePages
+            TestVV_IT_307TwoHundredVideoCaptionsAndLimitationsSurvivePagination
+            TestVV_IT_465DecodingAfterSourceExpiryIsInvalidState
+            TestExpiredSourceWithoutFramesRejectsRetryIT153
             TestVV_IT_457LegacyDisabledAdmissionAllowsNewVideoResponsibilities
             TestVideoQueueMigrationPreservesAcceptedMessages
           )
@@ -166,8 +174,10 @@ jobs:
           go test -p 1 -json -tags=integration -count=1 -timeout=45m -run "$regex" \
             ./services/inspection/internal/integration/harness \
             ./services/inspection/internal/features/media/prepare_video \
+            ./services/inspection/internal/features/media/manage_video_preparation \
             ./services/inspection/internal/features/media/read_video_evidence \
             ./services/inspection/internal/features/analysis/schedule_video_plan \
+            ./services/inspection/internal/features/reports/render_pdf \
             ./services/inspection/internal/platform/graphql/resolvers \
             ./services/inspection/cmd/inspection-video-worker \
             | tee /tmp/video-go-test.json \
@@ -314,7 +324,7 @@ jobs:
           export INSPECTION_ENV=local
           export INSPECTION_ALLOWED_ORIGINS=http://localhost:3000
           export INSPECTION_OIDC_ISSUER=http://localhost:8081/realms/inspection
-          export INSPECTION_OIDC_AUDIENCES=inspection-api
+          export INSPECTION_OIDC_AUDIENCES=inspection-admin,inspection-dashboard
           export INSPECTION_SUPER_ADMIN_ISSUER=ci INSPECTION_SUPER_ADMIN_SUBJECT=ci INSPECTION_SUPER_ADMIN_PASSWORD=ci
           export INSPECTION_MIGRATION_DATABASE_URL="$MIGRATOR_DATABASE_URL"
           export INSPECTION_DATABASE_URL="$DATABASE_URL"
@@ -322,6 +332,24 @@ jobs:
           go run ./services/inspection/cmd/inspection-migrate
           base_actual="$(psql "$DATABASE_URL" -Atf /tmp/upgrade-check.sql)"
           [[ "$base_actual" == "$base_latest" ]] || { echo "base schema version $base_actual did not match base migration catalog $base_latest" >&2; exit 1; }
+          # IT-356: records created by the pre-video code (PHOTO inspection, draft and
+          # media) must survive the candidate upgrade without conversion. The seed
+          # program is compiled against the base tree's own models; the assertion is
+          # the candidate's TestVV_IT_356, which performs the first candidate migration.
+          [[ "$base_actual" == "53" ]] || { echo "IT-356 needs the pre-video base at schema version 53, got $base_actual (base_sha must be the commit before video support)" >&2; exit 1; }
+          mkdir -p services/inspection/cmd/v53seed
+          cp /tmp/video-candidate/deploy/oci/ci/v53-seed.go.txt services/inspection/cmd/v53seed/main.go
+          fixture="$(V53_SEED_ADMIN_DATABASE_URL="$DATABASE_URL" V53_SEED_RUNTIME_DATABASE_URL="$RUNTIME_DATABASE_URL" go run ./services/inspection/cmd/v53seed)"
+          rm -r services/inspection/cmd/v53seed
+          (
+            cd /tmp/video-candidate
+            INSPECTION_TEST_V53_FIXTURE="$fixture" INSPECTION_TEST_MIGRATION_DATABASE_URL="$MIGRATOR_DATABASE_URL" \
+              go test -json -tags=integration -count=1 -timeout=15m \
+                -run '^TestVV_IT_356VideoFeatureMigrationPreservesExistingPhotoRecords$' \
+                ./services/inspection/internal/platform/database \
+              | tee /tmp/video-it356.json \
+              | python3 deploy/oci/ci/require_no_skips.py --required TestVV_IT_356VideoFeatureMigrationPreservesExistingPhotoRecords
+          )
           cd /tmp/video-candidate
           cp /tmp/latest-version.go services/inspection/cmd/inspection-migrate/ci_latest_version.go
           candidate_latest="$(go run ./services/inspection/cmd/inspection-migrate/ci_latest_version.go)"
@@ -344,5 +372,7 @@ jobs:
         if: failure()
         with:
           name: video-upgrade-rehearsal-diagnostics
-          path: /tmp/upgrade-schema.log
+          path: |
+            /tmp/upgrade-schema.log
+            /tmp/video-it356.json
           if-no-files-found: ignore

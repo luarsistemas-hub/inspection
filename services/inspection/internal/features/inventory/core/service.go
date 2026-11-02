@@ -146,6 +146,10 @@ type ItemCounts struct {
 	Included    int `json:"included"`
 	Rejected    int `json:"rejected"`
 	NotReviewed int `json:"notReviewed"`
+	// VoicePending is the part of NotReviewed that still holds a voice-backed
+	// attribute without human review. Those items stay outside the active
+	// inventory; the count is reported separately from the generic one.
+	VoicePending int `json:"voicePending"`
 }
 
 // DraftView contains the ordered draft and its review progress.
@@ -153,9 +157,11 @@ type DraftView struct {
 	Version          database.OriginVersion
 	Environments     []EnvironmentView
 	Decided, Pending int
-	ReadOnly         bool
-	NoticeCode       string
-	Warnings         []string
+	// VoicePending counts the pending items awaiting review of a voice-backed attribute.
+	VoicePending int
+	ReadOnly     bool
+	NoticeCode   string
+	Warnings     []string
 }
 
 // EnvironmentView pairs an environment with its ordered items.
@@ -168,6 +174,9 @@ type EnvironmentView struct {
 type ItemView struct {
 	Item     database.InventoryItem
 	Evidence []EvidenceView
+	// Sources is the per-attribute provenance (visual, voice, human review).
+	// It is empty in customer-safe projections.
+	Sources []database.InventoryItemAttributeSource
 }
 
 // EvidenceView reports the retained evidence's public availability.

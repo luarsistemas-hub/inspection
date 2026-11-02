@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { graphql } = vi.hoisted(() => ({ graphql: vi.fn() }));
-vi.mock("@/graphql/client", () => ({ graphql }));
+vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql }));
 
 import { ReplacementRequest, defaultReplacementDeadline, parseReplacementInput } from "@/features/dashboard/replacement-request";
 

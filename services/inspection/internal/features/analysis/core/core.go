@@ -8,7 +8,10 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -202,15 +205,93 @@ func validText(value string, maximum int) bool {
 	value = strings.TrimSpace(value)
 	return value != "" && utf8.RuneCountInString(value) <= maximum
 }
-func assignsConsequence(value string) bool {
-	prohibitedWords := map[string]struct{}{}
-	for _, word := range []string{"fault", "liable", "liability", "blame", "penalty", "fine", "charge", "cost", "compensation", "culpa", "responsável", "responsabilidade", "responsabilização", "multa", "penalidade", "cobrar", "cobrança", "custo", "indenização"} {
-		prohibitedWords[word] = struct{}{}
+
+// prohibitedConsequenceWords lists whole words (with their common inflections)
+// that assign fault, cost, liability or an automatic consequence. Matching is
+// word-based so neutral words that merely contain a stem (for example "costa")
+// remain valid observations. Words that are also neutral technical vocabulary
+// ("fine" cracks, "fault" lines, a "charged" battery) are not listed here; see
+// prohibitedConsequencePhrases.
+var prohibitedConsequenceWords = func() map[string]struct{} {
+	words := []string{
+		// English
+		"liable", "liability", "liabilities", "blame", "blames", "blamed", "blaming",
+		"responsible", "responsibility", "responsibilities", "negligence", "negligent",
+		"penalty", "penalties", "fined",
+		"cost", "costs", "compensation", "compensations", "compensate", "compensated",
+		"reimburse", "reimbursed", "reimbursement", "reimbursements",
+		// Portuguese
+		"culpa", "culpas", "culpado", "culpada", "culpados", "culpadas", "culpar", "culpou", "culpam", "culpabilidade",
+		"responsável", "responsavel", "responsáveis", "responsaveis", "responsabilidade", "responsabilidades",
+		"responsabilização", "responsabilizacao", "responsabilizar", "responsabilizado", "responsabilizada", "responsabilizados", "responsabilizadas",
+		"responsabiliza", "responsabilizam", "responsabilizou",
+		"multa", "multas", "multado", "multada", "multar", "multou", "multam",
+		"penalidade", "penalidades", "penalizar", "penalizado", "penalizada", "penaliza", "penalizam", "penalizou",
+		"cobrar", "cobra", "cobram", "cobrou", "cobrará", "cobrara", "cobrarão", "cobrarao", "cobrança", "cobranca", "cobranças", "cobrancas", "cobrado", "cobrada", "cobrados", "cobradas",
+		"custo", "custos", "custear", "custeio", "custa", "custam", "custou", "custará", "custara", "custarão", "custarao",
+		"indenização", "indenizacao", "indenizações", "indenizacoes", "indenizar", "indenizado", "indenizada", "indeniza", "indenizam", "indenizou",
+		"arcar",
+		"ressarcimento", "ressarcimentos", "ressarcir", "ressarcido", "ressarcida",
+		"reembolso", "reembolsos", "reembolsar", "reembolsado", "reembolsada",
+		"prejuízo", "prejuizo", "prejuízos", "prejuizos",
+		"negligência", "negligencia", "negligências", "negligencias", "negligente", "negligentes",
+		// Money amounts spelled out ("reais"); "R$" and currency symbols are
+		// matched by monetaryAmount.
+		"reais",
 	}
-	for _, word := range strings.Fields(strings.ToLower(value)) {
-		word = strings.Trim(word, ".,;:!?()[]{}\"'")
-		if _, prohibited := prohibitedWords[word]; prohibited {
+	set := make(map[string]struct{}, len(words))
+	for _, word := range words {
+		set[word] = struct{}{}
+	}
+	return set
+}()
+
+// prohibitedConsequencePhrases lists two or three adjacent words (lowercase, single
+// space) for words that are only a consequence in context: "fine", "charge" and
+// "fault" stay valid in "fine cracks", "fine dust", "fully charged" and "fault
+// line". The apostrophe splits words, so "tenant's fault" is the pair "s fault".
+var prohibitedConsequencePhrases = func() map[string]struct{} {
+	phrases := []string{
+		// fine
+		"a fine of", "a fine for", "pay a fine", "pay the fine", "paying a fine", "imposed a fine", "impose a fine", "levied a fine", "levy a fine", "be fined",
+		// charge
+		"charged for", "charged to", "charges for", "charge for", "extra charge", "additional charge", "service charge", "will charge", "be charged", "to charge",
+		// fault
+		"at fault", "their fault", "your fault", "his fault", "her fault", "our fault", "my fault", "s fault", "fault of", "fault lies",
+	}
+	set := make(map[string]struct{}, len(phrases))
+	for _, phrase := range phrases {
+		set[phrase] = struct{}{}
+	}
+	return set
+}()
+
+// monetaryAmount matches "R$ 500", "$ 100", "€50" and "500 reais"-style
+// amounts; the tokenizer would otherwise drop the currency symbol.
+var monetaryAmount = regexp.MustCompile(`r\s?\$|[$€£]\s*\d|\d\s*(?:usd|eur|brl)\b`)
+
+func assignsConsequence(value string) bool {
+	// Normalize to NFC first: a decomposed "é" (e + combining accent) would
+	// otherwise be split by the tokenizer and hide "responsável". Then split on
+	// every non letter/digit so punctuation such as "custo/benefício" or
+	// "culpa;" cannot hide a prohibited word.
+	value = strings.ToLower(norm.NFC.String(value))
+	if monetaryAmount.MatchString(value) {
+		return true
+	}
+	var recent []string
+	for _, word := range strings.FieldsFunc(value, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if _, prohibited := prohibitedConsequenceWords[word]; prohibited {
 			return true
+		}
+		recent = append(recent, word)
+		if len(recent) > 3 {
+			recent = recent[1:]
+		}
+		for size := 2; size <= len(recent); size++ {
+			if _, prohibited := prohibitedConsequencePhrases[strings.Join(recent[len(recent)-size:], " ")]; prohibited {
+				return true
+			}
 		}
 	}
 	return false

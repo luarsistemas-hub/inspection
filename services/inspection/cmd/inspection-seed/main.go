@@ -35,11 +35,12 @@ func main() {
 	}
 	ctx := context.Background()
 	mediaKind := envOr("INSPECTION_QA_MEDIA_KIND", "PHOTO")
+	voiceEligible := os.Getenv("INSPECTION_QA_VOICE") == "1"
 	scenario := os.Getenv("INSPECTION_QA_SCENARIO")
 	if scenario != "" {
 		log.Fatal("INSPECTION_QA_SCENARIO is no longer supported; leave it empty")
 	}
-	url, inspectionID, err := seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind)
+	url, inspectionID, err := seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind, voiceEligible)
 	if errors.Is(err, seedqa.ErrLocalOnboardingMissing) {
 		apiURL := os.Getenv("INSPECTION_API_URL")
 		if apiURL == "" {
@@ -48,10 +49,15 @@ func main() {
 		if bootstrapErr := bootstrapLocalAdmin(ctx, apiURL, tokenIssuer, issuer, envOr("INSPECTION_SEED_USERNAME", "admin"), envOr("INSPECTION_SEED_PASSWORD", "admin")); bootstrapErr != nil {
 			log.Fatalf("local onboarding is missing and automatic bootstrap failed: %v", bootstrapErr)
 		}
-		url, inspectionID, err = seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind)
+		url, inspectionID, err = seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind, voiceEligible)
 	}
 	if err != nil {
 		log.Fatal(err)
+	}
+	if voiceEligible {
+		if err := configureQAVoice(ctx, db, issuer); err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Printf("QA data created. Capture URL: %s\n", url)
 	if inspectionID != "" {

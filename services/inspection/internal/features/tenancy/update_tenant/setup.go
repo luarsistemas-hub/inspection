@@ -52,7 +52,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Tenan
 	if _, err := time.LoadLocation(cmd.Timezone); err != nil {
 		return database.Tenant{}, apperror.New(apperror.InvalidInput, "timezone", "invalid timezone")
 	}
-	if _, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin}, nil, true); err != nil {
+	if _, err := deps.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: cmd.TenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.OrganizationAdmin}, Mutate: true}); err != nil {
 		return database.Tenant{}, err
 	}
 	var result database.Tenant

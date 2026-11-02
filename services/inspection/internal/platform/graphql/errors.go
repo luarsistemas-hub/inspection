@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"inspection/services/inspection/internal/platform/apperror"
+	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/requestctx"
 
 	gqlgen "github.com/99designs/gqlgen/graphql"
@@ -41,9 +42,21 @@ func PresentError(ctx context.Context, err error) *gqlerror.Error {
 	}
 	if public.Code == apperror.Internal {
 		operation := graphqlOperationName(ctx)
-		slog.ErrorContext(ctx, "graphql resolver failure", "operation", operation, "correlationId", correlationID, "errorCode", string(public.Code))
+		cause := innermostApplicationCause(err)
+		slog.ErrorContext(ctx, "graphql resolver failure", "operation", operation, "correlationId", correlationID, "errorCode", string(public.Code), "error", observability.SanitizeError(cause.Error()))
 	}
 	return &gqlerror.Error{Message: public.Message, Extensions: extensions}
+}
+
+func innermostApplicationCause(err error) error {
+	cause := err
+	for {
+		var appErr *apperror.Error
+		if !errors.As(cause, &appErr) || appErr.Cause == nil {
+			return cause
+		}
+		cause = appErr.Cause
+	}
 }
 
 func graphqlOperationName(ctx context.Context) (operation string) {

@@ -8,6 +8,8 @@ type Query {
   me: Me!
   tenant: Tenant
   memberships(first: Int = 25, after: String): MembershipConnection!
+  effectiveAccess(membershipId: ID!, first: Int = 25, after: String): EffectiveAccess!
+  scopePreview(kind: String!, resourceId: ID!, first: Int = 25, after: String): ScopePreview!
   businessUnits(first: Int = 25, after: String): BusinessUnitConnection!
   auditEvents(first: Int = 25, after: String): AuditEventConnection!
   participants(search: String, first: Int = 25, after: String): ParticipantConnection!
@@ -65,6 +67,9 @@ type Query {
   videoPolicy: VideoPolicy!
   videoUploadStatus(mediaId: ID!): VideoUploadStatus!
   videoPreparation(mediaId: ID!): VideoPreparationStatus!
+  voicePolicy: VoicePolicy
+  audioNotes(inspectionId: ID!, environmentId: ID!, first: Int = 25, after: String): AudioNoteConnection!
+  audioNote(id: ID!): AudioNote
 }
 
 type OnboardingOption { value: String!, label: String! }
@@ -107,8 +112,10 @@ type Mutation {
   upsertBusinessUnit(input: UpsertBusinessUnitInput!): BusinessUnitPayload!
   archiveBusinessUnit(input: ArchiveBusinessUnitInput!): BusinessUnitPayload!
   inviteInternalUser(input: InviteInternalUserInput!): MembershipPayload!
+  inviteCustomerUser(input: InviteCustomerUserInput!): MembershipPayload!
   resendInternalUserInvitation(input: ResendInternalUserInvitationInput!): MembershipPayload!
   assignRoleScopes(input: AssignRoleScopesInput!): MembershipPayload!
+  assignMembershipAccess(input: AssignMembershipAccessInput!): MembershipPayload!
   disableMembership(input: DisableMembershipInput!): MembershipPayload!
   upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
   verifyContact(input: VerifyContactInput!): ParticipantContactPayload!
@@ -168,6 +175,15 @@ type Mutation {
   acceptProcessing(input: AcceptProcessingInput!): CapturePayload!
   beginVideoCapture(input: BeginVideoCaptureInput!): VideoAttemptPayload!
   configureVideoPolicy(input: ConfigureVideoPolicyInput!): VideoPolicyPayload!
+  configureVoicePolicy(input: ConfigureVoicePolicyInput!): VoicePolicyPayload!
+  createAudioNoteUpload(input: CreateAudioNoteUploadInput!): AudioNoteUploadPayload!
+  completeAudioNoteUpload(input: CompleteAudioNoteUploadInput!): AudioNotePayload!
+  reviseAudioNote(input: ReviseAudioNoteInput!): AudioNotePayload!
+  discardAudioNote(input: DiscardAudioNoteInput!): AudioNotePayload!
+  retryAudioNote(input: RetryAudioNoteInput!): AudioNotePayload!
+  setAudioNoteHighlight(input: SetAudioNoteHighlightInput!): AudioNotePayload!
+  confirmAudioNoteText(input: ConfirmAudioNoteTextInput!): AudioNotePayload!
+  regenerateInventorySuggestions(input: RegenerateInventorySuggestionsInput!): InventoryRegenerationPayload!
   retryVideoPreparation(input: RetryVideoPreparationInput!): VideoPreparationPayload!
   reprocessVideoPreparation(input: ReprocessVideoPreparationInput!): VideoPreparationPayload!
   reanalyzeVideoInspection(input: ReanalyzeVideoInspectionInput!): ReanalyzeVideoInspectionPayload!
@@ -196,9 +212,14 @@ type Mutation {
 }
 
 type Scope { kind: String! resourceId: ID! }
-type Membership { id: ID! tenantId: ID! name: String! email: String! role: String! status: String! invitationStatus: String! version: Int! scopes: [Scope!]! }
+type Membership { id: ID! tenantId: ID! name: String! email: String! role: String! status: String! invitationStatus: String! version: Int! productEntitlements: [String!]! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
+type AccessResource { kind: String! resourceId: ID! name: String! status: String! historical: Boolean! grantable: Boolean! }
+type EffectiveAccessEntry { kind: String! resourceId: ID! name: String! status: String! historical: Boolean! grantable: Boolean! inheritedFrom: Scope! }
+type EffectiveAccessEntryConnection { nodes: [EffectiveAccessEntry!]! pageInfo: PageInfo! }
+type EffectiveAccess { membershipId: ID! role: String! status: String! version: Int! productEntitlements: [String!]! tenantWide: Boolean! grants: [AccessResource!]! descendants: EffectiveAccessEntryConnection! }
+type ScopePreview { target: AccessResource! descendants: EffectiveAccessEntryConnection! }
 type InternalUserActivation { membershipId: ID! email: String! name: String! newIdentity: Boolean! status: String! }
 type InternalUserActivationPayload { activation: InternalUserActivation userErrors: [UserError!]! clientMutationId: String! }
 type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! canViewLLMCosts: Boolean! }
@@ -236,10 +257,13 @@ type InventoryCounts { included: Int! rejected: Int! notReviewed: Int! }
 type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! open: Int! noResponse: Int! }
 type BaselineCounterpartyInvitation { id: ID! participantId: ID! response: String! deadlineAt: String! respondedAt: String statement: String resolution: String! resolutionReason: String adjustmentVersionId: ID deliveryStatus: String deliveryId: ID }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
-type InventoryDraft { assetId: ID! version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
+type InventoryDraft { assetId: ID! version: OriginVersion! sourceInspectionId: ID environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! voiceSummary: InventoryVoiceSummary! }
 type InventoryProgress { decided: Int! pending: Int! }
-type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! }
-type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
+type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! voiceSummary: InventoryVoiceSummary! }
+type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! attributeSources: [InventoryAttributeSource!]! voiceConflicts: [InventoryVoiceConflict!]! }
+type InventoryVoiceConflict { attributeName: String! visualValue: String! voiceValue: String }
+type InventoryVoiceSummary { pendingVoiceItems: Int! conflictItems: Int! staleSuggestions: Int! notesWithoutItem: Int! }
+type InventoryAttributeSource { id: ID! attributeName: String! sourceKind: String! noteId: ID revisionId: ID currentRevisionId: ID stale: Boolean! visualEvidenceId: ID reviewedBy: ID createdAt: String! }
 type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
 type CounterpartyBaselineEvidence { kind: String! position: Int! url: String timestampMs: Int }
@@ -328,6 +352,17 @@ type CaptureReviewHandoff { inspectionId: ID! originVersionId: ID }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
 type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! captureLayout: String reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! environments: [CaptureEnvironment!]! reviewHandoff: CaptureReviewHandoff answers: [CaptureAnswer!]! disclosureVersion: String! }
+type VoicePolicy { enabled: Boolean! tenantNoteLimit: Int tenantAudioLimitMs: Int inspectionNoteLimit: Int inspectionAudioLimitMs: Int version: Int! }
+type VoicePolicyPayload { policy: VoicePolicy userErrors: [UserError!]! clientMutationId: String! }
+type AudioNoteRevision { id: ID! revisionNumber: Int! text: String! kind: String! authorId: ID authorName: String callId: ID createdAt: String! }
+type AudioNote { id: ID! inspectionId: ID! environmentId: ID! environmentName: String responsibilityId: ID! requirementKey: String! targetKind: String! photoMediaId: ID videoAttemptId: ID sourceMediaId: ID startMs: Int endMs: Int durationMs: Int! status: String! anchorStatus: String! anchor: AudioNoteAnchor! highlighted: Boolean! highlightSource: String version: Int! currentRevisionId: ID revisions: [AudioNoteRevision!]! textConfirmed: Boolean! noSpeech: Boolean! failureCode: String audioAvailability: String! audioDeletionStatus: String! createdAt: String! updatedAt: String! }
+type AudioNoteAnchor { kind: String! status: String! mediaId: ID mediaStatus: String! approximate: Boolean! previewUrl: String playbackUrl: String frames: [AudioNoteAnchorFrame!]! framesTruncated: Boolean! visualCoverage: String! }
+type AudioNoteAnchorFrame { id: ID! timestampMs: Int! url: String status: String! }
+type AudioNoteConnection { nodes: [AudioNote!]! pageInfo: PageInfo! }
+type AudioNoteUploadIntent { url: String! method: String! headers: JSON! expiresAt: String! }
+type AudioNoteUploadPayload { noteId: ID upload: AudioNoteUploadIntent userErrors: [UserError!]! clientMutationId: String! }
+type AudioNotePayload { note: AudioNote userErrors: [UserError!]! clientMutationId: String! }
+type InventoryRegenerationPayload { jobId: ID status: String userErrors: [UserError!]! clientMutationId: String! }
 type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
@@ -356,8 +391,8 @@ type ReportEvidence { id: ID! requirementKey: String! role: String! description:
 type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
-type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! publication: ReportPublication }
+type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! publication: ReportPublication }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
@@ -435,7 +470,7 @@ enum LLMCallState { STARTED FINISHED }
 enum LLMUsageCostState { INFORMED MISSING UNCERTAIN ERROR_WITHOUT_COST UNVERIFIED NOT_SENT }
 enum LLMUsageCostSource { HEADER BODY UNKNOWN ERROR_WITHOUT_COST UNVERIFIED UNCERTAIN NOT_SENT }
 enum LLMCostState { CONFIRMED UNKNOWN UNCERTAIN ERROR_WITHOUT_COST UNVERIFIED NOT_SENT }
-input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID withoutInspection: Boolean = false provider: String model: String modelAlias: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState includeTestData: Boolean = false }
+input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID withoutInspection: Boolean = false provider: String model: String modelAlias: String comparisonMode: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState includeTestData: Boolean = false }
 type LLMUsage {
   from: String!
   to: String!
@@ -491,6 +526,11 @@ type GlobalLLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  audioInputTokens: Int
+  textInputTokens: Int
+  reasoningTokens: Int
+  audioDurationMs: Int
+  audioTokenUnit: String
   cachedInputTokens: Int
   imageCount: Int
   requestBodyBytes: Int
@@ -547,6 +587,11 @@ type LLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  audioInputTokens: Int
+  textInputTokens: Int
+  reasoningTokens: Int
+  audioDurationMs: Int
+  audioTokenUnit: String
   cachedInputTokens: Int
   imageCount: Int
   requestBodyBytes: Int
@@ -562,12 +607,14 @@ input CreateBusinessUnitInput { code: String! name: String! expectedTenantVersio
 input UpsertBusinessUnitInput { businessUnitId: ID code: String! name: String! expectedVersion: Int expectedTenantVersion: Int clientMutationId: String! }
 input ArchiveBusinessUnitInput { businessUnitId: ID! expectedVersion: Int! clientMutationId: String! }
 input ScopeAssignmentInput { kind: String! resourceId: ID! }
-input InviteInternalUserInput { name: String! email: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input InviteInternalUserInput { name: String! email: String! role: String! scopes: [ScopeAssignmentInput!]! productEntitlements: [String!] clientMutationId: String! }
+input InviteCustomerUserInput { name: String! email: String! scopes: [ScopeAssignmentInput!]! productEntitlements: [String!] clientMutationId: String! }
 input ResendInternalUserInvitationInput { membershipId: ID! clientMutationId: String! }
 input RequestInternalUserActivationOtpInput { invitationToken: String clientMutationId: String! }
 input VerifyInternalUserActivationOtpInput { code: String! clientMutationId: String! }
 input CompleteInternalUserActivationInput { password: String clientMutationId: String! }
 input AssignRoleScopesInput { membershipId: ID! role: String! scopes: [ScopeAssignmentInput!]! expectedVersion: Int clientMutationId: String! }
+input AssignMembershipAccessInput { membershipId: ID! role: String! productEntitlements: [String!]! scopes: [ScopeAssignmentInput!]! expectedVersion: Int! clientMutationId: String! }
 input DisableMembershipInput { membershipId: ID! expectedVersion: Int! clientMutationId: String! }
 input ContactInput { channel: String! value: String! }
 input UpsertParticipantInput { participantId: ID expectedVersion: Int businessUnitId: ID! name: String! segmentRole: String! contacts: [ContactInput!]! clientMutationId: String! }
@@ -607,9 +654,19 @@ input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersio
 input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
-input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
+input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false voiceProcessing: Boolean = false voiceConsentVersion: String aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
 input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
 input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int expectedVersion: Int! clientMutationId: String! }
+input ConfigureVoicePolicyInput { enabled: Boolean! tenantNoteLimit: Int! tenantAudioLimitMs: Int! inspectionNoteLimit: Int! inspectionAudioLimitMs: Int! expectedVersion: Int! clientMutationId: String! }
+input CreateAudioNoteUploadInput { clientNoteId: ID! requirementKey: String! photoMediaId: ID videoAttemptId: ID startMs: Int endMs: Int timeBasis: String consentVersion: String! disclosureVersion: String! contentType: String! contentSha256: String! sizeBytes: Int! durationMs: Int! clientMutationId: String! }
+input CompleteAudioNoteUploadInput { noteId: ID! uploadProof: String! clientMutationId: String! }
+enum AudioNoteRevisionKind { HUMAN_EDIT PARTICIPANT_DECLARATION }
+input ReviseAudioNoteInput { noteId: ID! text: String! revisionKind: AudioNoteRevisionKind expectedVersion: Int! clientMutationId: String! }
+input DiscardAudioNoteInput { noteId: ID! expectedVersion: Int! clientMutationId: String! }
+input RetryAudioNoteInput { noteId: ID! expectedVersion: Int! clientMutationId: String! }
+input SetAudioNoteHighlightInput { noteId: ID! highlighted: Boolean! expectedVersion: Int! clientMutationId: String! }
+input ConfirmAudioNoteTextInput { noteId: ID! expectedVersion: Int! clientMutationId: String! }
+input RegenerateInventorySuggestionsInput { originVersionId: ID! environmentId: ID! expectedVersion: Int! revisionIds: [ID!]! clientMutationId: String! }
 input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }

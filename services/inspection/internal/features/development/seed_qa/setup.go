@@ -14,6 +14,7 @@ import (
 	"inspection/libs/identity"
 	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	inspectionscore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
@@ -31,7 +32,7 @@ var ErrLocalOnboardingMissing = errors.New("local admin onboarding missing")
 
 // Setup adds one fresh end-to-end QA scenario to the first active local admin
 // onboarding. Catalog rows are stable across runs; capture scenarios are not.
-func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string) (string, string, error) {
+func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string, voiceEligible bool) (string, string, error) {
 	if db == nil || strings.TrimSpace(issuer) == "" || strings.TrimSpace(captureBaseURL) == "" || (mediaKind != "PHOTO" && mediaKind != "VIDEO") {
 		return "", "", fmt.Errorf("slice %s: missing dependency", sliceName)
 	}
@@ -84,14 +85,40 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 		return "", "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
 	}
 	segmentJSON := json.RawMessage(`{"type":"object","properties":{"propertyType":{"type":"string"}}}`)
-	templateJSON, err := qaTemplateDefinition(ids.segmentVersion, mediaKind)
+	templateJSON, err := qaTemplateDefinition(ids.segmentVersion, mediaKind, voiceEligible)
 	if err != nil {
 		return "", "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
+	}
+	legacyTemplateJSON, err := qaTemplateDefinition(ids.segmentVersion, mediaKind, false)
+	if err != nil {
+		return "", "", fmt.Errorf("slice %s: encode legacy QA template: %w", sliceName, err)
+	}
+	var captureRequirements []capturecore.Requirement
+	if voiceEligible {
+		var document catalog.TemplateDocument
+		if err := json.Unmarshal(templateJSON, &document); err != nil {
+			return "", "", fmt.Errorf("slice %s: decode voice QA template: %w", sliceName, err)
+		}
+		captureRequirements = inspectionscore.CaptureRequirementsForCreation(document, catalog.ChecklistOnly, nil)
+	} else {
+		captureRequirements = requirements
+	}
+	requirementJSON, err = json.Marshal(captureRequirements)
+	if err != nil {
+		return "", "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
 	}
 	var promptSnapshot database.AnalysisPromptSnapshot
 	promptSnapshot, err = findFindingsPromptSnapshot(ctx, db)
 	if err != nil {
 		return "", "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
+	}
+	var inventoryPromptSnapshotID *identity.ID
+	if voiceEligible {
+		inventoryPromptSnapshot, err := findInventoryPromptSnapshot(ctx, db)
+		if err != nil {
+			return "", "", fmt.Errorf("slice %s: find seeded inventory prompt: %w", sliceName, err)
+		}
+		inventoryPromptSnapshotID = &inventoryPromptSnapshot.ID
 	}
 
 	token, err := security.NewScopedToken(tenant.ID)
@@ -107,6 +134,10 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 	llmDelivered, llmHTTPStatus := true, 200
 	llmInputTokens, llmOutputTokens, llmRequestBytes, llmDuration := int64(840), int64(126), int64(4096), int64(1250)
 	llmCost := 0.015
+	captureReferencePayload := json.RawMessage(`{}`)
+	if voiceEligible {
+		captureReferencePayload, _ = json.Marshal(map[string]any{"referenceVersionId": nil, "comparisonMode": catalog.ChecklistOnly})
+	}
 
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		stableRows := []any{
@@ -118,7 +149,7 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 			&database.SegmentDefinition{ID: ids.segment, TenantID: tenant.ID, Key: "qa-property", Name: "Imóvel QA", ActiveVersionID: &ids.segmentVersion, Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.SegmentDefinitionVersion{ID: ids.segmentVersion, TenantID: tenant.ID, DefinitionID: ids.segment, VersionNumber: 1, SchemaVersion: 1, SchemaJSON: segmentJSON, UISchemaJSON: json.RawMessage(`{}`), CanonicalDigest: digest(segmentJSON), Status: "PUBLISHED", IdempotencyKey: "qa-seed-segment", PublishedAt: now, CreatedBy: membership.IdentityID},
 			&database.Template{ID: ids.template, TenantID: tenant.ID, Key: "qa-basic-inspection", Name: "Vistoria básica QA", SegmentVersionID: ids.segmentVersion, ActiveVersionID: &ids.templateVersion, Version: 1, CreatedAt: now, UpdatedAt: now},
-			&database.TemplateVersion{ID: ids.templateVersion, TenantID: tenant.ID, TemplateID: ids.template, VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: templateJSON, CanonicalDigest: digest(templateJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-template", PublishedAt: now, CreatedBy: membership.IdentityID},
+			&database.TemplateVersion{ID: ids.templateVersion, TenantID: tenant.ID, TemplateID: ids.template, VersionNumber: 1, SchemaVersion: catalog.LegacySchemaVersion, DefinitionJSON: legacyTemplateJSON, CanonicalDigest: digest(legacyTemplateJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-template", PublishedAt: now, CreatedBy: membership.IdentityID},
 			&database.Asset{ID: ids.asset, TenantID: tenant.ID, BusinessUnitID: unit.ID, SegmentVersionID: ids.segmentVersion, TemplateID: &ids.template, Name: "Imóvel QA", ExternalKey: "QA-001", Address: "Rua de Teste, 100 — Centro — São Paulo/SP — CEP 01001-000", AddressCountryCode: "BR", AddressPostalCode: "01001000", AddressStreet: "Rua de Teste", AddressNumber: "100", AddressDistrict: "Centro", AddressCity: "São Paulo", AddressState: "SP", AddressMunicipalityCode: "3550308", AddressStatus: "COMPLETE", GeofenceMeters: 150, PolicyOverrides: json.RawMessage(`{"allowGallery":true}`), Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-asset", CreatedAt: now, UpdatedAt: now},
 			&database.AssetAttributeVersion{ID: ids.assetAttributes, TenantID: tenant.ID, AssetID: ids.asset, SegmentVersionID: ids.segmentVersion, VersionNumber: 1, AttributesJSON: json.RawMessage(`{"propertyType":"residential"}`), CanonicalDigest: digest([]byte(`{"propertyType":"residential"}`)), CreatedAt: now},
 			&database.AssetAssignment{ID: ids.assetAssignment, TenantID: tenant.ID, AssetID: ids.asset, ParticipantID: ids.participant, Role: "OWNER", Active: true, CreatedAt: now},
@@ -135,44 +166,29 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 			Update("status", "PUBLISHED").Error; err != nil {
 			return err
 		}
-		var documentKind string
-		if err := tx.Raw("SELECT jsonb_typeof(definition_json) FROM templates.template_versions WHERE tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Scan(&documentKind).Error; err != nil {
+		if err := repairLegacyTemplateVersion(tx, tenant.ID, ids.templateVersion, legacyTemplateJSON); err != nil {
 			return err
 		}
-		if documentKind == "array" {
-			// The disposable development seed predates the canonical template
-			// contract. Repair its stable row in place with the migrator role.
-			if err := tx.Exec("ALTER TABLE templates.template_versions DISABLE TRIGGER immutable_template_version").Error; err != nil {
+		inspectionTemplateID, inspectionTemplateVersionID := ids.template, ids.templateVersion
+		if voiceEligible {
+			voiceIDs := voiceTemplateIDs(tenant.ID)
+			if err := ensureVoiceTemplate(tx, tenant.ID, membership.IdentityID, ids.segmentVersion, voiceIDs, mediaKind, now); err != nil {
 				return err
 			}
-			if err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Updates(map[string]any{"definition_json": templateJSON, "canonical_digest": digest(templateJSON)}).Error; err != nil {
-				return err
-			}
-			if err := tx.Exec("ALTER TABLE templates.template_versions ENABLE TRIGGER immutable_template_version").Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND template_id = ? AND status = 'ACTIVE'", tenant.ID, ids.template).Update("status", "RETIRED").Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Update("status", "ACTIVE").Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&database.Template{}).Where("tenant_id = ? AND id = ?", tenant.ID, ids.template).Updates(map[string]any{"active_version_id": ids.templateVersion, "version": 1, "updated_at": now}).Error; err != nil {
-				return err
-			}
+			inspectionTemplateID, inspectionTemplateVersionID = voiceIDs.template, voiceIDs.templateVersion
 		}
 
 		project := database.Project{ID: projectID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, Name: "Projeto QA", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-project-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
 		stage := database.ProjectStage{ID: stageID, TenantID: tenant.ID, ProjectID: projectID, Key: "inspection", Label: "Vistoria inicial", Kind: "INSPECTION", Position: 1, Status: "AVAILABLE", Requirements: requirementJSON, EffectiveReference: json.RawMessage(`{}`), Version: 1, IdempotencyKey: "qa-seed-stage-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
-		inspection := database.Inspection{ID: inspectionID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, AnalysisPromptSnapshotID: promptSnapshot.ID, ProjectID: &projectID, StageID: &stageID, Source: "MANUAL", SourceKey: "qa-seed-" + scenarioID.String(), SourceReason: "Browser QA scenario", Status: "INVITED", DueAt: now, DeadlineAt: deadline, ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{"source":"qa-seed"}`), Version: 1, CreatedAt: now, UpdatedAt: now}
+		inspection := database.Inspection{ID: inspectionID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: inspectionTemplateID, TemplateVersionID: inspectionTemplateVersionID, AnalysisPromptSnapshotID: promptSnapshot.ID, InventoryPromptSnapshotID: inventoryPromptSnapshotID, ProjectID: &projectID, StageID: &stageID, Source: "MANUAL", SourceKey: "qa-seed-" + scenarioID.String(), SourceReason: "Browser QA scenario", Status: "INVITED", MediaKind: mediaKind, DueAt: now, DeadlineAt: deadline, ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{"source":"qa-seed"}`), Version: 1, CreatedAt: now, UpdatedAt: now}
 		rows := []any{
 			&project,
 			&stage,
 			&inspection,
 			&database.Responsibility{ID: responsibilityID, TenantID: tenant.ID, InspectionID: inspectionID, ParticipantID: ids.participant, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now},
-			&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ComparisonMode: "CHECKLIST_ONLY", Payload: json.RawMessage(`{}`), CreatedAt: now},
+			&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ComparisonMode: "CHECKLIST_ONLY", Payload: captureReferencePayload, CreatedAt: now},
 			&database.PolicySnapshot{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, SchemaVersion: 1, Payload: json.RawMessage(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`), CanonicalDigest: digest([]byte(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`)), CreatedAt: now},
-			&database.CaptureDraft{ID: draftID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: mediaKind, TemplateVersionID: ids.templateVersion, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`), Requirements: requirementJSON, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now},
+			&database.CaptureDraft{ID: draftID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: mediaKind, TemplateVersionID: inspectionTemplateVersionID, ReferencePayload: captureReferencePayload, PolicyPayload: json.RawMessage(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`), Requirements: requirementJSON, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.Invitation{ID: invitationID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, TokenHash: tokenHash[:], DeliveryIntents: deliveryIntents, Status: "ACTIVE", ExpiresAt: deadline, CreatedAt: now},
 			&database.DashboardInspection{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ProjectID: &projectID, AssetID: ids.asset, Classification: "ATTENTION", Status: "INVITED", Sequence: now.UnixNano(), UpdatedAt: now},
 			&database.AuditEvent{ID: identity.NewID(), TenantID: tenant.ID, ActorID: membership.IdentityID, Action: "QA_SCENARIO_SEEDED", TargetType: "INSPECTION", TargetID: inspectionID.String(), Outcome: "SUCCESS", Reason: "Local browser QA", CorrelationID: "qa-seed-" + scenarioID.String(), OccurredAt: now},
@@ -195,8 +211,72 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 	if err != nil {
 		return "", "", fmt.Errorf("slice %s: persist scenario: %w", sliceName, err)
 	}
+	if voiceEligible {
+		capture := capturecore.Service{DB: db, Within: func(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {
+			return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+				if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", tenantID.String()).Error; err != nil {
+					return err
+				}
+				return fn(tx)
+			})
+		}}
+		for _, environment := range []struct{ code, name string }{{"KITCHEN", "Cozinha"}, {"LIVING_ROOM", "Sala"}} {
+			if _, err := capture.DeclareEnvironment(ctx, capturecore.DeclareEnvironmentInput{TenantID: tenant.ID, ResponsibilityID: responsibilityID, TypeCode: environment.code, Name: environment.name, ClientMutationID: "qa-seed-voice-" + environment.code}); err != nil {
+				return "", "", fmt.Errorf("slice %s: declare voice QA environment: %w", sliceName, err)
+			}
+		}
+	}
 
 	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, inspectionID.String(), nil
+}
+
+func repairLegacyTemplateVersion(tx *gorm.DB, tenantID, templateVersionID identity.ID, definition json.RawMessage) error {
+	var current struct {
+		DocumentKind  string `gorm:"column:document_kind"`
+		SchemaVersion int    `gorm:"column:schema_version"`
+	}
+	jsonTypeFunction := "jsonb_typeof"
+	if tx.Dialector.Name() == "sqlite" {
+		jsonTypeFunction = "json_type"
+	}
+	query := "SELECT " + jsonTypeFunction + "(definition_json) AS document_kind, schema_version FROM templates.template_versions WHERE tenant_id = ? AND id = ?"
+	if err := tx.Raw(query, tenantID, templateVersionID).Scan(&current).Error; err != nil {
+		return err
+	}
+	if current.DocumentKind == "object" && current.SchemaVersion == catalog.LegacySchemaVersion {
+		return nil
+	}
+	// The trigger is disabled only to repair a malformed legacy seed row.
+	postgres := tx.Dialector.Name() == "postgres"
+	if postgres {
+		if err := tx.Exec("ALTER TABLE templates.template_versions DISABLE TRIGGER immutable_template_version").Error; err != nil {
+			return err
+		}
+	}
+	err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND id = ?", tenantID, templateVersionID).Updates(map[string]any{
+		"definition_json": definition, "schema_version": catalog.LegacySchemaVersion, "canonical_digest": digest(definition),
+	}).Error
+	if postgres {
+		if enableErr := tx.Exec("ALTER TABLE templates.template_versions ENABLE TRIGGER immutable_template_version").Error; enableErr != nil {
+			return enableErr
+		}
+	}
+	return err
+}
+
+func ensureVoiceTemplate(tx *gorm.DB, tenantID, membershipID, segmentVersionID identity.ID, ids qaVoiceTemplateIDs, mediaKind string, now time.Time) error {
+	definition, err := qaTemplateDefinition(segmentVersionID, mediaKind, true)
+	if err != nil {
+		return err
+	}
+	template := database.Template{ID: ids.template, TenantID: tenantID, Key: "qa-voice-environment-inspection", Name: "Vistoria de ambientes QA", SegmentVersionID: segmentVersionID, ActiveVersionID: &ids.templateVersion, Version: 1, CreatedAt: now, UpdatedAt: now}
+	version := database.TemplateVersion{ID: ids.templateVersion, TenantID: tenantID, TemplateID: ids.template, VersionNumber: 1, SchemaVersion: catalog.EnvironmentSchemaVersion, DefinitionJSON: definition, CanonicalDigest: digest(definition), Status: "ACTIVE", IdempotencyKey: "qa-seed-voice-environment-template-v1", PublishedAt: now, CreatedBy: membershipID}
+	for _, row := range []any{&template, &version} {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(row).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func findFindingsPromptSnapshot(ctx context.Context, db *gorm.DB) (database.AnalysisPromptSnapshot, error) {
@@ -205,7 +285,26 @@ func findFindingsPromptSnapshot(ctx context.Context, db *gorm.DB) (database.Anal
 	return snapshot, err
 }
 
-func qaTemplateDefinition(segmentVersionID identity.ID, mediaKind string) (json.RawMessage, error) {
+func findInventoryPromptSnapshot(ctx context.Context, db *gorm.DB) (database.AnalysisPromptSnapshot, error) {
+	var snapshot database.AnalysisPromptSnapshot
+	err := db.WithContext(ctx).Where("analysis_type = ? AND task = ?", analysisprompt.RealEstate, analysisprompt.InventoryCatalog).Order("created_at ASC").First(&snapshot).Error
+	return snapshot, err
+}
+
+func qaTemplateDefinition(segmentVersionID identity.ID, mediaKind string, voiceEligible bool) (json.RawMessage, error) {
+	if voiceEligible {
+		environmentCapture := catalog.DefaultEnvironmentCapture()
+		document := catalog.TemplateDocument{
+			SchemaVersion: catalog.EnvironmentSchemaVersion, IsVideo: mediaKind == "VIDEO", SegmentVersionID: segmentVersionID.String(),
+			ParticipantRoles: []string{"OWNER"}, DefaultComparisonMode: catalog.ChecklistOnly,
+			CaptureLayout: catalog.EnvironmentsLayout, EnvironmentCapture: environmentCapture,
+			SuggestedEnvironmentTypes: []string{"KITCHEN", "LIVING_ROOM"},
+			AnalysisType:              analysisprompt.RealEstate,
+			Policy:                    catalog.Policy{GPSRequired: false, GeofenceMeters: catalog.DefaultGeofence, AllowGallery: true},
+		}
+		encoded, _, err := catalog.CanonicalJSON(document)
+		return encoded, err
+	}
 	requirements := []catalog.CaptureRequirement{{
 		Key: "fachada-geral", Section: "Área externa", Label: "Fachada do imóvel",
 		Instructions: "Registre a fachada inteira, com boa iluminação.", EvidenceKind: "PHOTO",
@@ -216,7 +315,7 @@ func qaTemplateDefinition(segmentVersionID identity.ID, mediaKind string) (json.
 		requirements = []catalog.CaptureRequirement{{Key: "video:main", Section: "main", Label: "Vídeo principal", Instructions: "Grave um vídeo contínuo do imóvel.", EvidenceKind: "VIDEO", MinimumCount: 1, MaximumCount: 1, Required: true, CaptureSourcePolicy: "CAMERA_ONLY"}}
 	}
 	document := catalog.TemplateDocument{
-		SchemaVersion: catalog.SchemaVersion, IsVideo: mediaKind == "VIDEO", SegmentVersionID: segmentVersionID.String(),
+		SchemaVersion: catalog.LegacySchemaVersion, IsVideo: mediaKind == "VIDEO", SegmentVersionID: segmentVersionID.String(),
 		ParticipantRoles: []string{"OWNER"}, DefaultComparisonMode: catalog.ChecklistOnly,
 		Requirements: requirements,
 		AnalysisType: analysisprompt.RealEstate,
@@ -226,12 +325,28 @@ func qaTemplateDefinition(segmentVersionID identity.ID, mediaKind string) (json.
 	return encoded, err
 }
 
+func templateSchemaVersion(voiceEligible bool) int {
+	if voiceEligible {
+		return catalog.EnvironmentSchemaVersion
+	}
+	return catalog.LegacySchemaVersion
+}
+
 type qaIDs struct {
 	participant, contact, verification, channelSelection identity.ID
 	publicationPolicy                                    identity.ID
 	segment, segmentVersion, template, templateVersion   identity.ID
 	asset, assetAttributes                               identity.ID
 	assetAssignment                                      identity.ID
+}
+
+type qaVoiceTemplateIDs struct{ template, templateVersion identity.ID }
+
+func voiceTemplateIDs(tenantID identity.ID) qaVoiceTemplateIDs {
+	id := func(name string) identity.ID {
+		return identity.NewDeterministicID("inspection/qa-voice-environment-seed/"+tenantID.String(), name)
+	}
+	return qaVoiceTemplateIDs{template: id("template"), templateVersion: id("template-version")}
 }
 
 func stableIDs(tenantID identity.ID) qaIDs {

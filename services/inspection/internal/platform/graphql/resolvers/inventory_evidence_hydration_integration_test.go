@@ -4,6 +4,7 @@ package resolvers
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -26,9 +27,49 @@ type countingPresigner struct {
 	calls atomic.Int32
 }
 
+type failingPresigner struct{ objectstore.Client }
+
+func (failingPresigner) PresignGet(context.Context, string, string, time.Duration) (string, error) {
+	return "", fmt.Errorf("preview signing unavailable")
+}
+
 func (p *countingPresigner) PresignGet(_ context.Context, bucket, key string, _ time.Duration) (string, error) {
 	p.calls.Add(1)
 	return "https://signed.example/" + bucket + "/" + key, nil
+}
+
+func TestIT176_inventoryPreviewFailurePreservesReviewAndProvenance(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	ctx := context.Background()
+	h, err := harness.NewFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	f, err := h.SeedVideoOriginFixture(ctx, harness.VideoOriginFixtureOptions{Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var photo database.MediaObject
+	if err := h.AdminDB.Where("tenant_id=? AND media_kind<>'VIDEO'", f.TenantID).Take(&photo).Error; err != nil {
+		t.Fatal(err)
+	}
+	displayKey := "tenant/" + f.TenantID.String() + "/display/it176.jpg"
+	if err := h.AdminDB.Create(&database.MediaDerivative{ID: identity.NewID(), TenantID: f.TenantID, MediaID: photo.ID, ObjectKey: displayKey, Kind: "DISPLAY", SHA256: strings.Repeat("a", 64), ContentType: "image/jpeg", Width: 1, Height: 1, SizeBytes: 1, CreatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	evidence := &graphql1.InventoryEvidence{ID: identity.NewID().String(), Kind: "PHOTO", MediaID: photo.ID.String(), Availability: "AVAILABLE"}
+	source := &graphql1.InventoryAttributeSource{ID: identity.NewID().String(), AttributeName: "quantity", SourceKind: "VOICE", NoteID: strPtr(identity.NewID().String())}
+	item := &graphql1.InventoryItem{Name: "Pratos", Decision: "PENDING", Evidence: []*graphql1.InventoryEvidence{evidence}, AttributeSources: []*graphql1.InventoryAttributeSource{source}}
+	draft := &graphql1.InventoryDraft{Environments: []*graphql1.InventoryEnvironment{{Items: []*graphql1.InventoryItem{item}}}}
+	if err := hydrateInventoryEvidence(ctx, h.DB, objectstore.Store{Bucket: h.Store.Bucket, Client: failingPresigner{Client: h.Store.Client}}, f.TenantID, f.OriginVersionID, draft); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.URL != nil || item.Name != "Pratos" || item.Decision != "PENDING" || len(item.AttributeSources) != 1 || item.AttributeSources[0] != source {
+		t.Fatalf("IT-176 preview failure changed readable review/provenance state: item=%+v evidence=%+v", item, evidence)
+	}
 }
 
 // TestInventoryEvidenceHydrationIsBatchedAndKeepsPreservedFrames covers the

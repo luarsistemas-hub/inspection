@@ -15,6 +15,7 @@ import (
 	inventorydiscard "inspection/services/inspection/internal/features/inventory/discard_draft"
 	inventorydraft "inspection/services/inspection/internal/features/inventory/draft"
 	inventorymerge "inspection/services/inspection/internal/features/inventory/merge_items"
+	inventoryregenerate "inspection/services/inspection/internal/features/inventory/regenerate_suggestions"
 	inventoryremoveenv "inspection/services/inspection/internal/features/inventory/remove_environment"
 	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
 	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
@@ -55,7 +56,7 @@ func (r *mutationResolver) decideInventoryItems(ctx context.Context, input graph
 	_, err = r.inventoryAuthorizeVersion(ctx, meta.TenantID, version, "mutate")
 	if err != nil {
 		if businessInventoryError(err) {
-			out.UserErrors = append(out.UserErrors, userErrorFrom(err))
+			out.UserErrors = append(out.UserErrors, userErrorFrom(inventorySafeUserError(err)))
 			return out, nil
 		}
 		return nil, err
@@ -98,16 +99,84 @@ func (r *mutationResolver) decideInventoryItems(ctx context.Context, input graph
 		return out, nil
 	}
 	result := raw.(inventorycore.DecideResult)
-	for _, row := range result.Items {
-		item, e := r.inventorySingleItem(ctx, meta.TenantID, row)
-		if e != nil {
-			return nil, e
-		}
-		out.Items = append(out.Items, item)
+	items, e := r.inventoryItems(ctx, meta.TenantID, result.Items)
+	if e != nil {
+		return nil, e
 	}
+	out.Items = append(out.Items, items...)
 	for _, id := range result.EmptyEnvironments {
 		out.EmptyEnvironments = append(out.EmptyEnvironments, id.String())
 	}
+	return out, nil
+}
+
+func inventorySafeUserError(err error) error {
+	code, field, message := apperror.Public(err)
+	if code == apperror.InvalidState && message == "DRAFT_DISCARDED" {
+		return apperror.New(apperror.InvalidState, field, "Este rascunho foi descartado e não pode mais ser alterado.")
+	}
+	return err
+}
+
+// regenerateInventorySuggestions refreshes the undecided suggestions of one
+// room with the selected current note revisions. The role and the asset scope
+// are checked before the draft is revealed, as for the other inventory mutations.
+func (r *mutationResolver) regenerateInventorySuggestions(ctx context.Context, input graphql1.RegenerateInventorySuggestionsInput) (*graphql1.InventoryRegenerationPayload, error) {
+	meta, err := inventoryMutationMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &graphql1.InventoryRegenerationPayload{UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}
+	version, e := inventoryID(input.OriginVersionID, "originVersionId")
+	if e != nil {
+		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
+		return out, nil
+	}
+	if _, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, version, "mutate"); e != nil {
+		if businessInventoryError(e) {
+			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
+			return out, nil
+		}
+		return nil, e
+	}
+	// Regenerating is new work on the inspection that produced the draft: it is
+	// refused for an archived inspection, project, asset or business unit, and
+	// needs a grant that reaches that inspection.
+	if draft, e := checkInventoryVersion(ctx, r.DB, meta.TenantID, version); e == nil && draft.SourceInspectionID != nil {
+		_, e = r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.Employee, auth.Manager, auth.TenantAdmin}, Resource: &requestctx.Scope{Kind: "INSPECTION", ID: *draft.SourceInspectionID}, Mutate: true, NewWork: true})
+		if e != nil {
+			if businessInventoryError(e) {
+				out.UserErrors = append(out.UserErrors, userErrorFrom(e))
+				return out, nil
+			}
+			return nil, e
+		}
+	}
+	environment, e := inventoryID(input.EnvironmentID, "environmentId")
+	if e != nil {
+		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
+		return out, nil
+	}
+	revisions := make([]identity.ID, 0, len(input.RevisionIds))
+	for _, raw := range input.RevisionIds {
+		id, e := inventoryID(raw, "revisionIds")
+		if e != nil {
+			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
+			return out, nil
+		}
+		revisions = append(revisions, id)
+	}
+	raw, e := r.Bus.Send(ctx, inventoryregenerate.Command{Input: inventorycore.RegenerateInput{TenantID: meta.TenantID, OriginVersionID: version, EnvironmentID: environment, ActorMembershipID: meta.Principal.MembershipID, ExpectedVersion: input.ExpectedVersion, RevisionIDs: revisions, ClientMutationID: input.ClientMutationID}})
+	if e != nil {
+		out.UserErrors, err = mutationInventoryError(e, input.ClientMutationID)
+		if err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+	result := raw.(inventorycore.RegenerateResult)
+	jobID, status := result.JobID.String(), result.Status
+	out.JobID, out.Status = &jobID, &status
 	return out, nil
 }
 
@@ -689,6 +758,15 @@ func (r *queryResolver) inventoryDraft(ctx context.Context, originVersionID stri
 	if e != nil {
 		return nil, e
 	}
+	var versionStatus string
+	if e = (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Table("origins.origin_versions").Select("status").Where("tenant_id=? AND id=?", meta.TenantID, id).Take(&versionStatus).Error
+	}); e != nil {
+		return nil, e
+	}
+	if versionStatus == "DISCARDED" {
+		return nil, apperror.New(apperror.InvalidState, "originVersionId", "Este rascunho foi descartado e não pode mais ser consultado.")
+	}
 	viewRaw, e := r.Bus.Ask(ctx, inventorydraft.Query{TenantID: meta.TenantID, VersionID: id})
 	if e != nil {
 		return nil, e
@@ -700,7 +778,10 @@ func (r *queryResolver) inventoryDraft(ctx context.Context, originVersionID stri
 	}); e != nil {
 		return nil, e
 	}
-	out := &graphql1.InventoryDraft{AssetID: asset.String(), Version: inventoryVersion(view.Version, origin.Version), Environments: []*graphql1.InventoryEnvironment{}, Progress: &graphql1.InventoryProgress{Decided: view.Decided, Pending: view.Pending}, ReadOnly: view.ReadOnly, Warnings: view.Warnings}
+	out := &graphql1.InventoryDraft{AssetID: asset.String(), Version: inventoryVersion(view.Version, origin.Version), Environments: []*graphql1.InventoryEnvironment{}, Progress: &graphql1.InventoryProgress{Decided: view.Decided, Pending: view.Pending}, ReadOnly: view.ReadOnly, Warnings: view.Warnings, VoiceSummary: &graphql1.InventoryVoiceSummary{}}
+	if view.Version.SourceInspectionID != nil {
+		out.SourceInspectionID = optionalID(view.Version.SourceInspectionID)
+	}
 	if view.NoticeCode != "" {
 		out.NoticeCode = &view.NoticeCode
 	}
@@ -710,6 +791,7 @@ func (r *queryResolver) inventoryDraft(ctx context.Context, originVersionID stri
 	if err := hydrateInventoryEvidence(ctx, r.DB, r.Store, meta.TenantID, id, out); err != nil {
 		return nil, err
 	}
+	hydrateInventoryVoiceProjection(ctx, r.DB, meta.TenantID, view.Version.SourceInspectionID, out)
 	return out, nil
 }
 

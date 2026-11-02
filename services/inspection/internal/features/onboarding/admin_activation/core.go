@@ -56,7 +56,7 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (session.Ses
 	}
 	token = strings.TrimSpace(token)
 	if len(token) != 43 {
-		return session.Session{}, apperror.New(apperror.SessionExpired, "token", "activation link is invalid or expired")
+		return session.Session{}, apperror.New(apperror.SessionExpired, "token", "O link de ativação é inválido ou expirou.")
 	}
 	locator, err := security.NewOpaqueToken()
 	if err != nil {
@@ -82,12 +82,12 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (session.Ses
 		var invitation database.OnboardingActivation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("invitation_token_digest = ?", tokenDigest[:]).First(&invitation).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.SessionExpired, "token", "activation link is invalid or expired")
+				return apperror.New(apperror.SessionExpired, "token", "O link de ativação é inválido ou expirou.")
 			}
 			return err
 		}
 		if invitation.Status != "INVITED" || invitation.InvitationExpiresAt == nil || !security.Active(now, *invitation.InvitationExpiresAt, invitation.InvitationClaimedAt) {
-			return apperror.New(apperror.SessionExpired, "token", "activation link is invalid or expired")
+			return apperror.New(apperror.SessionExpired, "token", "O link de ativação é inválido ou expirou.")
 		}
 		if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", invitation.TenantID.String()).Error; err != nil {
 			return err
@@ -96,7 +96,7 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (session.Ses
 			return err
 		}
 		if owner.OwnerSubject == "" || owner.State != coordinator.StateSubmitted {
-			return apperror.New(apperror.InvalidState, "activation", "owner activation is not ready")
+			return apperror.New(apperror.InvalidState, "activation", "A ativação ainda não está disponível.")
 		}
 		result := tx.Model(&owner).Updates(map[string]any{
 			"session_locator_digest": locatorDigest[:],
@@ -108,7 +108,7 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (session.Ses
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "activation", "activation link was already used")
+			return apperror.New(apperror.Conflict, "activation", "Este link de ativação já foi utilizado.")
 		}
 		result = tx.Model(&invitation).
 			Where("invitation_claimed_at IS NULL AND status = ?", "INVITED").
@@ -117,7 +117,7 @@ func (s Service) ClaimInvitation(ctx context.Context, token string) (session.Ses
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "activation", "activation link was already used")
+			return apperror.New(apperror.Conflict, "activation", "Este link de ativação já foi utilizado.")
 		}
 		return nil
 	})
@@ -151,7 +151,7 @@ func (s Service) RequestOTP(ctx context.Context, locator, csrf string) error {
 	if result, err := s.Limits.AllowSend(ctx, owner.Email+":activation"); err != nil {
 		return apperror.Wrap(apperror.DependencyUnavailable, err)
 	} else if !result.Allowed {
-		return apperror.New(apperror.RateLimited, "", "retry later")
+		return apperror.New(apperror.RateLimited, "", "Aguarde antes de tentar novamente.")
 	}
 	code, err := newCode()
 	if err != nil {
@@ -206,24 +206,24 @@ func (s Service) VerifyOTP(ctx context.Context, locator, csrf, code string) (Act
 		if limit, err := s.Limits.AllowAttempt(ctx, owner.Email+":activation"); err != nil {
 			return apperror.Wrap(apperror.DependencyUnavailable, err)
 		} else if !limit.Allowed {
-			return apperror.New(apperror.RateLimited, "", "retry later")
+			return apperror.New(apperror.RateLimited, "", "Aguarde antes de tentar novamente.")
 		}
 		var challenge database.OnboardingOTPChallenge
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_id=? AND purpose=? AND verified_at IS NULL", owner.ID, session.PurposeActivation).Order("created_at DESC").First(&challenge).Error; err != nil || !security.Active(now, challenge.ExpiresAt, nil) || challenge.Attempts >= 5 {
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 		}
 		if !s.acceptsOTPCode(code, challenge.CodeHMAC) {
 			if updateErr := tx.Model(&challenge).UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error; updateErr != nil {
 				return updateErr
 			}
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			return apperror.New(apperror.InvalidInput, "code", "O código informado é inválido.")
 		}
 		if err := tx.Model(&challenge).Updates(map[string]any{"verified_at": now}).Error; err != nil {
 			return err
 		}
 		var membership database.Membership
 		if err := tx.Where("tenant_id=? AND subject=? AND role=?", *owner.TenantID, owner.OwnerSubject, "TENANT_ADMIN").First(&membership).Error; err != nil {
-			return apperror.New(apperror.InvalidState, "activation", "owner membership is not ready")
+			return apperror.New(apperror.InvalidState, "activation", "O acesso ainda não está disponível.")
 		}
 		identityID := membership.IdentityID
 		row := database.OnboardingActivation{TenantID: *owner.TenantID, IdentityID: identityID, Purpose: session.PurposeActivation, Status: "VERIFIED", IdempotencyKey: owner.ID.String(), CreatedAt: now, UpdatedAt: now}
@@ -241,7 +241,7 @@ func (s Service) SetInitialPassword(ctx context.Context, activation Activation, 
 		return Activation{}, errors.New("admin activation: missing dependency")
 	}
 	if !s.passwordAllowed(password) {
-		return Activation{}, apperror.New(apperror.InvalidInput, "password", "password does not meet policy")
+		return Activation{}, apperror.New(apperror.InvalidInput, "password", "A senha não atende aos requisitos informados.")
 	}
 	var row database.OnboardingActivation
 	if err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -250,13 +250,13 @@ func (s Service) SetInitialPassword(ctx context.Context, activation Activation, 
 		}
 		return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND identity_id=? AND purpose=?", activation.TenantID, activation.IdentityID, session.PurposeActivation).First(&row).Error
 	}); err != nil {
-		return Activation{}, apperror.New(apperror.Unauthenticated, "activation", "activation verification required")
+		return Activation{}, apperror.New(apperror.Unauthenticated, "activation", "Confirme sua identidade para continuar.")
 	}
 	if row.Status == "ACTIVE" {
 		return Activation{TenantID: row.TenantID, IdentityID: row.IdentityID, Subject: activation.Subject, Purpose: row.Purpose, Status: row.Status, ActivatedAt: row.ActivatedAt}, nil
 	}
 	if row.Status != "VERIFIED" {
-		return Activation{}, apperror.New(apperror.Conflict, "activation", "activation is already in progress")
+		return Activation{}, apperror.New(apperror.Conflict, "activation", "A ativação já está em andamento.")
 	}
 	if err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", activation.TenantID.String()).Error; err != nil {
@@ -269,7 +269,7 @@ func (s Service) SetInitialPassword(ctx context.Context, activation Activation, 
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "activation", "activation is already in progress")
+			return apperror.New(apperror.Conflict, "activation", "A ativação já está em andamento.")
 		}
 		return nil
 	}); err != nil {
@@ -299,7 +299,7 @@ func (s Service) SetInitialPassword(ctx context.Context, activation Activation, 
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "activation", "activation is already in progress")
+			return apperror.New(apperror.Conflict, "activation", "A ativação já está em andamento.")
 		}
 		return tx.Model(&database.Membership{}).Where("tenant_id=? AND identity_id=? AND role=?", activation.TenantID, activation.IdentityID, "TENANT_ADMIN").Updates(map[string]any{"status": "ACTIVE", "updated_at": now}).Error
 	}); err != nil {
@@ -348,7 +348,7 @@ func (s Service) SetInitialPasswordForSession(ctx context.Context, locator, csrf
 		}
 		return tx.Where("tenant_id=? AND subject=? AND role=?", *owner.TenantID, owner.OwnerSubject, "TENANT_ADMIN").First(&membership).Error
 	}); err != nil {
-		return Activation{}, apperror.New(apperror.InvalidState, "activation", "owner membership is not ready")
+		return Activation{}, apperror.New(apperror.InvalidState, "activation", "O acesso ainda não está disponível.")
 	}
 	activation := Activation{TenantID: *owner.TenantID, IdentityID: membership.IdentityID, Subject: owner.OwnerSubject, Purpose: session.PurposeActivation}
 	return s.SetInitialPassword(ctx, activation, password)
@@ -367,13 +367,13 @@ func (s Service) validateSession(tx *gorm.DB, locator, csrf string, now time.Tim
 	}
 	var owner database.OnboardingSession
 	if err := tx.Where("session_locator_digest=?", hash(locator)).First(&owner).Error; err != nil || owner.TenantID == nil || owner.OwnerSubject == "" || !security.Active(now, owner.ExpiresAt, nil) {
-		return database.OnboardingSession{}, apperror.New(apperror.SessionExpired, "session", "verified onboarding session required")
+		return database.OnboardingSession{}, apperror.New(apperror.SessionExpired, "session", "Confirme seu e-mail para continuar.")
 	}
 	if err := validateCSRF(locator, csrf, owner.CSRFDigest, s.Pepper); err != nil {
 		return database.OnboardingSession{}, err
 	}
 	if requireVerified && !activationSessionState(owner.State) {
-		return database.OnboardingSession{}, apperror.New(apperror.SessionExpired, "session", "verified onboarding session required")
+		return database.OnboardingSession{}, apperror.New(apperror.SessionExpired, "session", "Confirme seu e-mail para continuar.")
 	}
 	return owner, nil
 }
@@ -395,7 +395,7 @@ func activationSessionState(state string) bool {
 func validateCSRF(locator, csrf string, digest []byte, pepper []byte) error {
 	proof, err := security.CSRFProof(security.HashToken(locator), csrf, pepper)
 	if err != nil || len(digest) != 32 || !security.Equal(proof, bytes32(digest)) {
-		return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+		return apperror.New(apperror.Forbidden, "csrf", "Não foi possível validar a solicitação. Atualize a página e tente novamente.")
 	}
 	return nil
 }
@@ -410,7 +410,7 @@ func setActivationDigest(tx *gorm.DB, digest [32]byte) error {
 }
 func requireActivationStatus(tx *gorm.DB, owner database.OnboardingSession, statuses ...string) error {
 	if owner.TenantID == nil {
-		return apperror.New(apperror.SessionExpired, "session", "admin activation session required")
+		return apperror.New(apperror.SessionExpired, "session", "Sua sessão de ativação expirou. Acesse novamente pelo link recebido.")
 	}
 	if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", owner.TenantID.String()).Error; err != nil {
 		return err
@@ -422,7 +422,7 @@ func requireActivationStatus(tx *gorm.DB, owner database.OnboardingSession, stat
 		return err
 	}
 	if count != 1 {
-		return apperror.New(apperror.SessionExpired, "session", "admin activation session required")
+		return apperror.New(apperror.SessionExpired, "session", "Sua sessão de ativação expirou. Acesse novamente pelo link recebido.")
 	}
 	return nil
 }

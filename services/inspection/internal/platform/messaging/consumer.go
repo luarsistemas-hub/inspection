@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -76,34 +77,50 @@ func (c RabbitConsumer) Run(ctx context.Context) error {
 			continue
 		}
 		if errors.Is(handleErr, ErrPermanent) || attempt+1 >= len(RetryDelays) {
+			dlqReason := "retry_exhausted"
+			if errors.Is(handleErr, ErrPermanent) {
+				dlqReason = "permanent_rejection"
+			}
 			if err := c.publishQueue(ctx, c.Contract.DLQName, delivery, attempt+1, "contract_or_exhausted"); err != nil {
-				c.observeDelivery(deliveryCtx, delivery, "dlq", "publish_failed", "contract_or_exhausted", attempt, started, err)
+				c.observeDelivery(deliveryCtx, delivery, "dlq", "publish_failed", dlqReason, attempt, started, err)
 				_ = delivery.Nack(false, true)
 				continue
 			}
-			c.observeDelivery(deliveryCtx, delivery, "dlq", "published", "contract_or_exhausted", attempt, started, handleErr)
+			c.observeDelivery(deliveryCtx, delivery, "dlq", "published", dlqReason, attempt, started, handleErr)
 			_ = delivery.Ack(false)
 			continue
 		}
-		if err := c.publishQueue(ctx, c.Contract.RetryNames[attempt], delivery, attempt+1, "retryable"); err != nil {
-			c.observeDelivery(deliveryCtx, delivery, "retry", "publish_failed", "retryable", attempt, started, err)
+		retryIndex := attempt
+		reason := "retryable"
+		if errors.Is(handleErr, ErrLeaseBusy) {
+			retryIndex = len(c.Contract.RetryNames) - 1
+			reason = "lease_busy"
+		}
+		if err := c.publishQueue(ctx, c.Contract.RetryNames[retryIndex], delivery, retryIndex+1, reason); err != nil {
+			c.observeDelivery(deliveryCtx, delivery, "retry", "publish_failed", reason, attempt, started, err)
 			_ = delivery.Nack(false, true)
 			continue
 		}
-		c.observeDelivery(deliveryCtx, delivery, "retry", "published", "retryable", attempt, started, handleErr)
+		c.observeDelivery(deliveryCtx, delivery, "retry", "published", reason, attempt, started, handleErr)
 		_ = delivery.Ack(false)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return nil
+	return errors.New("rabbit consumer: delivery stream closed unexpectedly")
 }
 
 func (c RabbitConsumer) observeDelivery(ctx context.Context, delivery amqp.Delivery, action, result, reason string, attempt int, started time.Time, err error) {
 	if c.Observer == nil {
 		return
 	}
-	c.Observer.AfterDelivery(ctx, observability.DeliveryObservation{ExecutionID: observability.CorrelationFromContext(ctx).ExecutionID, Queue: c.Contract.Name, CorrelationID: delivery.CorrelationId, Action: action, Result: result, Reason: reason, Attempt: attempt, Duration: time.Since(started), Err: err})
+	var event struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(delivery.Body, &event) != nil || len(event.Type) > 200 {
+		event.Type = ""
+	}
+	c.Observer.AfterDelivery(ctx, observability.DeliveryObservation{ExecutionID: observability.CorrelationFromContext(ctx).ExecutionID, Queue: c.Contract.Name, CorrelationID: delivery.CorrelationId, EventType: event.Type, Action: action, Result: result, Reason: reason, Attempt: attempt, Duration: time.Since(started), Err: err})
 }
 
 func (c RabbitConsumer) publishQueue(ctx context.Context, queue string, delivery amqp.Delivery, attempt int, reason string) error {

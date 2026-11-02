@@ -36,7 +36,7 @@ func (r refs) SegmentExists(v string) bool      { return v == r.segment }
 func (r refs) AnalysisTypeExists(v string) bool { return v == r.analysisType }
 
 func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, idempotencyKey string, payload []byte) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, Mutate: true}); err != nil {
 		return View{}, err
 	}
 	if key == "" || !catalog.ValidName(name) || idempotencyKey == "" {
@@ -102,7 +102,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 }
 
 func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, expectedVersion int64) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, Mutate: true}); err != nil {
 		return View{}, err
 	}
 	var out View

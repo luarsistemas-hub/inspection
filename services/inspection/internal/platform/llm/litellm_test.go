@@ -13,7 +13,10 @@ import (
 	"inspection/services/inspection/internal/platform/video"
 )
 
-func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
+// TestAIP_UT_011GatewayUsesAliasSchemaDigestAndAuthorizedImages covers UT-011
+// of autonomous-inspection-platform: logical model alias (never a provider
+// model), strict JSON schema, mandatory prompt digest and authorized images.
+func TestAIP_UT_011GatewayUsesAliasSchemaDigestAndAuthorizedImages(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("path=%s", r.URL.Path)
@@ -22,6 +25,14 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 			t.Fatalf("authorization=%q", got)
 		}
 		var body struct {
+			Model          string `json:"model"`
+			ResponseFormat struct {
+				Type       string `json:"type"`
+				JSONSchema struct {
+					Strict bool            `json:"strict"`
+					Schema json.RawMessage `json:"schema"`
+				} `json:"json_schema"`
+			} `json:"response_format"`
 			Messages []struct {
 				Role    string          `json:"role"`
 				Content json.RawMessage `json:"content"`
@@ -29,6 +40,9 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
+		}
+		if body.Model != "inspection-vision" || body.ResponseFormat.Type != "json_schema" || !body.ResponseFormat.JSONSchema.Strict || string(body.ResponseFormat.JSONSchema.Schema) != `{"type":"object"}` {
+			t.Fatalf("gateway did not send the logical alias and strict schema: %+v", body)
 		}
 		if len(body.Messages) != 2 || body.Messages[0].Role != "system" || body.Messages[1].Role != "user" {
 			t.Fatalf("messages=%s", body.Messages)
@@ -42,6 +56,14 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 	result, err := (HTTPGateway{BaseURL: server.URL, APIKey: "gateway-secret"}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", SystemPrompt: "system", UserPrompt: "context", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", PairID: "pair-1", Position: "CURRENT_1", Digest: "digest", DataURL: "data:image/png;base64,AAAA"}}})
 	if err != nil || result.Model != "provider/model" || result.InputTokens == nil || result.CachedInputTokens == nil || *result.CachedInputTokens != 2 || result.RequestBodyBytes <= 0 || result.HTTPStatus != http.StatusOK || !result.TransportDelivered {
 		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	// The prompt digest is mandatory: a request without it is rejected before
+	// any provider call so every persisted run stays reproducible.
+	missingDigest := validRequest()
+	missingDigest.PromptDigest = ""
+	var typed *Error
+	if _, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), missingDigest); !errors.As(err, &typed) || typed.Code != CodeInvalidInput {
+		t.Fatalf("request without prompt digest was not rejected: %v", err)
 	}
 }
 
@@ -118,7 +140,9 @@ func TestHTTPGatewayPreservesKnownZeroCachedTokens(t *testing.T) {
 	}
 }
 
-func TestHTTPGatewayRejectsMalformedProviderResponseAndUnauthorizedImage(t *testing.T) {
+// TestAIP_UT_012GatewayRejectsMalformedProviderResponseAndUnauthorizedImage
+// covers the malformed-output half of UT-012.
+func TestAIP_UT_012GatewayRejectsMalformedProviderResponseAndUnauthorizedImage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"choices":[]}`)) }))
 	defer server.Close()
 	result, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "alias", PromptDigest: "d", SystemPrompt: "s", UserPrompt: "u", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", Digest: "d1", DataURL: "data:image/png;base64,AAAA"}}})
@@ -224,7 +248,9 @@ func TestVideoScopeGatewayPreservesKnownFrameObservationsUT080(t *testing.T) {
 	}
 }
 
-func TestHTTPGatewayClassifiesProviderHTTPStatuses(t *testing.T) {
+// TestAIP_UT_012GatewayClassifiesProviderHTTPStatuses covers the safe provider
+// failure mapping half of UT-012.
+func TestAIP_UT_012GatewayClassifiesProviderHTTPStatuses(t *testing.T) {
 	for _, tc := range []struct {
 		status int
 		code   ErrorCode

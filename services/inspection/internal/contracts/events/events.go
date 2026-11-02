@@ -104,6 +104,43 @@ type CounterpartyRespondedPayload struct {
 	OriginVersionID          identity.ID `json:"originVersionId"`
 }
 
+// TranscriptionRequestedPayload identifies one immutable processing generation.
+type TranscriptionRequestedPayload struct {
+	NoteID     identity.ID `json:"noteId"`
+	JobID      identity.ID `json:"jobId"`
+	Generation int         `json:"generation"`
+}
+
+// TranscriptionCompletedPayload identifies the immutable revision produced by a job.
+type TranscriptionCompletedPayload struct {
+	NoteID     identity.ID  `json:"noteId"`
+	RevisionID *identity.ID `json:"revisionId,omitempty"`
+	Generation int          `json:"generation"`
+	NoSpeech   bool         `json:"noSpeech,omitempty"`
+}
+
+// TranscriptionFailedPayload carries only an allowlisted safe failure code.
+type TranscriptionFailedPayload struct {
+	NoteID     identity.ID `json:"noteId"`
+	Generation int         `json:"generation"`
+	SafeCode   string      `json:"safeCode"`
+}
+
+// ReportPublishedPayload identifies a report release; it never carries content.
+type ReportPublishedPayload struct {
+	PublicationID identity.ID `json:"publicationId"`
+	SnapshotID    identity.ID `json:"snapshotId"`
+	InspectionID  identity.ID `json:"inspectionId"`
+}
+
+// ReportPublicationInvalidatedPayload identifies a withdrawn release. The
+// invalidation reason stays in the audit trail and never travels in the event.
+type ReportPublicationInvalidatedPayload struct {
+	PublicationID identity.ID `json:"publicationId"`
+	SnapshotID    identity.ID `json:"snapshotId"`
+	InspectionID  identity.ID `json:"inspectionId"`
+}
+
 type Registry struct {
 	mu      sync.RWMutex
 	version map[string]int
@@ -197,6 +234,12 @@ func (r *Registry) Validate(data []byte) (RawEnvelope, error) {
 	if valid, ok := inventoryPayloadValidators[envelope.Type]; ok && !valid(envelope.Payload) {
 		return RawEnvelope{}, fmt.Errorf("%w: %s payload", ErrInvalidEnvelope, envelope.Type)
 	}
+	if valid, ok := reportPublicationPayloadValidators[envelope.Type]; ok && !valid(envelope.Payload) {
+		return RawEnvelope{}, fmt.Errorf("%w: %s payload", ErrInvalidEnvelope, envelope.Type)
+	}
+	if valid, ok := transcriptionPayloadValidators[envelope.Type]; ok && !valid(envelope.Payload) {
+		return RawEnvelope{}, fmt.Errorf("%w: %s payload", ErrInvalidEnvelope, envelope.Type)
+	}
 	return envelope, nil
 }
 
@@ -222,6 +265,33 @@ var inventoryPayloadValidators = map[string]func(json.RawMessage) bool{
 	"counterparty.responded.v1": func(raw json.RawMessage) bool {
 		var payload CounterpartyRespondedPayload
 		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.CounterpartyInvitationID, payload.OriginVersionID)
+	},
+}
+
+var reportPublicationPayloadValidators = map[string]func(json.RawMessage) bool{
+	"report.published.v1": func(raw json.RawMessage) bool {
+		var payload ReportPublishedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.PublicationID, payload.SnapshotID, payload.InspectionID)
+	},
+	"report.publication_invalidated.v1": func(raw json.RawMessage) bool {
+		var payload ReportPublicationInvalidatedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.PublicationID, payload.SnapshotID, payload.InspectionID)
+	},
+}
+
+var transcriptionPayloadValidators = map[string]func(json.RawMessage) bool{
+	"transcription.requested.v1": func(raw json.RawMessage) bool {
+		var payload TranscriptionRequestedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.NoteID, payload.JobID) && payload.Generation > 0
+	},
+	"transcription.completed.v1": func(raw json.RawMessage) bool {
+		var payload TranscriptionCompletedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.NoteID) && payload.Generation > 0 &&
+			((payload.NoSpeech && (payload.RevisionID == nil || *payload.RevisionID != (identity.ID{}))) || (!payload.NoSpeech && payload.RevisionID != nil && nonZeroIDs(*payload.RevisionID)))
+	},
+	"transcription.failed.v1": func(raw json.RawMessage) bool {
+		var payload TranscriptionFailedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.NoteID) && payload.Generation > 0 && validSafeCode(payload.SafeCode)
 	},
 }
 
@@ -252,6 +322,18 @@ func validDigest(value string) bool {
 	}
 	for _, char := range value {
 		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validSafeCode(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	for _, char := range value {
+		if !(char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_') {
 			return false
 		}
 	}
@@ -305,7 +387,8 @@ func DefaultRegistry() *Registry {
 		"capture.submitted.v1", "capture.video_submitted.v1", "capture.environment_removed.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1", "video_replacement.deadline_reached.v1",
 		"analysis.comparison_requested.v1", "analysis.video_comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
 		"inventory.job_requested.v1", "inventory.draft_ready.v1", "inventory.version_activated.v1", "counterparty.responded.v1",
-		"media.video_prepared.v1", "report.snapshot_created.v1", "report.ready.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
+		"transcription.requested.v1", "transcription.completed.v1", "transcription.failed.v1",
+		"media.video_prepared.v1", "report.snapshot_created.v1", "report.ready.v1", "report.published.v1", "report.publication_invalidated.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
 	} {
 		_ = r.Register(name, 1)
 	}

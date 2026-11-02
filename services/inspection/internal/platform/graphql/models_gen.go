@@ -10,12 +10,23 @@ import (
 )
 
 type AcceptProcessingInput struct {
-	DisclosureVersion string `json:"disclosureVersion"`
-	PhotoProcessing   bool   `json:"photoProcessing"`
-	VideoProcessing   *bool  `json:"videoProcessing,omitempty"`
-	AiAnalysis        bool   `json:"aiAnalysis"`
-	GpsUse            bool   `json:"gpsUse"`
-	ClientMutationID  string `json:"clientMutationId"`
+	DisclosureVersion   string  `json:"disclosureVersion"`
+	PhotoProcessing     bool    `json:"photoProcessing"`
+	VideoProcessing     *bool   `json:"videoProcessing,omitempty"`
+	VoiceProcessing     *bool   `json:"voiceProcessing,omitempty"`
+	VoiceConsentVersion *string `json:"voiceConsentVersion,omitempty"`
+	AiAnalysis          bool    `json:"aiAnalysis"`
+	GpsUse              bool    `json:"gpsUse"`
+	ClientMutationID    string  `json:"clientMutationId"`
+}
+
+type AccessResource struct {
+	Kind       string `json:"kind"`
+	ResourceID string `json:"resourceId"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Historical bool   `json:"historical"`
+	Grantable  bool   `json:"grantable"`
 }
 
 type ActivateBaselineVersionInput struct {
@@ -150,12 +161,108 @@ type AssetPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type AssignMembershipAccessInput struct {
+	MembershipID        string                  `json:"membershipId"`
+	Role                string                  `json:"role"`
+	ProductEntitlements []string                `json:"productEntitlements"`
+	Scopes              []*ScopeAssignmentInput `json:"scopes"`
+	ExpectedVersion     int                     `json:"expectedVersion"`
+	ClientMutationID    string                  `json:"clientMutationId"`
+}
+
 type AssignRoleScopesInput struct {
 	MembershipID     string                  `json:"membershipId"`
 	Role             string                  `json:"role"`
 	Scopes           []*ScopeAssignmentInput `json:"scopes"`
 	ExpectedVersion  *int                    `json:"expectedVersion,omitempty"`
 	ClientMutationID string                  `json:"clientMutationId"`
+}
+
+type AudioNote struct {
+	ID                  string               `json:"id"`
+	InspectionID        string               `json:"inspectionId"`
+	EnvironmentID       string               `json:"environmentId"`
+	EnvironmentName     *string              `json:"environmentName,omitempty"`
+	ResponsibilityID    string               `json:"responsibilityId"`
+	RequirementKey      string               `json:"requirementKey"`
+	TargetKind          string               `json:"targetKind"`
+	PhotoMediaID        *string              `json:"photoMediaId,omitempty"`
+	VideoAttemptID      *string              `json:"videoAttemptId,omitempty"`
+	SourceMediaID       *string              `json:"sourceMediaId,omitempty"`
+	StartMs             *int                 `json:"startMs,omitempty"`
+	EndMs               *int                 `json:"endMs,omitempty"`
+	DurationMs          int                  `json:"durationMs"`
+	Status              string               `json:"status"`
+	AnchorStatus        string               `json:"anchorStatus"`
+	Anchor              *AudioNoteAnchor     `json:"anchor"`
+	Highlighted         bool                 `json:"highlighted"`
+	HighlightSource     *string              `json:"highlightSource,omitempty"`
+	Version             int                  `json:"version"`
+	CurrentRevisionID   *string              `json:"currentRevisionId,omitempty"`
+	Revisions           []*AudioNoteRevision `json:"revisions"`
+	TextConfirmed       bool                 `json:"textConfirmed"`
+	NoSpeech            bool                 `json:"noSpeech"`
+	FailureCode         *string              `json:"failureCode,omitempty"`
+	AudioAvailability   string               `json:"audioAvailability"`
+	AudioDeletionStatus string               `json:"audioDeletionStatus"`
+	CreatedAt           string               `json:"createdAt"`
+	UpdatedAt           string               `json:"updatedAt"`
+}
+
+type AudioNoteAnchor struct {
+	Kind            string                  `json:"kind"`
+	Status          string                  `json:"status"`
+	MediaID         *string                 `json:"mediaId,omitempty"`
+	MediaStatus     string                  `json:"mediaStatus"`
+	Approximate     bool                    `json:"approximate"`
+	PreviewURL      *string                 `json:"previewUrl,omitempty"`
+	PlaybackURL     *string                 `json:"playbackUrl,omitempty"`
+	Frames          []*AudioNoteAnchorFrame `json:"frames"`
+	FramesTruncated bool                    `json:"framesTruncated"`
+	VisualCoverage  string                  `json:"visualCoverage"`
+}
+
+type AudioNoteAnchorFrame struct {
+	ID          string  `json:"id"`
+	TimestampMs int     `json:"timestampMs"`
+	URL         *string `json:"url,omitempty"`
+	Status      string  `json:"status"`
+}
+
+type AudioNoteConnection struct {
+	Nodes    []*AudioNote `json:"nodes"`
+	PageInfo *PageInfo    `json:"pageInfo"`
+}
+
+type AudioNotePayload struct {
+	Note             *AudioNote   `json:"note,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type AudioNoteRevision struct {
+	ID             string  `json:"id"`
+	RevisionNumber int     `json:"revisionNumber"`
+	Text           string  `json:"text"`
+	Kind           string  `json:"kind"`
+	AuthorID       *string `json:"authorId,omitempty"`
+	AuthorName     *string `json:"authorName,omitempty"`
+	CallID         *string `json:"callId,omitempty"`
+	CreatedAt      string  `json:"createdAt"`
+}
+
+type AudioNoteUploadIntent struct {
+	URL       string         `json:"url"`
+	Method    string         `json:"method"`
+	Headers   map[string]any `json:"headers"`
+	ExpiresAt string         `json:"expiresAt"`
+}
+
+type AudioNoteUploadPayload struct {
+	NoteID           *string                `json:"noteId,omitempty"`
+	Upload           *AudioNoteUploadIntent `json:"upload,omitempty"`
+	UserErrors       []*UserError           `json:"userErrors"`
+	ClientMutationID string                 `json:"clientMutationId"`
 }
 
 type AuditEvent struct {
@@ -343,6 +450,12 @@ type CloseOriginInvitationInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type CompleteAudioNoteUploadInput struct {
+	NoteID           string `json:"noteId"`
+	UploadProof      string `json:"uploadProof"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type CompleteInternalUserActivationInput struct {
 	Password         *string `json:"password,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
@@ -389,6 +502,22 @@ type ConfigureVideoPolicyInput struct {
 	SupersededBaselineRetentionDays *int   `json:"supersededBaselineRetentionDays,omitempty"`
 	ExpectedVersion                 int    `json:"expectedVersion"`
 	ClientMutationID                string `json:"clientMutationId"`
+}
+
+type ConfigureVoicePolicyInput struct {
+	Enabled                bool   `json:"enabled"`
+	TenantNoteLimit        int    `json:"tenantNoteLimit"`
+	TenantAudioLimitMs     int    `json:"tenantAudioLimitMs"`
+	InspectionNoteLimit    int    `json:"inspectionNoteLimit"`
+	InspectionAudioLimitMs int    `json:"inspectionAudioLimitMs"`
+	ExpectedVersion        int    `json:"expectedVersion"`
+	ClientMutationID       string `json:"clientMutationId"`
+}
+
+type ConfirmAudioNoteTextInput struct {
+	NoteID           string `json:"noteId"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type ContactInput struct {
@@ -487,6 +616,23 @@ type CounterpartyResponsePayload struct {
 	RespondedAt      *string      `json:"respondedAt,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type CreateAudioNoteUploadInput struct {
+	ClientNoteID      string  `json:"clientNoteId"`
+	RequirementKey    string  `json:"requirementKey"`
+	PhotoMediaID      *string `json:"photoMediaId,omitempty"`
+	VideoAttemptID    *string `json:"videoAttemptId,omitempty"`
+	StartMs           *int    `json:"startMs,omitempty"`
+	EndMs             *int    `json:"endMs,omitempty"`
+	TimeBasis         *string `json:"timeBasis,omitempty"`
+	ConsentVersion    string  `json:"consentVersion"`
+	DisclosureVersion string  `json:"disclosureVersion"`
+	ContentType       string  `json:"contentType"`
+	ContentSha256     string  `json:"contentSha256"`
+	SizeBytes         int     `json:"sizeBytes"`
+	DurationMs        int     `json:"durationMs"`
+	ClientMutationID  string  `json:"clientMutationId"`
 }
 
 type CreateBusinessUnitInput struct {
@@ -713,9 +859,41 @@ type DisableMembershipInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type DiscardAudioNoteInput struct {
+	NoteID           string `json:"noteId"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type DiscardBaselineDraftInput struct {
 	OriginVersionID  string `json:"originVersionId"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type EffectiveAccess struct {
+	MembershipID        string                          `json:"membershipId"`
+	Role                string                          `json:"role"`
+	Status              string                          `json:"status"`
+	Version             int                             `json:"version"`
+	ProductEntitlements []string                        `json:"productEntitlements"`
+	TenantWide          bool                            `json:"tenantWide"`
+	Grants              []*AccessResource               `json:"grants"`
+	Descendants         *EffectiveAccessEntryConnection `json:"descendants"`
+}
+
+type EffectiveAccessEntry struct {
+	Kind          string `json:"kind"`
+	ResourceID    string `json:"resourceId"`
+	Name          string `json:"name"`
+	Status        string `json:"status"`
+	Historical    bool   `json:"historical"`
+	Grantable     bool   `json:"grantable"`
+	InheritedFrom *Scope `json:"inheritedFrom"`
+}
+
+type EffectiveAccessEntryConnection struct {
+	Nodes    []*EffectiveAccessEntry `json:"nodes"`
+	PageInfo *PageInfo               `json:"pageInfo"`
 }
 
 type ExternalCapture struct {
@@ -774,6 +952,11 @@ type GlobalLLMCallUsage struct {
 	HTTPStatus          *int                `json:"httpStatus,omitempty"`
 	InputTokens         *int                `json:"inputTokens,omitempty"`
 	OutputTokens        *int                `json:"outputTokens,omitempty"`
+	AudioInputTokens    *int                `json:"audioInputTokens,omitempty"`
+	TextInputTokens     *int                `json:"textInputTokens,omitempty"`
+	ReasoningTokens     *int                `json:"reasoningTokens,omitempty"`
+	AudioDurationMs     *int                `json:"audioDurationMs,omitempty"`
+	AudioTokenUnit      *string             `json:"audioTokenUnit,omitempty"`
 	CachedInputTokens   *int                `json:"cachedInputTokens,omitempty"`
 	ImageCount          *int                `json:"imageCount,omitempty"`
 	RequestBodyBytes    *int                `json:"requestBodyBytes,omitempty"`
@@ -946,6 +1129,19 @@ type InvalidateReportPublicationInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type InventoryAttributeSource struct {
+	ID                string  `json:"id"`
+	AttributeName     string  `json:"attributeName"`
+	SourceKind        string  `json:"sourceKind"`
+	NoteID            *string `json:"noteId,omitempty"`
+	RevisionID        *string `json:"revisionId,omitempty"`
+	CurrentRevisionID *string `json:"currentRevisionId,omitempty"`
+	Stale             bool    `json:"stale"`
+	VisualEvidenceID  *string `json:"visualEvidenceId,omitempty"`
+	ReviewedBy        *string `json:"reviewedBy,omitempty"`
+	CreatedAt         string  `json:"createdAt"`
+}
+
 type InventoryCounts struct {
 	Included    int `json:"included"`
 	Rejected    int `json:"rejected"`
@@ -962,26 +1158,29 @@ type InventoryDecisionInput struct {
 }
 
 type InventoryDraft struct {
-	AssetID      string                  `json:"assetId"`
-	Version      *OriginVersion          `json:"version"`
-	Environments []*InventoryEnvironment `json:"environments"`
-	Progress     *InventoryProgress      `json:"progress"`
-	ReadOnly     bool                    `json:"readOnly"`
-	NoticeCode   *string                 `json:"noticeCode,omitempty"`
-	Warnings     []string                `json:"warnings"`
+	AssetID            string                  `json:"assetId"`
+	Version            *OriginVersion          `json:"version"`
+	SourceInspectionID *string                 `json:"sourceInspectionId,omitempty"`
+	Environments       []*InventoryEnvironment `json:"environments"`
+	Progress           *InventoryProgress      `json:"progress"`
+	ReadOnly           bool                    `json:"readOnly"`
+	NoticeCode         *string                 `json:"noticeCode,omitempty"`
+	Warnings           []string                `json:"warnings"`
+	VoiceSummary       *InventoryVoiceSummary  `json:"voiceSummary"`
 }
 
 type InventoryEnvironment struct {
-	ID                 string           `json:"id"`
-	IdentityID         string           `json:"identityId"`
-	TypeCode           string           `json:"typeCode"`
-	Name               string           `json:"name"`
-	Expected           bool             `json:"expected"`
-	AddedDuringCapture bool             `json:"addedDuringCapture"`
-	RequirementKey     *string          `json:"requirementKey,omitempty"`
-	Decision           string           `json:"decision"`
-	Position           int              `json:"position"`
-	Items              []*InventoryItem `json:"items"`
+	ID                 string                 `json:"id"`
+	IdentityID         string                 `json:"identityId"`
+	TypeCode           string                 `json:"typeCode"`
+	Name               string                 `json:"name"`
+	Expected           bool                   `json:"expected"`
+	AddedDuringCapture bool                   `json:"addedDuringCapture"`
+	RequirementKey     *string                `json:"requirementKey,omitempty"`
+	Decision           string                 `json:"decision"`
+	Position           int                    `json:"position"`
+	Items              []*InventoryItem       `json:"items"`
+	VoiceSummary       *InventoryVoiceSummary `json:"voiceSummary"`
 }
 
 type InventoryEnvironmentPayload struct {
@@ -1011,26 +1210,28 @@ type InventoryEvidenceInput struct {
 }
 
 type InventoryItem struct {
-	ID              string               `json:"id"`
-	IdentityID      string               `json:"identityId"`
-	EnvironmentID   string               `json:"environmentId"`
-	TypeCode        string               `json:"typeCode"`
-	Name            string               `json:"name"`
-	Material        *string              `json:"material,omitempty"`
-	Color           *string              `json:"color,omitempty"`
-	Quantity        *int                 `json:"quantity,omitempty"`
-	Condition       string               `json:"condition"`
-	Observation     string               `json:"observation"`
-	Limitation      *string              `json:"limitation,omitempty"`
-	ConfidenceBps   *int                 `json:"confidenceBps,omitempty"`
-	Origin          string               `json:"origin"`
-	Declared        bool                 `json:"declared"`
-	Decision        string               `json:"decision"`
-	RejectionReason *string              `json:"rejectionReason,omitempty"`
-	RejectionText   *string              `json:"rejectionText,omitempty"`
-	Suggested       map[string]any       `json:"suggested,omitempty"`
-	Version         int                  `json:"version"`
-	Evidence        []*InventoryEvidence `json:"evidence"`
+	ID               string                      `json:"id"`
+	IdentityID       string                      `json:"identityId"`
+	EnvironmentID    string                      `json:"environmentId"`
+	TypeCode         string                      `json:"typeCode"`
+	Name             string                      `json:"name"`
+	Material         *string                     `json:"material,omitempty"`
+	Color            *string                     `json:"color,omitempty"`
+	Quantity         *int                        `json:"quantity,omitempty"`
+	Condition        string                      `json:"condition"`
+	Observation      string                      `json:"observation"`
+	Limitation       *string                     `json:"limitation,omitempty"`
+	ConfidenceBps    *int                        `json:"confidenceBps,omitempty"`
+	Origin           string                      `json:"origin"`
+	Declared         bool                        `json:"declared"`
+	Decision         string                      `json:"decision"`
+	RejectionReason  *string                     `json:"rejectionReason,omitempty"`
+	RejectionText    *string                     `json:"rejectionText,omitempty"`
+	Suggested        map[string]any              `json:"suggested,omitempty"`
+	Version          int                         `json:"version"`
+	Evidence         []*InventoryEvidence        `json:"evidence"`
+	AttributeSources []*InventoryAttributeSource `json:"attributeSources"`
+	VoiceConflicts   []*InventoryVoiceConflict   `json:"voiceConflicts"`
 }
 
 type InventoryItemPatchInput struct {
@@ -1064,6 +1265,13 @@ type InventoryProgress struct {
 	Pending int `json:"pending"`
 }
 
+type InventoryRegenerationPayload struct {
+	JobID            *string      `json:"jobId,omitempty"`
+	Status           *string      `json:"status,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type InventorySplitPartInput struct {
 	Name        string   `json:"name"`
 	TypeCode    string   `json:"typeCode"`
@@ -1091,6 +1299,19 @@ type InventoryTrailEntry struct {
 	OccurredAt        string         `json:"occurredAt"`
 }
 
+type InventoryVoiceConflict struct {
+	AttributeName string  `json:"attributeName"`
+	VisualValue   string  `json:"visualValue"`
+	VoiceValue    *string `json:"voiceValue,omitempty"`
+}
+
+type InventoryVoiceSummary struct {
+	PendingVoiceItems int `json:"pendingVoiceItems"`
+	ConflictItems     int `json:"conflictItems"`
+	StaleSuggestions  int `json:"staleSuggestions"`
+	NotesWithoutItem  int `json:"notesWithoutItem"`
+}
+
 type InvitationOtpPayload struct {
 	Status           string       `json:"status"`
 	UserErrors       []*UserError `json:"userErrors"`
@@ -1103,12 +1324,21 @@ type InvitationPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type InviteCustomerUserInput struct {
+	Name                string                  `json:"name"`
+	Email               string                  `json:"email"`
+	Scopes              []*ScopeAssignmentInput `json:"scopes"`
+	ProductEntitlements []string                `json:"productEntitlements,omitempty"`
+	ClientMutationID    string                  `json:"clientMutationId"`
+}
+
 type InviteInternalUserInput struct {
-	Name             string                  `json:"name"`
-	Email            string                  `json:"email"`
-	Role             string                  `json:"role"`
-	Scopes           []*ScopeAssignmentInput `json:"scopes"`
-	ClientMutationID string                  `json:"clientMutationId"`
+	Name                string                  `json:"name"`
+	Email               string                  `json:"email"`
+	Role                string                  `json:"role"`
+	Scopes              []*ScopeAssignmentInput `json:"scopes"`
+	ProductEntitlements []string                `json:"productEntitlements,omitempty"`
+	ClientMutationID    string                  `json:"clientMutationId"`
 }
 
 type InviteOriginCaptureInput struct {
@@ -1143,6 +1373,11 @@ type LLMCallUsage struct {
 	HTTPStatus          *int                `json:"httpStatus,omitempty"`
 	InputTokens         *int                `json:"inputTokens,omitempty"`
 	OutputTokens        *int                `json:"outputTokens,omitempty"`
+	AudioInputTokens    *int                `json:"audioInputTokens,omitempty"`
+	TextInputTokens     *int                `json:"textInputTokens,omitempty"`
+	ReasoningTokens     *int                `json:"reasoningTokens,omitempty"`
+	AudioDurationMs     *int                `json:"audioDurationMs,omitempty"`
+	AudioTokenUnit      *string             `json:"audioTokenUnit,omitempty"`
 	CachedInputTokens   *int                `json:"cachedInputTokens,omitempty"`
 	ImageCount          *int                `json:"imageCount,omitempty"`
 	RequestBodyBytes    *int                `json:"requestBodyBytes,omitempty"`
@@ -1186,6 +1421,7 @@ type LLMUsageFilter struct {
 	Provider          *string            `json:"provider,omitempty"`
 	Model             *string            `json:"model,omitempty"`
 	ModelAlias        *string            `json:"modelAlias,omitempty"`
+	ComparisonMode    *string            `json:"comparisonMode,omitempty"`
 	Mode              *LLMExecutionMode  `json:"mode,omitempty"`
 	TechnicalOutcome  *string            `json:"technicalOutcome,omitempty"`
 	State             *LLMCallState      `json:"state,omitempty"`
@@ -1298,15 +1534,16 @@ type MediaUploadPayload struct {
 }
 
 type Membership struct {
-	ID               string   `json:"id"`
-	TenantID         string   `json:"tenantId"`
-	Name             string   `json:"name"`
-	Email            string   `json:"email"`
-	Role             string   `json:"role"`
-	Status           string   `json:"status"`
-	InvitationStatus string   `json:"invitationStatus"`
-	Version          int      `json:"version"`
-	Scopes           []*Scope `json:"scopes"`
+	ID                  string   `json:"id"`
+	TenantID            string   `json:"tenantId"`
+	Name                string   `json:"name"`
+	Email               string   `json:"email"`
+	Role                string   `json:"role"`
+	Status              string   `json:"status"`
+	InvitationStatus    string   `json:"invitationStatus"`
+	Version             int      `json:"version"`
+	ProductEntitlements []string `json:"productEntitlements"`
+	Scopes              []*Scope `json:"scopes"`
 }
 
 type MembershipConnection struct {
@@ -1890,6 +2127,14 @@ type RecordDeletionRequestInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
+type RegenerateInventorySuggestionsInput struct {
+	OriginVersionID  string   `json:"originVersionId"`
+	EnvironmentID    string   `json:"environmentId"`
+	ExpectedVersion  int      `json:"expectedVersion"`
+	RevisionIds      []string `json:"revisionIds"`
+	ClientMutationID string   `json:"clientMutationId"`
+}
+
 type RegisterAssetInput struct {
 	Asset            *AssetInput `json:"asset"`
 	ClientMutationID string      `json:"clientMutationId"`
@@ -1929,6 +2174,7 @@ type Report struct {
 	Findings       []*ReportFinding          `json:"findings"`
 	Timeline       []*ReportTimelineEntry    `json:"timeline"`
 	PDFStatus      string                    `json:"pdfStatus"`
+	Publication    *ReportPublication        `json:"publication,omitempty"`
 }
 
 type ReportAssetContext struct {
@@ -2042,15 +2288,16 @@ type ReportRequirement struct {
 }
 
 type ReportSummary struct {
-	ID               string `json:"id"`
-	InspectionID     string `json:"inspectionId"`
-	AssetName        string `json:"assetName"`
-	AssetAddress     string `json:"assetAddress"`
-	AssetExternalKey string `json:"assetExternalKey"`
-	ParticipantName  string `json:"participantName"`
-	GeneratedAt      string `json:"generatedAt"`
-	Classification   string `json:"classification"`
-	Version          int    `json:"version"`
+	ID               string             `json:"id"`
+	InspectionID     string             `json:"inspectionId"`
+	AssetName        string             `json:"assetName"`
+	AssetAddress     string             `json:"assetAddress"`
+	AssetExternalKey string             `json:"assetExternalKey"`
+	ParticipantName  string             `json:"participantName"`
+	GeneratedAt      string             `json:"generatedAt"`
+	Classification   string             `json:"classification"`
+	Version          int                `json:"version"`
+	Publication      *ReportPublication `json:"publication,omitempty"`
 }
 
 type ReportTemplateContext struct {
@@ -2196,6 +2443,12 @@ type RetentionPolicyPayload struct {
 	ClientMutationID string           `json:"clientMutationId"`
 }
 
+type RetryAudioNoteInput struct {
+	NoteID           string `json:"noteId"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type RetryInventoryDraftInput struct {
 	OriginVersionID  string `json:"originVersionId"`
 	ClientMutationID string `json:"clientMutationId"`
@@ -2205,6 +2458,14 @@ type RetryVideoPreparationInput struct {
 	MediaID                    string `json:"mediaId"`
 	ExpectedPreparationVersion int    `json:"expectedPreparationVersion"`
 	ClientMutationID           string `json:"clientMutationId"`
+}
+
+type ReviseAudioNoteInput struct {
+	NoteID           string                 `json:"noteId"`
+	Text             string                 `json:"text"`
+	RevisionKind     *AudioNoteRevisionKind `json:"revisionKind,omitempty"`
+	ExpectedVersion  int                    `json:"expectedVersion"`
+	ClientMutationID string                 `json:"clientMutationId"`
 }
 
 type RevokeInvitationInput struct {
@@ -2264,6 +2525,11 @@ type Scope struct {
 type ScopeAssignmentInput struct {
 	Kind       string `json:"kind"`
 	ResourceID string `json:"resourceId"`
+}
+
+type ScopePreview struct {
+	Target      *AccessResource                 `json:"target"`
+	Descendants *EffectiveAccessEntryConnection `json:"descendants"`
 }
 
 type SegmentDefinition struct {
@@ -2330,6 +2596,13 @@ type SensitiveMediaReviewConnection struct {
 
 type SetAdminInitialPasswordInput struct {
 	Password         string `json:"password"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type SetAudioNoteHighlightInput struct {
+	NoteID           string `json:"noteId"`
+	Highlighted      bool   `json:"highlighted"`
+	ExpectedVersion  int    `json:"expectedVersion"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
@@ -2777,6 +3050,21 @@ type VideoUploadStatus struct {
 	MissingParts   []int                `json:"missingParts"`
 }
 
+type VoicePolicy struct {
+	Enabled                bool `json:"enabled"`
+	TenantNoteLimit        *int `json:"tenantNoteLimit,omitempty"`
+	TenantAudioLimitMs     *int `json:"tenantAudioLimitMs,omitempty"`
+	InspectionNoteLimit    *int `json:"inspectionNoteLimit,omitempty"`
+	InspectionAudioLimitMs *int `json:"inspectionAudioLimitMs,omitempty"`
+	Version                int  `json:"version"`
+}
+
+type VoicePolicyPayload struct {
+	Policy           *VoicePolicy `json:"policy,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type AnalysisPromptTask string
 
 const (
@@ -2882,6 +3170,61 @@ func (e *AnalysisType) UnmarshalJSON(b []byte) error {
 }
 
 func (e AnalysisType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type AudioNoteRevisionKind string
+
+const (
+	AudioNoteRevisionKindHumanEdit              AudioNoteRevisionKind = "HUMAN_EDIT"
+	AudioNoteRevisionKindParticipantDeclaration AudioNoteRevisionKind = "PARTICIPANT_DECLARATION"
+)
+
+var AllAudioNoteRevisionKind = []AudioNoteRevisionKind{
+	AudioNoteRevisionKindHumanEdit,
+	AudioNoteRevisionKindParticipantDeclaration,
+}
+
+func (e AudioNoteRevisionKind) IsValid() bool {
+	switch e {
+	case AudioNoteRevisionKindHumanEdit, AudioNoteRevisionKindParticipantDeclaration:
+		return true
+	}
+	return false
+}
+
+func (e AudioNoteRevisionKind) String() string {
+	return string(e)
+}
+
+func (e *AudioNoteRevisionKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AudioNoteRevisionKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AudioNoteRevisionKind", str)
+	}
+	return nil
+}
+
+func (e AudioNoteRevisionKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AudioNoteRevisionKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AudioNoteRevisionKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

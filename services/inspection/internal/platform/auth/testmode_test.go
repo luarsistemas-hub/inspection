@@ -24,6 +24,9 @@ func TestTestMetadataFromHeaders(t *testing.T) {
 	if len(metadata.Principal.Roles) != 2 || metadata.Principal.Roles[1] != "VIEWER" {
 		t.Fatalf("unexpected roles: %#v", metadata.Principal.Roles)
 	}
+	if !metadata.Principal.ProductEntitled(AdminProduct) || !metadata.Principal.ProductEntitled(DashboardProduct) {
+		t.Fatalf("unexpected test product entitlements: %#v", metadata.Principal.ProductEntitlements)
+	}
 }
 
 func TestTestMetadataFromHeadersRejectsMissingRole(t *testing.T) {

@@ -50,7 +50,7 @@ func TestVV_IT_018PolicyChangeAfterFreezeKeepsC1Expiry(t *testing.T) {
 	if err := configurevideopolicy.Setup(configurevideopolicy.Dependencies{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}, Within: h.WithinTenant}); err != nil {
 		t.Fatal(err)
 	}
-	admin := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}})
+	admin := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	var policy database.VideoPolicy
 	_ = h.AdminDB.Where("tenant_id=?", fixture.TenantID).Take(&policy).Error
 	expected := policy.Version

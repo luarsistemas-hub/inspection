@@ -17,23 +17,34 @@ import (
 	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
 	generatesnapshot "inspection/services/inspection/internal/features/reports/generate_snapshot"
+	publicationcore "inspection/services/inspection/internal/features/reports/publication/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
+// Dependencies are the external adapters of the handler. Production wires
+// CreateSnapshotInTx, which finalizes the report inside the consumer's own
+// transaction; CreateSnapshot opens a separate transaction and is only suitable
+// for fakes and tests that do not publish automatically.
 type Dependencies struct {
-	Notifications  core.NotificationService
-	CreateSnapshot func(context.Context, generatesnapshot.Input) (generatesnapshot.Result, error)
-	Now            func() time.Time
+	Notifications      core.NotificationService
+	CreateSnapshot     func(context.Context, generatesnapshot.Input) (generatesnapshot.Result, error)
+	CreateSnapshotInTx func(context.Context, *gorm.DB, generatesnapshot.Input) (generatesnapshot.Result, error)
+	Now                func() time.Time
 }
 
 type requirementAnalysis struct {
 	mode, status     string
 	noRelevantChange *bool
 }
+
+// ErrAutomaticPublicationNeedsTransaction reports a handler wired with only the
+// separate-transaction snapshot adapter while the tenant policy is AUTOMATIC.
+var ErrAutomaticPublicationNeedsTransaction = errors.New("automatic publication requires the transactional snapshot adapter")
 
 // ErrClassifiedPrerequisitePending makes the inbox retry a premature event.
 var ErrClassifiedPrerequisitePending = errors.New("classified report prerequisites are pending")
@@ -44,6 +55,13 @@ func UpsertTriageReviewCase(ctx context.Context, tx *gorm.DB, tenantID, inspecti
 		return fmt.Errorf("triage projection: missing database transaction")
 	}
 	tx = tx.WithContext(ctx)
+	var inspection database.Inspection
+	if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Select("status").Where("tenant_id=? AND id=?", tenantID, inspectionID).First(&inspection).Error; err != nil {
+		return err
+	}
+	if inspection.Status == "CANCELED" || inspection.Status == "INVALIDATED" {
+		return nil
+	}
 	var triage database.TriageCase
 	err := tx.Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).First(&triage).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
@@ -73,7 +91,7 @@ func UpsertTriageReviewCase(ctx context.Context, tx *gorm.DB, tenantID, inspecti
 
 // Setup validates the external adapters and creates the classified-event handler.
 func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) error, error) {
-	if deps.Notifications == nil || deps.CreateSnapshot == nil {
+	if deps.Notifications == nil || (deps.CreateSnapshot == nil && deps.CreateSnapshotInTx == nil) {
 		return nil, fmt.Errorf("reports/handle_classified: missing notification or snapshot adapter")
 	}
 	if deps.Now == nil {
@@ -86,7 +104,11 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return messaging.ErrPermanent
 		}
 		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
+		// FOR UPDATE, not SHARE: the handler later writes under this lock (and the
+		// snapshot publishes through the same transaction), so a shared lock would
+		// let two concurrent deliveries of one event deadlock on the upgrade. It is
+		// the same lock handle_state_changed takes, keeping one lock order.
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
 			return err
 		}
 		var class database.ClassificationRun
@@ -102,21 +124,23 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		}
 		var previous database.ClassificationRun
 		previousClassification := ""
-		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").Offset(1).First(&previous).Error; err == nil {
+		if err := tx.Where("tenant_id=? AND inspection_id=? AND (created_at < ? OR (created_at = ? AND id < ?))", envelope.TenantID, payload.InspectionID, class.CreatedAt, class.CreatedAt, class.ID).Order("created_at DESC, id DESC").First(&previous).Error; err == nil {
 			previousClassification = previous.Classification
 		} else if err != gorm.ErrRecordNotFound {
 			return err
 		}
-		var configuredRecipients []database.NotificationRecipient
-		if err := tx.Where("tenant_id=? AND verified=true AND selected=true", envelope.TenantID).Order("channel ASC, destination ASC").Find(&configuredRecipients).Error; err != nil {
-			return err
-		}
-		recipients := make([]requestdelivery.Recipient, 0, len(configuredRecipients))
-		for _, recipient := range configuredRecipients {
-			recipients = append(recipients, requestdelivery.Recipient{ID: recipient.IdentityID.String(), Channel: recipient.Channel, Destination: recipient.Destination, Internal: true, Verified: recipient.Verified, Selected: recipient.Selected})
-		}
-		if err := requestdelivery.Request(ctx, tx, deps.Notifications, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients, CorrelationID: envelope.CorrelationID}); err != nil {
-			return err
+		if previousClassification != "CRITICAL" && class.Classification == "CRITICAL" && inspection.Status != "CANCELED" && inspection.Status != "INVALIDATED" {
+			configuredRecipients, err := loadCriticalRecipients(ctx, tx, envelope.TenantID, inspection)
+			if err != nil {
+				return err
+			}
+			recipients := make([]requestdelivery.Recipient, 0, len(configuredRecipients))
+			for _, recipient := range configuredRecipients {
+				recipients = append(recipients, requestdelivery.Recipient{ID: recipient.RecipientMembershipID.String(), ChannelID: recipient.ID.String(), Channel: recipient.Channel, Destination: recipient.Destination, Internal: true, Verified: recipient.VerifiedAt != nil, Selected: recipient.Selected})
+			}
+			if err := requestdelivery.Request(ctx, tx, deps.Notifications, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients}); err != nil {
+				return err
+			}
 		}
 		var reference database.ReferenceSnapshot
 		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).First(&reference).Error; err != nil {
@@ -286,7 +310,28 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		evidence = append(promotedEvidence, evidence...)
-		result, err := deps.CreateSnapshot(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence, Inventory: inventorySection})
+		policy, err := effectivePublicationPolicy(ctx, tx, envelope.TenantID)
+		if err != nil {
+			return err
+		}
+		// A canceled or invalidated inspection never releases a report to
+		// customers on its own, whatever the tenant policy says.
+		publicationMode := policy.Mode
+		if inspection.Status == "CANCELED" || inspection.Status == "INVALIDATED" {
+			publicationMode = ""
+		}
+		// Releasing in a separate transaction would take the inspection locks in the
+		// opposite order of this handler, so AUTOMATIC needs the transactional adapter.
+		if publicationMode == publicationcore.Automatic && deps.CreateSnapshotInTx == nil {
+			return ErrAutomaticPublicationNeedsTransaction
+		}
+		snapshotInput := generatesnapshot.Input{PublicationMode: publicationMode, PublicationPolicyVersion: policy.Version, TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence, Inventory: inventorySection}
+		var result generatesnapshot.Result
+		if deps.CreateSnapshotInTx != nil {
+			result, err = deps.CreateSnapshotInTx(ctx, tx, snapshotInput)
+		} else {
+			result, err = deps.CreateSnapshot(ctx, snapshotInput)
+		}
 		if errors.Is(err, generatesnapshot.ErrFrameIntegrity) {
 			return messaging.ErrPermanent
 		}
@@ -301,6 +346,56 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "report.snapshot_created.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"snapshotId": result.SnapshotID, "inspectionId": payload.InspectionID, "version": result.Version}})
 
 	}, nil
+}
+
+// effectivePublicationPolicy returns the tenant policy in force when the
+// report becomes final; a tenant without a stored policy is MANUAL, version 0.
+func effectivePublicationPolicy(ctx context.Context, tx *gorm.DB, tenantID identity.ID) (publicationcore.Policy, error) {
+	var row database.PublicationPolicy
+	err := tx.WithContext(ctx).Where("tenant_id=?", tenantID).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return publicationcore.EffectivePolicy(nil), nil
+	}
+	if err != nil {
+		return publicationcore.Policy{}, err
+	}
+	return publicationcore.EffectivePolicy(&publicationcore.Policy{Mode: row.Mode, Version: row.Version}), nil
+}
+
+// criticalRecipient is a verified dashboard membership destination eligible
+// for internal alerts about one inspection.
+type criticalRecipient struct {
+	database.RecipientChannel
+}
+
+// loadCriticalRecipients uses RecipientChannel, the current membership-owned
+// preference source. notifications.recipients is a legacy table and is not
+// used for alert delivery.
+func loadCriticalRecipients(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection) ([]criticalRecipient, error) {
+	var recipients []criticalRecipient
+	err := tx.WithContext(ctx).Table("notifications.recipient_channels AS rc").
+		Select("rc.*").
+		Joins("JOIN access.memberships AS m ON m.tenant_id=rc.tenant_id AND m.id=rc.recipient_membership_id").
+		Where(`EXISTS (SELECT 1 FROM access.product_entitlements AS pe
+			WHERE pe.tenant_id=m.tenant_id AND pe.membership_id=m.id AND pe.product='DASHBOARD')`).
+		Where("rc.tenant_id=? AND rc.selected=true AND rc.verified_at IS NOT NULL", tenantID).
+		Where("m.status='ACTIVE' AND m.role <> 'CUSTOMER_VIEWER'").
+		Where(`NOT EXISTS (SELECT 1 FROM tenancy.business_units bu WHERE bu.tenant_id=? AND bu.id=? AND bu.status='ARCHIVED')`, tenantID, inspection.BusinessUnitID).
+		Where(`NOT EXISTS (SELECT 1 FROM assets.assets a WHERE a.tenant_id=? AND a.id=? AND a.status='ARCHIVED')`, tenantID, inspection.AssetID).
+		Where(`NOT EXISTS (SELECT 1 FROM inspections.inspections i WHERE i.tenant_id=? AND i.id=? AND i.status='ARCHIVED')`, tenantID, inspection.ID).
+		Where(`NOT EXISTS (SELECT 1 FROM projects.projects p WHERE p.tenant_id=? AND p.id=? AND p.status='ARCHIVED')`, tenantID, inspection.ProjectID).
+		Where(`(m.role='TENANT_ADMIN' OR EXISTS (
+			SELECT 1 FROM access.resource_scopes AS s
+			WHERE s.tenant_id=m.tenant_id AND s.membership_id=m.id AND (
+				(s.kind='BUSINESS_UNIT' AND s.resource_id=?) OR
+				(s.kind='ASSET' AND s.resource_id=?) OR
+				(s.kind='INSPECTION' AND s.resource_id=?) OR
+				(s.kind='PROJECT' AND s.resource_id=?)
+			)
+		))`, inspection.BusinessUnitID, inspection.AssetID, inspection.ID, inspection.ProjectID).
+		Order("rc.channel ASC, rc.destination ASC, rc.recipient_membership_id ASC").
+		Find(&recipients).Error
+	return recipients, err
 }
 
 func mergeRequirementAnalysis(current, next requirementAnalysis) requirementAnalysis {

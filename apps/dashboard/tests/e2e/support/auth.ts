@@ -31,7 +31,7 @@ export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<v
   }
   await expect(navigation).toBeVisible({ timeout: 15_000 });
   if (!page.url().endsWith(returnTo)) await page.goto(returnTo);
-  await expect(page.getByRole("heading", { name: /Vistorias|Projetos|Triagem|Portfólio|Relatórios|Laudos|Notificações|Agenda de vistorias/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: /Vistorias|Projetos|Triagem|Portfólio|Relatórios|Laudos|Notificações|Agenda de vistorias|Inventários|Revisar inventário|Inventário pronto|Preparando inventário|Não foi possível preparar o inventário/ }).first()).toBeVisible({ timeout: 15_000 });
 }
 
 /** Authenticates deterministic GraphQL tests without depending on Keycloak. */
@@ -41,14 +41,14 @@ export async function loginAsMockAdmin(page: Page, returnTo: string): Promise<vo
   await page.addInitScript((options) => sessionStorage.setItem("inspection.dashboard.pkce", JSON.stringify({ verifier: "dashboard-e2e-verifier", state: options.state, returnTo: options.path })), { state, path: returnTo });
   await page.goto(`/auth/callback?code=dashboard-e2e-code&state=${state}`);
   await expect(page.getByRole("navigation", { name: "Painel" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Vistorias|Projetos|Triagem|Portfólio|Relatórios|Laudos|Notificações|Agenda de vistorias/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Vistorias|Projetos|Triagem|Portfólio|Relatórios|Laudos|Notificações|Agenda de vistorias|Inventários/ })).toBeVisible();
 }
 
 export async function openDashboardRoute(page: Page, label: string): Promise<void> {
   const navigation = page.getByRole("navigation", { name: "Painel" });
-  const link = navigation.getByRole("link", { name: label, exact: true });
-  if (await link.isVisible()) {
-    await link.click();
+  const links = navigation.getByRole("link", { name: label, exact: true }).filter({ visible: true });
+  if (await links.count() > 0) {
+    await links.first().click();
     return;
   }
   await navigation.getByRole("button", { name: /^Mais destinos/ }).click();

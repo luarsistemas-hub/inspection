@@ -1,0 +1,38 @@
+{
+  "persistent": false,
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": {
+          "expression": "$.model",
+          "matches": "gemini-(2\\.5|3\\.5|2\\.0)-flash-lite"
+        }
+      },
+      {
+        "matchesJsonPath": {
+          "expression": "$.metadata.comparison_mode",
+          "equalTo": "TRANSCRIPTION"
+        }
+      },
+      {
+        "matchesJsonPath": "$.messages[1].content[?(@.type == 'input_audio')]"
+      }
+    ]
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "application/json",
+      "Retry-After": "1"
+    },
+    "jsonBody": {
+      "error": {
+        "message": "falha transitória de QA",
+        "type": "service_unavailable"
+      }
+    }
+  }
+}

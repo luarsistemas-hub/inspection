@@ -75,6 +75,8 @@ func TestValidateOwnerNormalizesEmailAndRejectsMalformedInput(t *testing.T) {
 	}
 	if _, err := ValidateOwner("Ana", "bad"); err == nil {
 		t.Fatal("malformed email accepted")
+	} else if code, field, message := apperror.Public(err); code != apperror.InvalidInput || field != "email" || message != "Informe um e-mail válido." {
+		t.Fatalf("malformed email public error = %s field=%q message=%q", code, field, message)
 	}
 }
 

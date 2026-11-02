@@ -29,6 +29,8 @@ type Summary struct {
 	TenantName, TenantStatus, Role, MembershipStatus string
 	Name, Email, InvitationStatus                    string
 	MembershipVersion                                int64
+	// ProductEntitlements are the products currently granted to the membership.
+	ProductEntitlements []string
 }
 
 // Result is a stable cursor page for the identity-owned selector.
@@ -96,12 +98,20 @@ func handle(ctx context.Context, db *gorm.DB, query Query) (Result, error) {
 	}
 	for _, membership := range memberships {
 		var tenant database.Tenant
+		var entitlements []database.ProductEntitlement
 		if err := (tenanttx.Runner{DB: db}).Within(ctx, membership.TenantID, func(tx *gorm.DB) error {
-			return tx.Where("id=?", membership.TenantID).First(&tenant).Error
+			if err := tx.Where("id=?", membership.TenantID).First(&tenant).Error; err != nil {
+				return err
+			}
+			return tx.Where("tenant_id=? AND membership_id=?", membership.TenantID, membership.ID).Order("product").Find(&entitlements).Error
 		}); err != nil {
 			return Result{}, err
 		}
-		result.Nodes = append(result.Nodes, Summary{MembershipID: membership.ID, TenantID: membership.TenantID, TenantName: tenant.Name, TenantStatus: tenant.Status, Role: membership.Role, MembershipStatus: membership.Status, Name: membership.Name, Email: membership.Email, InvitationStatus: membership.InvitationStatus, MembershipVersion: membership.Version})
+		products := make([]string, 0, len(entitlements))
+		for _, entitlement := range entitlements {
+			products = append(products, entitlement.Product)
+		}
+		result.Nodes = append(result.Nodes, Summary{ProductEntitlements: products, MembershipID: membership.ID, TenantID: membership.TenantID, TenantName: tenant.Name, TenantStatus: tenant.Status, Role: membership.Role, MembershipStatus: membership.Status, Name: membership.Name, Email: membership.Email, InvitationStatus: membership.InvitationStatus, MembershipVersion: membership.Version})
 	}
 	if len(memberships) > 0 {
 		result.EndCursor = memberships[len(memberships)-1].ID.String()

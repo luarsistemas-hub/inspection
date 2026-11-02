@@ -4,7 +4,9 @@ package resolvers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -21,6 +23,7 @@ import (
 	"inspection/services/inspection/internal/features/inventory/discard_draft"
 	"inspection/services/inspection/internal/features/inventory/draft"
 	"inspection/services/inspection/internal/features/inventory/merge_items"
+	"inspection/services/inspection/internal/features/inventory/regenerate_suggestions"
 	"inspection/services/inspection/internal/features/inventory/remove_environment"
 	"inspection/services/inspection/internal/features/inventory/request_cataloging"
 	"inspection/services/inspection/internal/features/inventory/split_item"
@@ -233,6 +236,7 @@ func TestInventoryIT054CustomerPortfolioScopeRoleAndRealProgress(t *testing.T) {
 
 func TestInventoryITBaselineQueriesWithoutOriginAndCatalogingWithoutOrigin(t *testing.T) {
 	fx := newInventoryITFixture(t, auth.TenantAdmin)
+	removeFixtureBaselineOrigin(t, fx)
 	versions := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`query { baselineVersions(assetId:"%s",first:25) { nodes { id } } }`, fx.seed.AssetID), fx.ctx, "", "")
 	if strings.Contains(versions, `"errors"`) || !strings.Contains(versions, `"nodes":[]`) {
 		t.Fatalf("baselineVersions for asset without origin should be empty: %s", versions)
@@ -249,6 +253,7 @@ func TestInventoryITBaselineQueriesWithoutOriginAndCatalogingWithoutOrigin(t *te
 
 func TestInventoryITRequestOriginCatalogingFromLegacyOrigin(t *testing.T) {
 	fx := newInventoryITFixture(t, auth.Employee)
+	removeFixtureBaselineOrigin(t, fx)
 	legacyVersionID := identity.NewID()
 	if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
 		now := time.Now().UTC()
@@ -533,6 +538,7 @@ func newInventoryITFixtureWithOptions(t *testing.T, role string, options harness
 			return promoteorigin.Setup(promoteorigin.Dependencies{DB: fx.h.DB, Bus: fx.bus, Authorizer: auth.Authorizer{}, Inventory: service})
 		},
 		func() error { return decide_items.Setup(fx.bus, service) },
+		func() error { return regenerate_suggestions.Setup(fx.bus, service) },
 		func() error { return activate_version.Setup(fx.bus, service) },
 		func() error { return discard_draft.Setup(fx.bus, service) },
 		func() error { return remove_environment.Setup(fx.bus, service) },
@@ -572,8 +578,41 @@ func inventoryITContext(fx api06Fixture, role string) context.Context {
 	return requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, MembershipID: fx.seed.MembershipID, TenantID: fx.seed.TenantID, Roles: []string{role}, Scopes: []requestctx.Scope{target}, ProductEntitlements: products}, CorrelationID: "inventory-it"})
 }
 
+// removeFixtureBaselineOrigin drops the MOVE_IN origin that the shared API-06
+// fixture seeds for its asset. Scenarios that build their own origin (or that
+// need an asset without one) start from this clean state because an asset has
+// at most one origin (idx_origin_asset).
+func removeFixtureBaselineOrigin(t *testing.T, fx api06Fixture) {
+	t.Helper()
+	statements := []string{
+		`DELETE FROM origins.inventory_item_evidence WHERE tenant_id=@tenant AND item_id IN (SELECT i.id FROM origins.inventory_items i JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id WHERE v.tenant_id=@tenant AND v.origin_id=@origin)`,
+		`DELETE FROM origins.inventory_items WHERE tenant_id=@tenant AND origin_version_id IN (SELECT id FROM origins.origin_versions WHERE tenant_id=@tenant AND origin_id=@origin)`,
+		`DELETE FROM origins.inventory_environments WHERE tenant_id=@tenant AND origin_version_id IN (SELECT id FROM origins.origin_versions WHERE tenant_id=@tenant AND origin_id=@origin)`,
+		`DELETE FROM origins.origin_versions WHERE tenant_id=@tenant AND origin_id=@origin`,
+		`DELETE FROM origins.origins WHERE tenant_id=@tenant AND id=@origin`,
+	}
+	var origin database.Origin
+	if err := fx.h.AdminDB.Where("tenant_id=? AND asset_id=?", fx.seed.TenantID, fx.seed.AssetID).Take(&origin).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return
+		}
+		t.Fatal(err)
+	}
+	if err := fx.h.AdminDB.Transaction(func(tx *gorm.DB) error {
+		for _, statement := range statements {
+			if err := tx.Exec(statement, sql.Named("tenant", fx.seed.TenantID), sql.Named("origin", origin.ID)).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func seedInventoryDraft(t *testing.T, fx api06Fixture, withPrevious bool) inventoryITSeed {
 	t.Helper()
+	removeFixtureBaselineOrigin(t, fx)
 	seed := inventoryITSeed{version: identity.NewID(), environments: []identity.ID{identity.NewID()}, items: []identity.ID{identity.NewID(), identity.NewID()}}
 	if withPrevious {
 		seed.previous = identity.NewID()

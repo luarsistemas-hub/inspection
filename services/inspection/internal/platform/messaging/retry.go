@@ -8,6 +8,8 @@ import (
 var (
 	ErrPermanent = errors.New("permanent message failure")
 	ErrRetryable = errors.New("retryable message failure")
+	// ErrLeaseBusy defers work to the full five-minute lease retry queue.
+	ErrLeaseBusy = errors.New("message job has an active lease")
 )
 
 var RetryDelays = [...]time.Duration{0, 5 * time.Second, 30 * time.Second, 5 * time.Minute}

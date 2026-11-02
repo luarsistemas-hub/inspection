@@ -184,49 +184,64 @@ func TestIT357IT360IT547IT548IT551ToIT554IT577ToIT582EventConsumers(t *testing.T
 	}
 }
 
+// assertTask06EventContract exercises one event type through the inbox path:
+// the valid event is consumed once, a duplicate does not repeat the local
+// outcome, and an invalid major is rejected permanently without state change.
+func assertTask06EventContract(t *testing.T, eventType string) {
+	t.Helper()
+	db := sqliteDB(t)
+	consumer := Consumer{
+		DB:       db,
+		Registry: events.DefaultRegistry(),
+		Name:     "task06-" + eventType,
+		Handle: func(_ context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			return tx.Create(&outcome{EventID: envelope.ID.String()}).Error
+		},
+	}
+	body := eventBody(t, eventType, 1)
+	processed, err := consumer.Process(context.Background(), body, 0)
+	if err != nil || !processed {
+		t.Fatalf("valid event was not processed: %v %v", processed, err)
+	}
+	processed, err = consumer.Process(context.Background(), body, 0)
+	if err != nil || processed {
+		t.Fatalf("duplicate event was processed: %v %v", processed, err)
+	}
+	invalid := eventBody(t, eventType, 2)
+	if _, err := consumer.Process(context.Background(), invalid, 0); !errors.Is(err, ErrPermanent) {
+		t.Fatalf("invalid major was not rejected permanently: %v", err)
+	}
+	var count int64
+	db.Model(&outcome{}).Count(&count)
+	if count != 1 {
+		t.Fatalf("duplicate or invalid event changed state: outcomes=%d", count)
+	}
+}
+
+// TestAIP_IT_561ToIT562CaptureSubmittedContract covers IT-561 (valid
+// capture.submitted.v1 consumed once) and IT-562 (duplicate and invalid major
+// do not duplicate state) of autonomous-inspection-platform.
+func TestAIP_IT_561ToIT562CaptureSubmittedContract(t *testing.T) {
+	assertTask06EventContract(t, "capture.submitted.v1")
+}
+
 // Task 06 event contracts are deliberately exercised through the same inbox
-// path as the earlier lifecycle events.  Keeping these cases in the
-// integration contract test prevents a valid report/retention event from
-// silently bypassing deduplication while still allowing the full external
-// suite to provide its provider and worker assertions.
-func TestIT567ToIT576AndIT583ToIT586Task06EventConsumers(t *testing.T) {
-	for _, eventType := range []string{
-		"analysis.comparison_requested.v1",
-		"analysis.comparison_completed.v1",
-		"inspection.classified.v1",
-		"report.snapshot_created.v1",
-		"report.ready.v1",
-		"retention.purge_due.v1",
-		"retention.purged.v1",
+// path as the earlier lifecycle events. Each event type maps to the catalog's
+// valid/duplicate-or-invalid pair: IT-567/568 comparison_requested, IT-569/570
+// comparison_completed, IT-571/572 classified, IT-573/574 snapshot_created,
+// IT-575/576 report.ready, IT-583/584 purge_due and IT-585/586 purged.
+func TestAIP_IT_567ToIT576AndIT583ToIT586Task06EventConsumers(t *testing.T) {
+	for _, contract := range []struct{ eventType, ids string }{
+		{"analysis.comparison_requested.v1", "IT-567/IT-568"},
+		{"analysis.comparison_completed.v1", "IT-569/IT-570"},
+		{"inspection.classified.v1", "IT-571/IT-572"},
+		{"report.snapshot_created.v1", "IT-573/IT-574"},
+		{"report.ready.v1", "IT-575/IT-576"},
+		{"retention.purge_due.v1", "IT-583/IT-584"},
+		{"retention.purged.v1", "IT-585/IT-586"},
 	} {
-		t.Run(eventType, func(t *testing.T) {
-			db := sqliteDB(t)
-			consumer := Consumer{
-				DB:       db,
-				Registry: events.DefaultRegistry(),
-				Name:     "task06-" + eventType,
-				Handle: func(_ context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-					return tx.Create(&outcome{EventID: envelope.ID.String()}).Error
-				},
-			}
-			body := eventBody(t, eventType, 1)
-			processed, err := consumer.Process(context.Background(), body, 0)
-			if err != nil || !processed {
-				t.Fatalf("valid event was not processed: %v %v", processed, err)
-			}
-			processed, err = consumer.Process(context.Background(), body, 0)
-			if err != nil || processed {
-				t.Fatalf("duplicate event was processed: %v %v", processed, err)
-			}
-			invalid := eventBody(t, eventType, 2)
-			if _, err := consumer.Process(context.Background(), invalid, 0); !errors.Is(err, ErrPermanent) {
-				t.Fatalf("invalid major was not rejected permanently: %v", err)
-			}
-			var count int64
-			db.Model(&outcome{}).Count(&count)
-			if count != 1 {
-				t.Fatalf("duplicate or invalid event changed state: outcomes=%d", count)
-			}
+		t.Run(contract.ids+" "+contract.eventType, func(t *testing.T) {
+			assertTask06EventContract(t, contract.eventType)
 		})
 	}
 }

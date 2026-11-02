@@ -1,0 +1,52 @@
+{
+  "priority": 4,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": {
+          "expression": "$.model",
+          "matches": "gemini-(2\\.5|3\\.5|2\\.0)-flash-lite"
+        }
+      },
+      {
+        "matchesJsonPath": {
+          "expression": "$.metadata.comparison_mode",
+          "equalTo": "TRANSCRIPTION"
+        }
+      },
+      {
+        "matchesJsonPath": "$.messages[1].content[?(@.type == 'input_audio')]"
+      }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json",
+      "X-LiteLLM-Call-ID": "stub-transcription-1",
+      "X-LiteLLM-Response-Cost": "0.0002"
+    },
+    "jsonBody": {
+      "id": "stub-transcription-1",
+      "provider": "stub",
+      "model": "stub/gemini-audio",
+      "choices": [
+        {
+          "message": {
+            "content": "{\"transcript\":\"cinco pratos fundos brancos na cozinha\",\"noSpeech\":false}"
+          }
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 32,
+        "completion_tokens": 12,
+        "prompt_tokens_details": {
+          "audio_tokens": 20
+        }
+      },
+      "cost": 0.0002
+    }
+  }
+}

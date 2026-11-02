@@ -1,8 +1,7 @@
 ---
 name: code-reviewer
 provider: codex
-model: gpt-5.6-sol
-reasoning_effort: high
+model: gpt-6-luna
 permissions: approve-reads
 ---
 

@@ -220,7 +220,7 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, schema := range []string{"origins", "media", "inspections", "messaging", "assets", "analysis", "capture"} {
+	for _, schema := range []string{"origins", "inventory", "media", "inspections", "messaging", "assets", "analysis", "capture", "transcription"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -231,6 +231,7 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE origins.inventory_environments (id text primary key, tenant_id text, origin_version_id text, identity_id text, type_code text, name text, expected numeric, added_during_capture numeric, requirement_key text, decision text, position integer, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE origins.inventory_items (id text primary key, tenant_id text, origin_version_id text, environment_id text, identity_id text, type_code text, name text, material text, color text, quantity integer, condition text, observation text, limitation text, confidence_bps integer, origin text, declared numeric, decision text, rejection_reason text, rejection_text text, suggested json, merged_into_id text, decided_by text, auto_accepted_by_promotion_id text, decided_at datetime, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE origins.inventory_item_evidence (id text primary key, tenant_id text, item_id text, kind text, media_id text, frame_id text, region json, position integer, created_at datetime)`,
+		`CREATE TABLE inventory.item_attribute_sources (id text primary key, tenant_id text, item_id text, origin_version_id text, attribute_name text, source_kind text, note_id text, revision_id text, visual_evidence_id text, reviewed_by text, created_at datetime)`,
 		`CREATE TABLE origins.inventory_decisions (id text primary key, tenant_id text, origin_version_id text, target_type text, target_id text, action text, before json, after json, reason text, actor_membership_id text, occurred_at datetime, created_at datetime)`,
 		`CREATE TABLE origins.origin_evidence (id text, tenant_id text, origin_version_id text, media_id text, category text, description text, attention_items json, created_at datetime)`,
 		`CREATE TABLE media.media_objects (id text, tenant_id text, responsibility_id text, status text, media_kind text)`,
@@ -246,6 +247,8 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE analysis.inventory_evidence_pairs (id text, tenant_id text, job_id text, item_identity_id text, origin_kind text, origin_media_id text, origin_frame_id text, current_kind text, current_media_id text, current_frame_id text, decision text, confirmed numeric, reason text, created_at datetime)`,
 		`CREATE TABLE capture.capture_drafts (id text, tenant_id text, responsibility_id text, kind text, media_kind text, template_version_id text, reference_payload json, policy_payload json, requirements json, status text, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE assets.assets (id text, tenant_id text, status text, updated_at datetime)`,
+		`CREATE TABLE transcription.audio_notes (id text, tenant_id text, inspection_id text, requirement_key text, status text, anchor_status text, no_speech numeric, current_revision_id text)`,
+		`CREATE TABLE analysis.catalog_note_manifests (id text, tenant_id text, inspection_id text, requirement_key text, catalog_generation integer, note_revisions json, deadline_at datetime, missing_count integer, digest text, sealed_at datetime, created_at datetime)`,
 		`CREATE TABLE messaging.outbox (id text primary key, tenant_id text, type text, schema_version integer, payload blob, correlation_id text, causation_id text, status text, attempts integer, next_attempt_at datetime, claimed_at datetime, last_error text, published_at datetime, created_at datetime)`,
 	}
 	for _, statement := range ddl {
@@ -1130,3 +1133,57 @@ func originForAsset(t *testing.T, db *gorm.DB, tenant, asset identity.ID) identi
 	}
 	return origin.ID
 }
+
+func TestService_BulkAcceptVoiceReviewGuard(t *testing.T) {
+	t.Run("UT-017 skips voice pending item and accepts eligible visual item", func(t *testing.T) {
+		db := inventoryTestDB(t)
+		tenant, version, env, actor := seedReadyDraft(t, db)
+		voiceID, visualID := identity.NewID(), identity.NewID()
+		for _, item := range []database.InventoryItem{
+			{ID: voiceID, TenantID: tenant, OriginVersionID: version, EnvironmentID: env, IdentityID: identity.NewID(), TypeCode: "OTHER", Name: "Pratos", Quantity: testPtr(5), Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Declared: true, ConfidenceBps: testPtr(9500), Version: 1},
+			{ID: visualID, TenantID: tenant, OriginVersionID: version, EnvironmentID: env, IdentityID: identity.NewID(), TypeCode: "OTHER", Name: "Mesa", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Declared: true, ConfidenceBps: testPtr(9500), Version: 1},
+		} {
+			if err := db.Create(&item).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := db.Create(&database.InventoryItemAttributeSource{ID: identity.NewID(), TenantID: tenant, ItemID: voiceID, OriginVersionID: version, AttributeName: "quantity", SourceKind: "VOICE"}).Error; err != nil {
+			t.Fatal(err)
+		}
+		count, err := testService(db).BulkAccept(context.Background(), tenant, version, env, actor, 8500)
+		if err != nil || count != 1 {
+			t.Fatalf("accepted=%d err=%v", count, err)
+		}
+		var voice, visual database.InventoryItem
+		if err := db.First(&voice, "id=?", voiceID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.First(&visual, "id=?", visualID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if voice.Decision != "PENDING" || visual.Decision != "ACCEPTED" {
+			t.Fatalf("voice=%s visual=%s", voice.Decision, visual.Decision)
+		}
+	})
+	t.Run("UT-018 voice-only bulk acceptance reports pending review", func(t *testing.T) {
+		db := inventoryTestDB(t)
+		tenant, version, env, actor := seedReadyDraft(t, db)
+		item := database.InventoryItem{ID: identity.NewID(), TenantID: tenant, OriginVersionID: version, EnvironmentID: env, IdentityID: identity.NewID(), TypeCode: "OTHER", Name: "Pratos", Quantity: testPtr(5), Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Declared: true, ConfidenceBps: testPtr(9500), Version: 1}
+		if err := db.Create(&item).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Create(&database.InventoryItemAttributeSource{ID: identity.NewID(), TenantID: tenant, ItemID: item.ID, OriginVersionID: version, AttributeName: "quantity", SourceKind: "VOICE"}).Error; err != nil {
+			t.Fatal(err)
+		}
+		count, err := testService(db).BulkAccept(context.Background(), tenant, version, env, actor, 8500)
+		if !apperror.Is(err, apperror.InvalidState) || count != 0 {
+			t.Fatalf("accepted=%d err=%v", count, err)
+		}
+		var stored database.InventoryItem
+		if err := db.First(&stored, "id=?", item.ID).Error; err != nil || stored.Decision != "PENDING" {
+			t.Fatalf("item=%+v err=%v", stored, err)
+		}
+	})
+}
+
+func testPtr[T any](value T) *T { return &value }

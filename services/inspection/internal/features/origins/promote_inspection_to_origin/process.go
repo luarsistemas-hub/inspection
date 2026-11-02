@@ -146,8 +146,10 @@ func Process(ctx context.Context, db *gorm.DB, deps ProcessDependencies, tenantI
 		if draft.DraftState == nil || *draft.DraftState != "READY" {
 			return activationFailure{"FAILED", "CATALOG_FAILED", "A catalogação da vistoria falhou. Tente novamente.", true}
 		}
+		// Only the latest generation of each room counts: a regeneration that
+		// fits the limits replaces an earlier truncated catalog.
 		var truncated int64
-		if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND origin_version_id=? AND kind='CATALOG' AND error_code='TRUNCATED_ITEMS'", tenantID, draft.ID).Count(&truncated).Error; err != nil {
+		if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND origin_version_id=? AND kind='CATALOG' AND error_code='TRUNCATED_ITEMS' AND generation=(SELECT max(latest.generation) FROM analysis.inventory_jobs latest WHERE latest.tenant_id=inventory_jobs.tenant_id AND latest.origin_version_id=inventory_jobs.origin_version_id AND latest.kind='CATALOG' AND latest.requirement_key=inventory_jobs.requirement_key)", tenantID, draft.ID).Count(&truncated).Error; err != nil {
 			return err
 		}
 		if truncated > 0 {
@@ -184,9 +186,20 @@ func Process(ctx context.Context, db *gorm.DB, deps ProcessDependencies, tenantI
 				valid[e.ItemID] = true
 			}
 		}
+		itemIDs := make([]identity.ID, 0, len(items))
+		for _, it := range items {
+			itemIDs = append(itemIDs, it.ID)
+		}
+		// Items holding a voice-backed attribute without human review are never
+		// accepted by a promotion: they stay pending, outside the active
+		// inventory, and are counted apart from the other pending items.
+		voicePending, err := core.UndecidedVoiceItems(tx, tenantID, itemIDs)
+		if err != nil {
+			return err
+		}
 		autoCount := 0
 		for _, it := range items {
-			if !valid[it.ID] {
+			if !valid[it.ID] || voicePending[it.ID] {
 				continue
 			}
 			accepted := tx.Model(&database.InventoryItem{}).Where("tenant_id=? AND id=? AND decision='PENDING' AND version=?", tenantID, it.ID, it.Version).Updates(map[string]any{"decision": "ACCEPTED", "auto_accepted_by_promotion_id": p.ID, "decided_by": nil, "decided_at": deps.Now().UTC(), "version": gorm.Expr("version+1"), "updated_at": deps.Now().UTC()})
@@ -196,7 +209,7 @@ func Process(ctx context.Context, db *gorm.DB, deps ProcessDependencies, tenantI
 			autoCount += int(accepted.RowsAffected)
 		}
 		if autoCount > 0 {
-			if err := tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: p.RequestedBy, Action: "AUTO_ACCEPT_BY_PROMOTION", TargetType: "INSPECTION_ORIGIN_PROMOTION", TargetID: p.ID.String(), Outcome: "SUCCESS", Reason: fmt.Sprintf("accepted=%d pending_without_evidence=%d", autoCount, len(items)-autoCount), CorrelationID: "inspection-promotion:auto-accept:" + p.ID.String(), OccurredAt: deps.Now().UTC()}).Error; err != nil {
+			if err := tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: p.RequestedBy, Action: "AUTO_ACCEPT_BY_PROMOTION", TargetType: "INSPECTION_ORIGIN_PROMOTION", TargetID: p.ID.String(), Outcome: "SUCCESS", Reason: fmt.Sprintf("accepted=%d pending_without_evidence=%d voice_pending=%d", autoCount, len(items)-autoCount-len(voicePending), len(voicePending)), CorrelationID: "inspection-promotion:auto-accept:" + p.ID.String(), OccurredAt: deps.Now().UTC()}).Error; err != nil {
 				return err
 			}
 		}
@@ -232,7 +245,12 @@ func Process(ctx context.Context, db *gorm.DB, deps ProcessDependencies, tenantI
 			return err
 		}
 		finalStatus = "COMPLETED"
-		return tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: p.RequestedBy, Action: "origin.inspection_promotion_completed", TargetType: "INSPECTION_ORIGIN_PROMOTION", TargetID: p.ID.String(), Outcome: "SUCCESS", CorrelationID: "inspection-promotion:" + p.ID.String(), OccurredAt: now}).Error
+		completed := database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: p.RequestedBy, Action: "origin.inspection_promotion_completed", TargetType: "INSPECTION_ORIGIN_PROMOTION", TargetID: p.ID.String(), Outcome: "SUCCESS", CorrelationID: "inspection-promotion:" + p.ID.String(), OccurredAt: now}
+		if len(voicePending) > 0 {
+			// The count of voice-supported items still awaiting review is reported apart.
+			completed.Reason = fmt.Sprintf("voice_pending=%d", len(voicePending))
+		}
+		return tx.Create(&completed).Error
 	})
 	var businessFailure activationFailure
 	if errors.As(err, &businessFailure) {

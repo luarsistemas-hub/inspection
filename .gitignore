@@ -32,3 +32,9 @@ node_modules/
 /inspection-scheduler
 /inspection-migrate
 /inspection-seed
+
+# Binários Go gerados por engano dentro de cmd/
+services/inspection/cmd/*/inspection-*
+
+# Estado local do Compozy; não versionar banco, logs ou execuções.
+.tools/

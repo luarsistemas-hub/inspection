@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@inspection/design-system";
-import { graphql, type GraphQLFailure } from "@/graphql/client";
+import { graphQLFailureText, graphql, throwAdminUserErrors } from "@/graphql/client";
 import * as G from "@/graphql/generated";
 import { preparationFrameMetrics } from "./video-preparation-view";
 
-const failureText = (failure: unknown) => failure instanceof Error ? failure.message : (failure as GraphQLFailure).message ?? "Não foi possível concluir a operação.";
+const failureText = graphQLFailureText;
 const mutationId = () => `video-ops-${crypto.randomUUID()}`;
 
 export function VideoOperationsPage() {
@@ -42,12 +42,12 @@ export function VideoOperationsPage() {
   };
   const retry = (row: G.AdminVideoPreparationsQuery["videoPreparations"]["nodes"][number]) => {
     if (!window.confirm(`Tentar novamente a preparação ${row.preparationId}?`)) return;
-    void run(async () => { const r = await graphql<G.AdminRetryVideoPreparationMutation>(G.AdminRetryVideoPreparationDocument, { input: { mediaId: row.mediaId, expectedPreparationVersion: row.preparationVersion, clientMutationId: mutationId() } }); if (r.retryVideoPreparation.userErrors.length) throw new Error(r.retryVideoPreparation.userErrors[0].message); });
+    void run(async () => { const r = await graphql<G.AdminRetryVideoPreparationMutation>(G.AdminRetryVideoPreparationDocument, { input: { mediaId: row.mediaId, expectedPreparationVersion: row.preparationVersion, clientMutationId: mutationId() } }); if (r.retryVideoPreparation.userErrors.length) throwAdminUserErrors(r.retryVideoPreparation.userErrors); });
   };
   const reprocess = (row: G.AdminVideoPreparationsQuery["videoPreparations"]["nodes"][number]) => {
     const profileDigest = window.prompt("Digest do perfil implantado para reprocessar:");
     if (!profileDigest || !window.confirm(`Reprocessar a fonte ${row.mediaId} com o perfil informado?`)) return;
-    void run(async () => { const r = await graphql<G.AdminReprocessVideoPreparationMutation>(G.AdminReprocessVideoPreparationDocument, { input: { mediaId: row.mediaId, expectedPreparationVersion: row.preparationVersion, profileDigest, clientMutationId: mutationId() } }); if (r.reprocessVideoPreparation.userErrors.length) throw new Error(r.reprocessVideoPreparation.userErrors[0].message); });
+    void run(async () => { const r = await graphql<G.AdminReprocessVideoPreparationMutation>(G.AdminReprocessVideoPreparationDocument, { input: { mediaId: row.mediaId, expectedPreparationVersion: row.preparationVersion, profileDigest, clientMutationId: mutationId() } }); if (r.reprocessVideoPreparation.userErrors.length) throwAdminUserErrors(r.reprocessVideoPreparation.userErrors); });
   };
   const send = async (field: "applyLegalHold" | "releaseLegalHold" | "recordDeletionRequest") => {
     const hasSource = Boolean(sourceMediaId.trim());
@@ -60,10 +60,10 @@ export function VideoOperationsPage() {
       if (field === "applyLegalHold" || field === "releaseLegalHold") {
         const r = await graphql(field === "applyLegalHold" ? G.AdminApplyVideoLegalHoldDocument : G.AdminReleaseVideoLegalHoldDocument, { input: { sourceMediaId: sourceMediaId || null, originVersionId: originVersionId || null, reason: actionReason, clientMutationId: mutationId() } });
         const payload = field === "applyLegalHold" ? (r as G.AdminApplyVideoLegalHoldMutation).applyLegalHold : (r as G.AdminReleaseVideoLegalHoldMutation).releaseLegalHold;
-        if (payload.userErrors.length) throw new Error(payload.userErrors[0].message);
+        if (payload.userErrors.length) throwAdminUserErrors(payload.userErrors);
       } else {
         const r = await graphql<G.AdminRecordVideoDeletionRequestMutation>(G.AdminRecordVideoDeletionRequestDocument, { input: { sourceMediaId: sourceMediaId || null, originVersionId: originVersionId || null, reason: actionReason, clientMutationId: mutationId() } });
-        if (r.recordDeletionRequest.userErrors.length) throw new Error(r.recordDeletionRequest.userErrors[0].message);
+        if (r.recordDeletionRequest.userErrors.length) throwAdminUserErrors(r.recordDeletionRequest.userErrors);
       }
       setNotice("Operação registrada.");
     });

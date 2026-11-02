@@ -12,6 +12,8 @@ import (
 
 	"inspection/libs/identity"
 	report "inspection/services/inspection/internal/features/reports/core"
+	"inspection/services/inspection/internal/features/reports/publication"
+	publicationcore "inspection/services/inspection/internal/features/reports/publication/core"
 	"inspection/services/inspection/internal/platform/database"
 
 	"gorm.io/gorm"
@@ -65,12 +67,66 @@ var ErrFrameIntegrity = errors.New("FRAME_INTEGRITY_FAILED")
 
 // Create increments versions only by append. A repeated terminal event with
 // identical report input returns the already-stored immutable snapshot.
+//
+// Reading the latest version and inserting the next one happen in one
+// transaction guarded by a per-inspection advisory lock, so two concurrent
+// generation attempts (a duplicated or replayed terminal event) retain exactly
+// one logical report version instead of two rows with the same version number.
 func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Result, error) {
 	if db == nil || input.TenantID == (identity.ID{}) || input.InspectionID == (identity.ID{}) {
 		return Result{}, fmt.Errorf("report snapshot: missing identity")
 	}
+	var result Result
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setSnapshotTenant(tx, input.TenantID); err != nil {
+			return err
+		}
+		if err := lockInspectionSnapshots(tx, input.TenantID, input.InspectionID); err != nil {
+			return err
+		}
+		var err error
+		result, err = createLocked(ctx, tx, input, now)
+		return err
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	return result, nil
+}
+
+// CreateInTx is Create inside the caller's transaction. Report finalization
+// runs in the consumer's transaction, which already holds a lock on the
+// inspection; opening a second transaction here would make the snapshot's
+// publication wait for a lock held by the very caller that waits for it (a
+// cycle PostgreSQL cannot detect). The caller owns commit and rollback.
+func CreateInTx(ctx context.Context, tx *gorm.DB, input Input, now time.Time) (Result, error) {
+	if tx == nil || input.TenantID == (identity.ID{}) || input.InspectionID == (identity.ID{}) {
+		return Result{}, fmt.Errorf("report snapshot: missing identity")
+	}
+	tx = tx.WithContext(ctx)
+	if err := setSnapshotTenant(tx, input.TenantID); err != nil {
+		return Result{}, err
+	}
+	if err := lockInspectionSnapshots(tx, input.TenantID, input.InspectionID); err != nil {
+		return Result{}, err
+	}
+	return createLocked(ctx, tx, input, now)
+}
+
+// lockInspectionSnapshots serializes snapshot versioning per inspection until
+// the surrounding transaction ends. SQLite (unit tests) has a single writer.
+func lockInspectionSnapshots(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	if tx.Dialector.Name() != "postgres" {
+		return nil
+	}
+	return tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "report-snapshot:"+tenantID.String()+":"+inspectionID.String()).Error
+}
+
+// createLocked runs inside the transaction opened by Create, after the tenant is
+// set and the inspection's snapshot lock is held.
+func createLocked(ctx context.Context, tx *gorm.DB, input Input, now time.Time) (Result, error) {
 	var latest database.ReportSnapshot
-	err := db.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", input.TenantID, input.InspectionID).Order("version_number DESC").First(&latest).Error
+	err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", input.TenantID, input.InspectionID).Order("version_number DESC").First(&latest).Error
 	version := 1
 	if err == nil {
 		version = latest.VersionNumber + 1
@@ -113,48 +169,40 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 		return Result{}, err
 	}
 	if latest.ID != (identity.ID{}) && latest.JSONDigest == jsonDigest {
-		if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := setSnapshotTenant(tx, input.TenantID); err != nil {
-				return err
-			}
-			return persistSnapshotEvidenceReferences(ctx, tx, input.TenantID, latest.ID, snapshot.Evidence, now.UTC())
-		}); err != nil {
+		if err := persistSnapshotEvidenceReferences(ctx, tx, input.TenantID, latest.ID, snapshot.Evidence, now.UTC()); err != nil {
 			return Result{}, err
 		}
 		return Result{SnapshotID: latest.ID, Version: latest.VersionNumber, JSONDigest: latest.JSONDigest, HTMLDigest: latest.HTMLDigest}, nil
 	}
 	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, VideoPlanID: input.VideoPlanID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, SchemaVersion: schemaVersion, VersionNumber: version, PDFRenderVersion: 1, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
-	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := setSnapshotTenant(tx, input.TenantID); err != nil {
-			return err
+	if input.VideoPlanID != nil {
+		if err := verifyPlanFrameEvidence(ctx, tx, input.TenantID, *input.VideoPlanID, input.ReferenceVersionID, snapshot.Evidence); err != nil {
+			return Result{}, err
 		}
-		if input.VideoPlanID != nil {
-			if err := verifyPlanFrameEvidence(ctx, tx, input.TenantID, *input.VideoPlanID, input.ReferenceVersionID, snapshot.Evidence); err != nil {
-				return err
-			}
-		}
-		if err := tx.Create(&row).Error; err != nil {
-			return err
-		}
-		return persistSnapshotEvidenceReferences(ctx, tx, input.TenantID, id, snapshot.Evidence, now.UTC())
-	}); err != nil {
+	}
+	if err := tx.Create(&row).Error; err != nil {
+		return Result{}, err
+	}
+	if err := persistSnapshotEvidenceReferences(ctx, tx, input.TenantID, id, snapshot.Evidence, now.UTC()); err != nil {
 		return Result{}, err
 	}
 	result := Result{SnapshotID: id, Version: version, JSONDigest: jsonDigest, HTMLDigest: htmlDigest}
-	if input.PublicationMode == "AUTOMATIC" && db.Migrator().HasTable(&database.ReportPublication{}) {
-		actor := input.ActorID
-		if actor == (identity.ID{}) {
-			actor = input.TenantID
-		}
-		published := now.UTC()
-		publication := database.ReportPublication{ID: identity.NewID(), TenantID: input.TenantID, SnapshotID: id, InspectionID: input.InspectionID, PolicyVersion: input.PublicationPolicyVersion, Status: "PUBLISHED", ActorID: actor, Version: 1, PublishedAt: &published, CreatedAt: published, UpdatedAt: published}
-		if err := db.WithContext(ctx).Create(&publication).Error; err != nil {
+	// The AUTOMATIC policy version effective at finalization releases the report
+	// in the snapshot's own transaction.
+	if input.PublicationMode == publicationcore.Automatic {
+		key := AutomaticMutationID(id)
+		released, err := publication.PublishTx(ctx, tx, publication.PublishInput{TenantID: input.TenantID, InspectionID: input.InspectionID, SnapshotID: id, ActorID: input.ActorID, ClientMutationID: key, CorrelationID: key, Final: true}, now.UTC())
+		if err != nil {
 			return Result{}, err
 		}
-		result.PublicationID = publication.ID
+		result.PublicationID = released.ID
 	}
 	return result, nil
 }
+
+// AutomaticMutationID is the deterministic publication key of a snapshot
+// released by the AUTOMATIC policy, so a replay cannot release it twice.
+func AutomaticMutationID(snapshotID identity.ID) string { return "auto:" + snapshotID.String() }
 
 func hasVideoEvidence(evidence []report.Evidence) bool {
 	for _, item := range evidence {

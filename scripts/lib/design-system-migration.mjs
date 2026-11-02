@@ -40,6 +40,9 @@ export function validateMigrationInventory(inventory, discoveredRoutes = [], kno
   }
 
   const discovered = discoveredRoutes.map(normalizeRoute);
+  if (discovered.length === 0 && PAGE_DIRS.some((application) => existsSync(join(repository, "apps", application)))) {
+    errors.push("page route discovery returned no routes in a repository with applications");
+  }
   const inventoryKeys = new Set(rows.map((row) => `${row.application}:${row.route}`));
   for (const route of discovered) if (!inventoryKeys.has(`${route.application}:${route.route}`)) errors.push(`discovered route missing from inventory: ${route.application}:${route.route}`);
   for (const row of rows) if (discovered.length > 0 && !discovered.some((route) => route.application === row.application && route.route === row.route)) errors.push(`inventory route is not present on disk: ${row.application}:${row.route}`);

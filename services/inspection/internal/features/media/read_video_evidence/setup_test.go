@@ -229,3 +229,43 @@ func (testObjectClient) Get(context.Context, string, string) (io.ReadCloser, err
 func (testObjectClient) Put(context.Context, string, string, io.Reader, int64, string) error {
 	return nil
 }
+
+func TestSnapshotEvidenceBlockedHidesOnlyWhatTheSnapshotBlocked(t *testing.T) {
+	mediaID, frameID, otherFrameID, preparationID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	digest := "ab"
+	evidence := func(id identity.ID, mutate func(*report.Evidence)) report.Evidence {
+		item := report.Evidence{ID: id.String(), FrameID: id.String(), SourceMediaID: mediaID.String(), PreparationID: preparationID.String(), FrameDigest: digest, DisplayDigest: digest}
+		if mutate != nil {
+			mutate(&item)
+		}
+		return item
+	}
+	snapshot := func(items ...report.Evidence) []byte {
+		raw, err := json.Marshal(report.Snapshot{Evidence: items})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	frame := &database.VideoFrame{ID: frameID, SourceMediaID: mediaID, PreparationID: preparationID, SHA256: digest}
+	blockedFlag := func(e *report.Evidence) { e.Flags = []string{"SENSITIVE_DETECTION"} }
+	blockedAvailability := func(e *report.Evidence) { e.Availability = "SENSITIVE_BLOCKED" }
+	for name, test := range map[string]struct {
+		canonical []byte
+		frame     *database.VideoFrame
+		want      bool
+	}{
+		"clean frame":                      {snapshot(evidence(frameID, nil)), frame, false},
+		"frame flagged":                    {snapshot(evidence(frameID, blockedFlag)), frame, true},
+		"frame availability blocked":       {snapshot(evidence(frameID, blockedAvailability)), frame, true},
+		"another frame blocked":            {snapshot(evidence(frameID, nil), evidence(otherFrameID, blockedFlag)), frame, false},
+		"source with one blocked frame":    {snapshot(evidence(frameID, blockedFlag), evidence(otherFrameID, nil)), nil, true},
+		"source with only blocked frames":  {snapshot(evidence(frameID, blockedFlag), evidence(otherFrameID, blockedAvailability)), nil, true},
+		"source with only clean frames":    {snapshot(evidence(frameID, nil), evidence(otherFrameID, nil)), nil, false},
+		"unreadable snapshot fails closed": {[]byte(`{`), frame, true},
+	} {
+		if got := snapshotEvidenceBlocked(test.canonical, test.frame, mediaID); got != test.want {
+			t.Errorf("%s: blocked=%v, want %v", name, got, test.want)
+		}
+	}
+}

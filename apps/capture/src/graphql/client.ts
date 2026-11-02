@@ -25,6 +25,7 @@ export type GraphQLFailure = { message: string; code?: string; field?: string };
 type GraphQLErrorResponse = { message: string; extensions?: { code?: string; field?: string; correlationId?: string; [key: string]: unknown } };
 type Response<T> = { data?: T; errors?: GraphQLErrorResponse[] };
 const captureSessionErrorCodes = new Set(["UNAUTHENTICATED", "SESSION_EXPIRED"]);
+const captureAuthorityRevocationCodes = new Set(["SESSION_EXPIRED"]);
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
 
 function logOperationErrors<TData, TVariables>(query: TypedDocumentNode<TData, TVariables>, errors: GraphQLErrorResponse[]): void {
@@ -61,7 +62,7 @@ export async function graphql<TData, TVariables>(query: TypedDocumentNode<TData,
   const error = body.errors?.find((candidate) => captureSessionErrorCodes.has(candidate.extensions?.code ?? "")) ?? body.errors?.[0];
   if (!response.ok || error) {
     const failure = { message: error?.message ?? "Não foi possível concluir a solicitação", code: error?.extensions?.code, field: error?.extensions?.field } satisfies GraphQLFailure;
-    if (isCaptureSessionFailure(failure)) clearCaptureCsrfToken();
+    if (captureAuthorityRevocationCodes.has(failure.code ?? "")) clearCaptureCsrfToken();
     throw failure;
   }
   if (!body.data) throw { message: "Resposta vazia da API" } satisfies GraphQLFailure;

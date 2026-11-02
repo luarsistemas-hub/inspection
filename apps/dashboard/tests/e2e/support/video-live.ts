@@ -14,7 +14,15 @@ export const originPath = resolve(fixtureDirectory, "origem.mp4");
 export const currentPath = resolve(fixtureDirectory, "atual.mp4");
 const oidcTokenURL = process.env.NEXT_PUBLIC_OIDC_TOKEN_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/token";
 
-type GraphQLResponse<T> = { data?: T; errors?: Array<{ message: string; extensions?: { code?: string } }> };
+type GraphQLResponse<T> = { data?: T; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
+
+/** Falha GraphQL tipada: o código e o campo vêm de `errors[0].extensions`, nunca do texto da mensagem. */
+export class GraphQLFailure extends Error {
+  constructor(message: string, readonly code?: string, readonly field?: string) {
+    super(message);
+    this.name = "GraphQLFailure";
+  }
+}
 type MailpitMessage = { ID: string; Created: string; Subject: string; To: Array<{ Address: string }> };
 type MailpitList = { messages: MailpitMessage[] };
 type MailpitDetail = { Text: string; HTML: string };
@@ -141,7 +149,10 @@ export class LocalGraphQL {
         continue;
       }
       const body = await response.json() as GraphQLResponse<T>;
-      if (!response.ok() || body.errors?.length || !body.data) throw new Error(`GraphQL falhou: ${body.errors?.map((error) => error.message).join(" | ") ?? `HTTP ${response.status()}`}`);
+      if (!response.ok() || body.errors?.length || !body.data) {
+        const first = body.errors?.[0];
+        throw new GraphQLFailure(`GraphQL falhou: ${body.errors?.map((error) => error.message).join(" | ") ?? `HTTP ${response.status()}`}`, first?.extensions?.code, first?.extensions?.field);
+      }
       return body.data;
     }
     throw new Error("Não foi possível renovar a sessão do Dashboard.");
@@ -376,11 +387,11 @@ async function remainingReportEvidence(api: LocalGraphQL, inspectionId: string, 
 export async function waitForReport(api: LocalGraphQL, inspectionId: string): Promise<{ id: string; report: Record<string, unknown>; evidence: Array<Record<string, unknown>> }> {
   const started = Date.now();
   await expect.poll(async () => {
-    // Até o snapshot existir, a API responde "report is not ready" em vez de null.
+    // Até o snapshot existir, a API responde INVALID_STATE no campo inspectionId em vez de null.
     const data = await api.execute<{ report: { id: string; requirements: Array<{ analysisStatus: string }>; evidence: { nodes: Array<{ id: string }> } } | null }>(
       `query VideoE2EReportReady($inspectionId: ID!) { report(inspectionId: $inspectionId) { id requirements { analysisStatus } evidence(first: 1) { nodes { id } } } }`, { inspectionId })
-      .catch((error: Error) => {
-        if (error.message.includes("report is not ready")) return { report: null };
+      .catch((error: unknown) => {
+        if (error instanceof GraphQLFailure && error.code === "INVALID_STATE" && error.field === "inspectionId") return { report: null };
         throw error;
       });
     if (data.report) {

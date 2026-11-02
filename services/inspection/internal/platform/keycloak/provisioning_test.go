@@ -115,3 +115,69 @@ func TestInternalUserIsCreatedUnverifiedAndVerifiedOnlyAfterAcceptance(t *testin
 		t.Fatalf("activation did not verify/set password: verified=%v password=%v", verified, resetPassword)
 	}
 }
+
+func TestTFE_UT_023CreateConflictResolvesByVerifiedEmailAndBindsOneSubject(t *testing.T) {
+	var lookups, creates int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/protocol/openid-connect/token"):
+			_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "token"})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/users"):
+			lookups++
+			if r.URL.Query().Get("exact") != "true" || r.URL.Query().Get("email") != "ada@example.test" {
+				t.Errorf("lookup must be exact by normalized email: %s", r.URL.RawQuery)
+			}
+			// The first lookup races a concurrent create and finds nothing; the retry finds the winner.
+			if lookups == 1 {
+				_ = json.NewEncoder(w).Encode([]any{})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]string{{"id": "winner-subject", "email": "ada@example.test"}})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/users"):
+			creates++
+			w.WriteHeader(http.StatusConflict)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/users/winner-subject/credentials"):
+			_ = json.NewEncoder(w).Encode([]map[string]string{{"type": "password"}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := ProvisioningClient{BaseURL: server.URL, Realm: "inspection", ClientID: "client", ClientSecret: "secret", Stage: "dev"}
+	user, err := client.EnsureInternalUser(context.Background(), " Ada@Example.Test ", "Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.ID != "winner-subject" || user.Created || creates != 1 || lookups != 2 {
+		t.Fatalf("user=%+v creates=%d lookups=%d, want the concurrent winner bound once", user, creates, lookups)
+	}
+}
+
+func TestTFE_UT_023PersistentConflictAndAmbiguousEmailNeverBindASubject(t *testing.T) {
+	for name, handler := range map[string]http.HandlerFunc{
+		"conflict persists": func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/protocol/openid-connect/token"):
+				_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "token"})
+			case r.Method == http.MethodGet:
+				_ = json.NewEncoder(w).Encode([]any{})
+			default:
+				w.WriteHeader(http.StatusConflict)
+			}
+		},
+		"two accounts share the email": func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/protocol/openid-connect/token") {
+				_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "token"})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]string{{"id": "one", "email": "ada@example.test"}, {"id": "two", "email": "ada@example.test"}})
+		},
+	} {
+		server := httptest.NewServer(handler)
+		client := ProvisioningClient{BaseURL: server.URL, Realm: "inspection", ClientID: "client", ClientSecret: "secret", Stage: "dev"}
+		if user, err := client.EnsureInternalUser(context.Background(), "ada@example.test", "Ada"); err == nil || user.ID != "" {
+			t.Fatalf("%s: user=%+v err=%v, want no bound subject", name, user, err)
+		}
+		server.Close()
+	}
+}

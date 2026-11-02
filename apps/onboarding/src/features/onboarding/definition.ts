@@ -53,5 +53,15 @@ export function nextConfirmedStep(definition: OnboardingDefinition, session: { s
   if (session.state === "IDENTITY_VERIFIED") return steps[0]?.key ?? "";
   if (session.state === "PARTICIPANT_SAVED" || session.state === "READY_TO_SUBMIT" || session.state === "SUBMITTED") return "";
   const currentIndex = steps.findIndex((step) => step.key.toLowerCase() === session.currentStep.toLowerCase());
-  return currentIndex >= 0 ? steps[currentIndex + 1]?.key ?? "" : steps[0]?.key ?? "";
+  if (currentIndex >= 0) return steps[currentIndex + 1]?.key ?? "";
+
+  // The server can report a checkpoint that this client definition no longer
+  // contains. Use the confirmed state to continue after the last known step.
+  const confirmedStepByState: Record<string, string> = {
+    AGENCY_SAVED: "agency",
+    PROPERTY_SAVED: "property",
+  };
+  const confirmedStep = confirmedStepByState[session.state];
+  const confirmedIndex = steps.findIndex((step) => step.key.toLowerCase() === confirmedStep);
+  return confirmedIndex >= 0 ? steps[confirmedIndex + 1]?.key ?? "" : steps[0]?.key ?? "";
 }

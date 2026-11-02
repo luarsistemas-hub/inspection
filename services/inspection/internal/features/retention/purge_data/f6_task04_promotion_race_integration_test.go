@@ -163,6 +163,13 @@ func seedTask04PromotableBank(t *testing.T, h *harness.Harness) task04Promotable
 		if err := tx.Create(&database.VideoPlan{ID: planID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: digest, Status: "SEALED", SealedAt: &firstReady, NextAttemptAt: firstReady, CreatedAt: firstReady}).Error; err != nil {
 			return err
 		}
+		if err := tx.Create(&database.VideoPlanPreparation{TenantID: fixture.TenantID, PlanID: planID, PreparationID: preparationID, Role: "MAIN", CreatedAt: firstReady}).Error; err != nil {
+			return err
+		}
+		// Promotion only accepts the plan that the inspection currently points at.
+		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.InspectionID).Update("active_video_plan_id", planID).Error; err != nil {
+			return err
+		}
 		return tx.Create(&database.VideoEvidenceReference{ID: identity.NewID(), TenantID: fixture.TenantID, PreparationID: preparationID, OwnerType: "VIDEO_PLAN", OwnerID: planID, CreatedAt: firstReady}).Error
 	}); err != nil {
 		t.Fatal(err)

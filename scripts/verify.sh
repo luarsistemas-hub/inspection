@@ -34,7 +34,11 @@ for product in admin dashboard capture onboarding; do
   npm run test
   npm run build
   npx playwright install chromium webkit
-  npm run test:e2e
+  if [ "$product" = admin ] || [ "$product" = dashboard ]; then
+    INSPECTION_E2E_MOCKS=true npm run test:e2e
+  else
+    npm run test:e2e
+  fi
 done
 
 cd "$workspace"

@@ -146,7 +146,7 @@ func TestUT134DisabledReviewerKeepsCaptureHandoffButCannotDecideInventory(t *tes
 	if err := inventorydecide.Setup(fixture.bus, inventorycore.Service{DB: fixture.harness.DB, Within: fixture.harness.WithinTenant}); err != nil {
 		t.Fatal(err)
 	}
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.tenantID, Principal: requestctx.Principal{IdentityID: reviewerIdentityID, MembershipID: reviewerID, TenantID: fixture.tenantID, Roles: []string{auth.Employee}, Scopes: []requestctx.Scope{{Kind: "ASSET", ID: assetID}}}})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.tenantID, Principal: requestctx.Principal{IdentityID: reviewerIdentityID, MembershipID: reviewerID, TenantID: fixture.tenantID, Roles: []string{auth.Employee}, Scopes: []requestctx.Scope{{Kind: "ASSET", ID: assetID}}, ProductEntitlements: auth.ProductsForRole(auth.Employee)}})
 	resolver := &Resolver{DB: fixture.harness.DB, Bus: fixture.bus, Authorizer: auth.Authorizer{Store: auth.GORMMembershipStore{DB: fixture.harness.DB}}}
 	payload, err := resolver.Mutation().DecideInventoryItems(ctx, graph.DecideInventoryItemsInput{OriginVersionID: versionID.String(), Decisions: []*graph.InventoryDecisionInput{{ItemID: itemID.String(), Action: "ACCEPT", ExpectedVersion: 1}}, ClientMutationID: "ut134-disabled-reviewer"})
 	if err != nil {

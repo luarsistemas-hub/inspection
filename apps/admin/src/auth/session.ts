@@ -28,6 +28,7 @@ export async function accessTokenForRequest(staleToken?: string): Promise<string
     const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: currentRefreshToken, client_id: "inspection-admin" }) });
     if (!response.ok) {
       if (version === sessionVersion && (response.status === 400 || response.status === 401)) clearSession();
+      if (response.status === 400 || response.status === 401) throw { code: "SESSION_EXPIRED" };
       throw new Error("Não foi possível renovar a sessão. Tente novamente.");
     }
     const renewed = await response.json() as { access_token?: string; refresh_token?: string; id_token?: string; expires_in?: number };
@@ -77,6 +78,7 @@ const adminPageRoles: Record<string, string[]> = {
   "/templates": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/video": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/video-operations": ["TENANT_ADMIN"],
+  "/voice-policy": ["TENANT_ADMIN"],
   "/baseline-policy": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/governance": ["TENANT_ADMIN", "GOVERNANCE_ADMIN"],
   "/prompts": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],

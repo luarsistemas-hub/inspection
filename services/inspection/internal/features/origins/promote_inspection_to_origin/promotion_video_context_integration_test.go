@@ -64,7 +64,28 @@ func TestProcessRequiresConfirmationWhenActiveSealedVideoPlanChanges(t *testing.
 	if err := Setup(Dependencies{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}, Now: func() time.Time { return now }, Inventory: inventory}); err != nil {
 		t.Fatal(err)
 	}
-	ctx = requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: f.TenantID, Principal: requestctx.Principal{IdentityID: f.IdentityID, MembershipID: f.MembershipID, TenantID: f.TenantID, Roles: []string{auth.TenantAdmin}}})
+	ctx = requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: f.TenantID, Principal: requestctx.Principal{IdentityID: f.IdentityID, MembershipID: f.MembershipID, TenantID: f.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
+	var scopeItem database.VideoScopeItem
+	if err := h.WithinTenant(ctx, f.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND preparation_id=?", f.TenantID, f.PreparationID).Take(&scopeItem).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&scopeItem).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	emptyScopeRaw, err := bus.Ask(ctx, Query{TenantID: f.TenantID, InspectionID: f.InspectionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// IT-050: a READY CURRENT/SUPPLEMENT preparation with zero scope items
+	// keeps promotion ineligible.
+	if emptyScope := emptyScopeRaw.(StatusView); emptyScope.Eligible || !hasImpediment(emptyScope.Impediments, "EVIDENCE_UNAVAILABLE") {
+		t.Fatalf("video inspection without prepared scope must remain ineligible with EVIDENCE_UNAVAILABLE: %+v", emptyScope.Impediments)
+	}
+	if err := h.WithinTenant(ctx, f.TenantID, func(tx *gorm.DB) error { return tx.Create(&scopeItem).Error }); err != nil {
+		t.Fatal(err)
+	}
 	statusRaw, err := bus.Ask(ctx, Query{TenantID: f.TenantID, InspectionID: f.InspectionID})
 	if err != nil {
 		t.Fatal(err)
@@ -137,3 +158,12 @@ func TestProcessRequiresConfirmationWhenActiveSealedVideoPlanChanges(t *testing.
 }
 
 func ptrString(value string) *string { return &value }
+
+func hasImpediment(impediments []Impediment, code string) bool {
+	for _, impediment := range impediments {
+		if impediment.Code == code {
+			return true
+		}
+	}
+	return false
+}

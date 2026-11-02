@@ -111,7 +111,7 @@ func TestPolicyQueriesAreTenantScopedAcrossOneHundredTenantsIT029(t *testing.T) 
 	}
 	actorID := identity.NewID()
 	for i, policy := range policies {
-		ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: policy.TenantID, Principal: requestctx.Principal{IdentityID: actorID, TenantID: policy.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "video-policy-tenant-scope"})
+		ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: policy.TenantID, Principal: requestctx.Principal{IdentityID: actorID, TenantID: policy.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "video-policy-tenant-scope"})
 		raw, err := bus.Ask(ctx, Query{TenantID: policy.TenantID})
 		if err != nil {
 			t.Fatalf("tenant %d query failed: %v", i, err)
@@ -130,7 +130,7 @@ func TestPolicyQueriesAreTenantScopedAcrossOneHundredTenantsIT029(t *testing.T) 
 		t.Fatalf("external capture could not read its effective policy: %v (%+v)", err, raw)
 	}
 	command := Command{TenantID: policies[0].TenantID, MaxDurationMinutes: 11, OriginRetentionDays: 41, CurrentRetentionDays: 8, ExpectedVersion: 2, MutationID: "policy-idempotency"}
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: command.TenantID, Principal: requestctx.Principal{IdentityID: actorID, TenantID: command.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "video-policy-idempotency"})
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: command.TenantID, Principal: requestctx.Principal{IdentityID: actorID, TenantID: command.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "video-policy-idempotency"})
 	first, err := bus.Send(ctx, command)
 	if err != nil {
 		t.Fatal(err)

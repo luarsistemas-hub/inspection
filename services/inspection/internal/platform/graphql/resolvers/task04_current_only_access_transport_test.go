@@ -26,7 +26,7 @@ func TestVV_IT_200CustomerCannotReadV2ConditionResults(t *testing.T) {
 	server := task06GraphQLServer(db)
 	foreignTenantID := identity.NewID()
 	foreignAdmin := identity.NewID()
-	requestContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: foreignTenantID, Principal: requestctx.Principal{IdentityID: foreignAdmin, TenantID: foreignTenantID, Roles: []string{auth.TenantAdmin}}})
+	requestContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: foreignTenantID, Principal: requestctx.Principal{IdentityID: foreignAdmin, TenantID: foreignTenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}})
 	for _, query := range []string{
 		`query { report(inspectionId:"` + inspectionID.String() + `") { id findings { title description } } }`,
 		`query { customerReport(inspectionId:"` + inspectionID.String() + `") { snapshotId advisory } }`,
@@ -38,7 +38,7 @@ func TestVV_IT_200CustomerCannotReadV2ConditionResults(t *testing.T) {
 	}
 	// A customer of the same tenant scoped to another business unit must not
 	// reach V2 through the published customer views either.
-	sameTenantCustomer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: identity.NewID()}}}})
+	sameTenantCustomer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.CustomerViewer}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: identity.NewID()}}, ProductEntitlements: auth.ProductsForRole(auth.CustomerViewer)}})
 	for _, query := range []string{
 		`query { customerReport(inspectionId:"` + inspectionID.String() + `") { snapshotId advisory } }`,
 		`query { customerEvidence(inspectionId:"` + inspectionID.String() + `") { nodes { requirementKey } } }`,

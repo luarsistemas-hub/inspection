@@ -16,6 +16,7 @@ test("IT-088 / IT-099 shows the current-only baseline explanation without reques
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: {
       responsibilityId: "responsibility-current-only", recaptureRequestId: null, status: "OPEN", confirmationOnly: false,
       kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1",
@@ -48,6 +49,7 @@ test("câmera de vídeo em ambientes mantém a faixa desabilitada durante a grav
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: {
       responsibilityId: "environment-video-camera", recaptureRequestId: null, status: "OPEN", confirmationOnly: false,
       kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", captureLayout: "ENVIRONMENTS",
@@ -87,6 +89,7 @@ test("IT-223 shows the requested video item, reason, deadline and origin frame t
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: {
       responsibilityId: "responsibility-recapture", recaptureRequestId: "request-1", recaptureDeadlineAt: "2026-10-18T12:00:00Z",
       status: "OPEN", confirmationOnly: false, kind: "RECAPTURE", mediaKind: "VIDEO", disclosureVersion: "video-v1",
@@ -124,6 +127,7 @@ test("IT-075 authenticated V1 guidance shows O1 kitchen and bathroom stills", as
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: {
       responsibilityId: "v1", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1",
       reference: { comparisonMode: "FIXED_ORIGIN", mediaKind: "VIDEO" }, referenceItems,
@@ -170,6 +174,7 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: { responsibilityId: "responsibility-video", recaptureRequestId: null, status: submitted ? "COMPLETED" : "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: false, maxDurationSeconds: 900 }, requirements: [{ key: "video:main", section: "main", label: "Vídeo principal", instructions: "Grave o imóvel", required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_ONLY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }], answers: [] } });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("beginVideoCapture")) { recorderAdmissions += 1; return respond({ beginVideoCapture: { attempt: { id: "attempt-1", kind: "CURRENT", acquisitionSource: "CAMERA", maxDurationSeconds: 900, maxBytes: 1073741824, policyVersion: 1, admittedAt: "2026-10-15T00:00:00Z", expiresAt: "2099-01-01T00:00:00Z", status: "ACTIVE" }, userErrors: [] } }); }
@@ -291,6 +296,7 @@ test("E2E-036 explains a supported capture path in an unsupported embedded brows
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: { responsibilityId: "responsibility-video", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: false, maxDurationSeconds: 900 }, requirements: [{ key: "video:main", section: "main", label: "Vídeo principal", instructions: "Grave o imóvel", required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_ONLY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }], answers: [] } });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     throw new Error(`Unexpected operation: ${query.slice(0, 100)}`);
@@ -334,6 +340,7 @@ test("IT-124 clears incomplete chunks before a new recording after storage quota
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: { responsibilityId: "responsibility-quota", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: false, maxDurationSeconds: 600 }, requirements: [{ key: "video:main", section: "main", label: "Vídeo principal", instructions: "Grave o imóvel", required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_ONLY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }], answers: [] } });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("beginVideoCapture")) { admissions += 1; return respond({ beginVideoCapture: { attempt: { id: "quota-attempt", kind: "CURRENT", acquisitionSource: "CAMERA", maxDurationSeconds: 600, maxBytes: 1073741824, policyVersion: 1, admittedAt: "2026-10-15T00:00:00Z", expiresAt: "2099-01-01T00:00:00Z", status: "ACTIVE" }, userErrors: [] } }); }
@@ -372,6 +379,7 @@ test("IT-120/IT-128 keeps received distinct from ready and refreshes without ano
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: { responsibilityId: "responsibility-received", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: false, maxDurationSeconds: 900 }, requirements: [{ key: "video:main", section: "main", label: "Vídeo principal", instructions: "Grave o imóvel", required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_ONLY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }], answers: [] } });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("videoUploadStatus")) return respond({ videoUploadStatus: { mediaId: "media-received", status: preparationReady ? "READY" : "RECEIVED", expiresAt: "2099-01-01T00:00:00Z", receivedParts: [1], confirmedParts: [{ partNumber: 1, etag: "etag-1", sizeBytes: 100 }], missingParts: [] } });
@@ -422,6 +430,7 @@ test("IT-122 shows replacement guidance when server validation reports CHECKSUM_
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: { responsibilityId: "responsibility-checksum", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: false, maxDurationSeconds: 900 }, requirements: [{ key: "video:main", section: "main", label: "Vídeo principal", instructions: "Grave o imóvel", required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_ONLY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }], answers: [] } });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("videoUploadStatus")) return respond({ videoUploadStatus: { mediaId: "media-checksum", status: "RECEIVED", expiresAt: "2099-01-01T00:00:00Z", receivedParts: [1], confirmedParts: [{ partNumber: 1, etag: "etag-1", sizeBytes: 100 }], missingParts: [] } });

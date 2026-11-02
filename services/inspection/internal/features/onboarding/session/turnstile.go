@@ -42,7 +42,7 @@ func (v TurnstileVerifier) Verify(ctx context.Context, token string) error {
 		return apperror.New(apperror.InvalidInput, "turnstileToken", "Conclua a verificação de segurança e tente novamente.")
 	}
 	if strings.TrimSpace(v.Secret) == "" || strings.TrimSpace(v.Hostname) == "" {
-		return apperror.New(apperror.DependencyUnavailable, "", "service temporarily unavailable")
+		return apperror.New(apperror.DependencyUnavailable, "", "Não foi possível concluir a solicitação. Tente novamente mais tarde.")
 	}
 
 	body, err := json.Marshal(turnstileRequest{Secret: v.Secret, Response: token})
@@ -71,7 +71,7 @@ func (v TurnstileVerifier) Verify(ctx context.Context, token string) error {
 	var result turnstileResponse
 	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&result) != nil {
 		slog.WarnContext(ctx, "onboarding Turnstile returned an invalid response", "status", response.StatusCode)
-		return apperror.New(apperror.DependencyUnavailable, "", "service temporarily unavailable")
+		return apperror.New(apperror.DependencyUnavailable, "", "Não foi possível concluir a solicitação. Tente novamente mais tarde.")
 	}
 	if !result.Success {
 		slog.InfoContext(ctx, "onboarding Turnstile rejected a token", "errorCodes", result.ErrorCodes)

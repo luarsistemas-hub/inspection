@@ -16,7 +16,11 @@ func TestSetupRequiresObjectStore(t *testing.T) {
 func TestAttentionItemsAreScopedToTheirOriginEvidence(t *testing.T) {
 	first, second := identity.NewID(), identity.NewID()
 	snapshot := referenceSnapshot{Items: []referenceEvidence{{MediaID: first, AttentionItems: []string{"Cafeteira"}}, {MediaID: second, AttentionItems: []string{"Torneira"}}}}
-	prompt, err := addAttentionItemsToPrompt("base", snapshot.attentionItemsFor(second))
+	pinned, ok := snapshot.pinnedEvidence(second)
+	if !ok {
+		t.Fatal("second reference evidence was not found")
+	}
+	prompt, err := addAttentionItemsToPrompt("base", pinned.AttentionItems)
 	if err != nil || !strings.Contains(prompt, `{"attentionItems":["Torneira"]}`) || strings.Contains(prompt, "Cafeteira") {
 		t.Fatalf("prompt=%q err=%v", prompt, err)
 	}

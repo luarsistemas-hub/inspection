@@ -227,6 +227,8 @@ func seedLifecycle(t *testing.T, db *gorm.DB) lifecycleFixture {
 		&database.Tenant{ID: f.tenantID, TenantID: f.tenantID, Name: "Lifecycle", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: f.now, UpdatedAt: f.now},
 		&database.BusinessUnit{ID: f.unitID, TenantID: f.tenantID, Code: "main-" + f.tenantID.String(), Name: "Main", Status: "ACTIVE", Version: 1, CreatedAt: f.now, UpdatedAt: f.now},
 		&database.Membership{ID: f.membershipID, TenantID: f.tenantID, IdentityID: f.identityID, Issuer: "test", Subject: f.identityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: f.now, UpdatedAt: f.now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: f.tenantID, MembershipID: f.membershipID, Product: auth.AdminProduct, CreatedAt: f.now},
+		&database.ProductEntitlement{ID: identity.NewID(), TenantID: f.tenantID, MembershipID: f.membershipID, Product: auth.DashboardProduct, CreatedAt: f.now},
 		&database.Participant{ID: f.participantID, TenantID: f.tenantID, BusinessUnitID: f.unitID, Name: "Responsible", SegmentRole: "RESPONSIBLE", Status: "ACTIVE", Version: 1, IdempotencyKey: "participant-" + f.tenantID.String(), CreatedAt: f.now, UpdatedAt: f.now},
 		&database.ParticipantContact{ID: contactID, TenantID: f.tenantID, ParticipantID: f.participantID, Channel: "EMAIL", Value: "lifecycle@example.com", Normalized: "lifecycle@example.com", Active: true, CreatedAt: f.now, UpdatedAt: f.now},
 		&database.ContactVerification{ID: identity.NewID(), TenantID: f.tenantID, ContactID: contactID, IdempotencyKey: "verify-" + f.tenantID.String(), Status: "VERIFIED", VerifiedAt: &f.now, CreatedAt: f.now},

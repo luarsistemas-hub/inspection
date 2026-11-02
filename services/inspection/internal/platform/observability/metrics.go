@@ -124,6 +124,7 @@ func NewMetrics() *Metrics {
 			"inspection_video_work_heartbeat_timestamp_seconds": {typeName: "gauge", help: "Unix timestamp of the last video work heartbeat."},
 			"inspection_video_queue_depth":                      {typeName: "gauge", help: "Runnable video work by stage and status."},
 			"inspection_video_oldest_runnable_age_seconds":      {typeName: "gauge", help: "Age of the oldest runnable video job by stage."},
+			"inspection_transcription_sweep_items_total":        {typeName: "counter", help: "Voice-note scheduler scan items by bounded scan and outcome."},
 		},
 	}
 }
@@ -220,6 +221,24 @@ func (m *Metrics) ResetVideoExpirationLag() {
 // VideoPartialDeletion records an incomplete object deletion that must be retried.
 func (m *Metrics) VideoPartialDeletion() {
 	m.counter("inspection_video_partial_deletions_total", nil, 1)
+}
+
+// TranscriptionSweep records voice-note scheduler scan items with bounded labels.
+func (m *Metrics) TranscriptionSweep(scan, outcome string, count int) {
+	if count <= 0 {
+		return
+	}
+	switch scan {
+	case "lease_recovery", "expiry", "retry_wakeup", "cleanup":
+	default:
+		scan = "other"
+	}
+	switch outcome {
+	case "recovered", "exhausted", "expired", "requeued", "deleted", "failed":
+	default:
+		outcome = "other"
+	}
+	m.counter("inspection_transcription_sweep_items_total", map[string]string{"scan": scan, "outcome": outcome}, float64(count))
 }
 
 // VideoScope records discovered components or environments when a preparation is sealed.

@@ -114,7 +114,7 @@ func TestVV_IT_460VideoPreparationOperationsRequireCapability(t *testing.T) {
 			if operation == "videoPreparation" {
 				role = auth.CustomerViewer
 			}
-			actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{role}}, CorrelationID: "vv-it-460"})
+			actor := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{role}, ProductEntitlements: auth.ProductsForRole(role)}, CorrelationID: "vv-it-460"})
 			response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, resources.query(fx, operation, "vv-it-460-"+operation), actor, "", "")
 			assertFixedOriginTransportError(t, response, "FORBIDDEN")
 		})
@@ -289,7 +289,7 @@ func newAPI08Fixture(t *testing.T) api08Fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	seed, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{InspectionStatus: "COMPLETED"})
+	seed, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{InspectionStatus: "COMPLETED", MediaKind: "VIDEO"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func newAPI08Fixture(t *testing.T) api08Fixture {
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: bus}}))
 	server.SetErrorPresenter(graph.PresentError)
-	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-api08"}
+	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-api08"}
 	return api08Fixture{fixedOriginGraphQLFixture{ctx: requestctx.WithMetadata(ctx, meta), h: h, seed: seed, server: server, bus: bus}}
 }
 

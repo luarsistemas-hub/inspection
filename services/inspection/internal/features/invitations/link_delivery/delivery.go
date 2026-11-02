@@ -28,7 +28,7 @@ type withinFunc func(context.Context, identity.ID, func(*gorm.DB) error) error
 
 func deliver(ctx context.Context, registry *notifications.Registry, tenantID, invitationID identity.ID, token string, delivery []invitationcore.DeliveryIntent, template string, now time.Time, within withinFunc) error {
 	if registry == nil || within == nil || tenantID == (identity.ID{}) || invitationID == (identity.ID{}) || token == "" || len(delivery) == 0 {
-		return apperror.New(apperror.InvalidInput, "delivery", "valid invitation delivery is required")
+		return apperror.New(apperror.InvalidInput, "delivery", "Informe um envio de convite válido.")
 	}
 	deliverySeed := database.Delivery{ID: identity.NewID(), TenantID: tenantID, IntentID: invitationID, Status: "QUEUED", CreatedAt: now, UpdatedAt: now}
 	var deliveryRow database.Delivery
@@ -97,7 +97,7 @@ func deliver(ctx context.Context, registry *notifications.Registry, tenantID, in
 		return err
 	}
 	if succeeded == 0 {
-		return apperror.Wrap(apperror.DependencyUnavailable, errors.New("invitation delivery unavailable"))
+		return &apperror.Error{Code: apperror.DependencyUnavailable, Safe: "Não foi possível enviar o convite agora. Tente novamente.", Cause: errors.New("invitation delivery unavailable")}
 	}
 	return nil
 }
@@ -125,7 +125,7 @@ func RetryToken(ctx context.Context, db *gorm.DB, tenantID, invitationID identit
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return apperror.New(apperror.InvalidState, "invitation", "invitation is unavailable")
+			return apperror.New(apperror.InvalidState, "invitation", "O convite não está disponível.")
 		}
 		return nil
 	})

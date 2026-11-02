@@ -62,6 +62,8 @@ type CallStart struct {
 	Attempt, ReplayGeneration                int
 	Mode, ComparisonMode, ModelAlias         string
 	PromptDigest                             string
+	AudioDurationMS                          int64
+	AudioTokenUnit                           string
 	StartedAt                                time.Time
 }
 
@@ -71,6 +73,9 @@ type CallFinish struct {
 	CallID, Provider, Model, GatewayRequestID, GatewayCallID, TechnicalOutcome string
 	InputTokens, OutputTokens                                                  *int64
 	CachedInputTokens                                                          *int64
+	AudioDurationMS, AudioInputTokens                                          *int64
+	TextInputTokens, ReasoningTokens                                           *int64
+	AudioTokenUnit                                                             string
 	ImageCount                                                                 int
 	RequestBodyBytes                                                           int64
 	Cost                                                                       *float64

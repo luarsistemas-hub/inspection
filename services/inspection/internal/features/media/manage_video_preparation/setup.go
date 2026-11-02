@@ -195,6 +195,12 @@ func retry(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 	var status Status
 	err := runWithin(ctx, db, within, c.TenantID, func(tx *gorm.DB) error {
 		job, err := mediacore.RetryFailedPreparation(tx.WithContext(ctx), c.TenantID, c.MediaID, c.ExpectedPreparationVersion, clock())
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Code == apperror.SourceUnavailable {
+			// A retry cannot decode a source that is gone; the operator must
+			// capture a replacement video instead (API08, IT-153/IT-465).
+			return apperror.New(apperror.InvalidState, "mediaId", "A fonte do vídeo não está mais disponível. Capture um vídeo substituto.")
+		}
 		if err != nil {
 			return err
 		}

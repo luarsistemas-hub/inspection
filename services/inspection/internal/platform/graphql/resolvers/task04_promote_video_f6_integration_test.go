@@ -102,7 +102,14 @@ func seedPromotableVideo(t *testing.T, fx fixedOriginGraphQLFixture, sourceStatu
 			if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: fx.seed.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", Landmarks: json.RawMessage(`[]`), CreatedAt: firstReady}).Error; err != nil {
 				return err
 			}
-			return tx.Create(&database.VideoPlan{ID: planID, TenantID: fx.seed.TenantID, InspectionID: fx.seed.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: manifest, Status: "SEALED", SealedAt: &firstReady, CreatedAt: firstReady}).Error
+			if err := tx.Create(&database.VideoPlan{ID: planID, TenantID: fx.seed.TenantID, InspectionID: fx.seed.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: manifest, Status: "SEALED", SealedAt: &firstReady, CreatedAt: firstReady}).Error; err != nil {
+				return err
+			}
+			// Promotion reads the inspection's active sealed plan and its MAIN preparation.
+			if err := tx.Create(&database.VideoPlanPreparation{TenantID: fx.seed.TenantID, PlanID: planID, PreparationID: preparationID, Role: "MAIN", CreatedAt: now}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, fx.seed.InspectionID).Update("active_video_plan_id", planID).Error
 		}
 		return nil
 	})

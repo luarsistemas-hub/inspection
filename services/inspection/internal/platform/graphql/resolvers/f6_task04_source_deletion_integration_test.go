@@ -15,7 +15,7 @@ import (
 
 func TestVV_IT_316OrdinaryViewerSourceDeletionIsForbidden(t *testing.T) {
 	fx := newAPI14RetentionFixture(t)
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-316"})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-316"})
 	query := api14RetentionMutation("recordDeletionRequest", "", fx.mediaID.String(), "", "vv-it-316-delete")
 	assertFixedOriginTransportError(t, executeAPI14Retention(t, fx, query, viewer, "", ""), "FORBIDDEN")
 	if err := fx.h.WithinTenant(context.Background(), fx.tenantID, func(tx *gorm.DB) error {

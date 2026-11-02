@@ -75,7 +75,7 @@ func TestCreateInspectionChecklistOnlyRejectsMandatoryFixedOriginInstructionsIT0
 	}); err != nil {
 		t.Fatal(err)
 	}
-	principal := requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}
+	principal := requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}
 	request := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: principal, CorrelationID: "vv-it092"})
 	service := inspectioncore.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}}
 	now := time.Now().UTC()
@@ -150,7 +150,7 @@ func TestCreateInspectionVideoChecklistOnlyWithoutOriginHasNullReferenceIT093(t 
 	}); err != nil {
 		t.Fatal(err)
 	}
-	request := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-it093"})
+	request := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-it093"})
 	now := time.Now().UTC()
 	view, err := (inspectioncore.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}}).Create(request, inspectioncore.CreateInput{TenantID: fixture.TenantID, AssetID: fixture.AssetID, ParticipantID: fixture.ParticipantID, ComparisonMode: catalog.ChecklistOnly, Source: inspectioncore.SourceManual, SourceKey: "vistoria-video-it093", Reason: "IT-093", DueAt: now.Add(time.Hour), DeadlineAt: now.Add(24 * time.Hour)})
 	if err != nil {
@@ -524,7 +524,7 @@ func newOriginChecklistOnlyTransportFixture(t *testing.T) originChecklistOnlyTra
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: bus, InspectionService: inspectioncore.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}}}}))
 	server.SetErrorPresenter(graph.PresentError)
-	principal := requestctx.Principal{IdentityID: member.IdentityID, MembershipID: member.ID, TenantID: origin.TenantID, Roles: []string{auth.TenantAdmin}}
+	principal := requestctx.Principal{IdentityID: member.IdentityID, MembershipID: member.ID, TenantID: origin.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}
 	operator := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: origin.TenantID, Principal: principal, CorrelationID: "vv-it091-096"})
 	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated IT-091/096 fixture", "vv-it091-096").Error; err != nil {
 		t.Fatal(err)

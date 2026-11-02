@@ -21,6 +21,7 @@ import (
 type notificationRecorder struct {
 	requests []notificationcore.Notification
 	err      error
+	db       *gorm.DB
 }
 
 func (r *notificationRecorder) Send(_ context.Context, request notificationcore.Notification) (notificationcore.NotificationResult, error) {
@@ -28,7 +29,15 @@ func (r *notificationRecorder) Send(_ context.Context, request notificationcore.
 		return notificationcore.NotificationResult{}, r.err
 	}
 	r.requests = append(r.requests, request)
-	return notificationcore.NotificationResult{ID: identity.NewID(), State: notificationcore.StateQueued}, nil
+	id := identity.NewID()
+	if r.db != nil {
+		now := time.Now().UTC()
+		row := database.Delivery{ID: id, TenantID: request.TenantID, IntentID: identity.NewID(), InspectionID: request.InspectionID, InvitationID: request.InvitationID, Status: string(notificationcore.StateQueued), LogicalTemplate: request.Template.Name, TemplateVersion: request.Template.Version, IdempotencyKey: request.IdempotencyKey, RecipientID: "test-recipient", CreatedAt: now, UpdatedAt: now}
+		if err := r.db.Create(&row).Error; err != nil {
+			return notificationcore.NotificationResult{}, err
+		}
+	}
+	return notificationcore.NotificationResult{ID: id, State: notificationcore.StateQueued}, nil
 }
 
 func correctionFixture(t *testing.T) (*gorm.DB, Service, Input, *notificationRecorder) {
@@ -118,6 +127,32 @@ func TestCorrectCreatesFirstInvitationWhenInitialDispatchWasMissed(t *testing.T)
 		t.Fatal("reused mutation ID accepted a different recipient")
 	} else if code, _, _ := apperror.Public(err); code != apperror.Conflict {
 		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestREO_UT023DuplicateDelegateInvitationKeepsSingleDelivery(t *testing.T) {
+	db, service, input, recorder := correctionFixture(t)
+	recorder.db = db
+	service.Within = func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
+		return fn(db.WithContext(ctx))
+	}
+	first, err := service.Correct(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.Correct(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invitations, deliveries int64
+	if err := db.Model(&database.Invitation{}).Where("tenant_id=? AND idempotency_key=?", input.TenantID, input.IdempotencyKey).Count(&invitations).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&database.Delivery{}).Where("tenant_id=? AND invitation_id=?", input.TenantID, first.InvitationID).Count(&deliveries).Error; err != nil {
+		t.Fatal(err)
+	}
+	if first.InvitationID != second.InvitationID || first.DeliveryID == nil || second.DeliveryID == nil || *first.DeliveryID != *second.DeliveryID || invitations != 1 || deliveries != 1 || len(recorder.requests) != 1 {
+		t.Fatalf("duplicate invitation was not idempotent: first=%+v second=%+v invitations=%d deliveries=%d dispatches=%d", first, second, invitations, deliveries, len(recorder.requests))
 	}
 }
 

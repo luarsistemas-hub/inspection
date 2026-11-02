@@ -88,7 +88,7 @@ func TestVV_IT_516RetentionMutationsRequireAuthentication(t *testing.T) {
 
 func TestVV_IT_517RetentionMutationsRequireManagementCapability(t *testing.T) {
 	fx := newAPI14RetentionFixture(t)
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-517"})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-517"})
 	for _, operation := range api14RetentionOperations(fx) {
 		t.Run(operation.name, func(t *testing.T) {
 			assertFixedOriginTransportError(t, executeAPI14Retention(t, fx, operation.query, viewer, "", ""), "FORBIDDEN")
@@ -257,7 +257,7 @@ func TestVV_IT_522InspectionPurgeRequestRejectsLiveVideoPlanFrames(t *testing.T)
 		t.Fatal(err)
 	}
 	fx.tenantID, fx.inspectionID = origin.TenantID, inspectionID
-	fx.admin = requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: origin.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: origin.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-it-522"})
+	fx.admin = requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: origin.TenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: origin.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-it-522"})
 	planID := identity.NewID()
 	submissionID := identity.NewID()
 	now := time.Now().UTC()
@@ -331,7 +331,7 @@ func newAPI14RetentionFixture(t *testing.T) api14RetentionFixture {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	admin := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-api14"})
+	admin := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-api14"})
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: h.DB, Bus: mediator.New()}}))
 	server.SetErrorPresenter(graph.PresentError)
 	return api14RetentionFixture{h: h, tenantID: seed.TenantID, identityID: seed.IdentityID, inspectionID: seed.InspectionID, mediaID: mediaID, originVersionID: originVersionID, draftID: seed.DraftID, responsibilityID: seed.ResponsibilityID, sourceExpiry: sourceExpiry, server: server, admin: admin}

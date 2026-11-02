@@ -14,7 +14,7 @@ Execute `generate-graphql-contracts.sh` após alterar o schema ou os documentos
 GraphQL dos frontends e inclua os arquivos gerados no commit. A CI executa o
 mesmo comando e verifica se o repositório continua sem diferenças.
 
-`./scripts/local.sh down` preserva os volumes; `./scripts/local.sh down -v` também os remove. `verify.sh`, `smoke.sh`, `security-smoke.sh`, `load-smoke.sh` e `validate-compozy-tasks.sh` continuam disponíveis para CI e diagnóstico. `parity-gate.sh` sobe uma stack isolada, executa os testes autenticados, gera evidência redigida e valida o inventário legado antes de desmontar os volumes. Os scripts de startup não removem volumes nem criam binários no repositório.
+`./scripts/local.sh down` preserva os volumes; `./scripts/local.sh down -v` também os remove. `verify.sh`, `smoke.sh`, `security-smoke.sh`, `load-smoke.sh` e `validate-compozy-tasks.sh` continuam disponíveis para CI e diagnóstico. `parity-gate.sh` sobe uma stack isolada, executa os testes autenticados, gera evidência redigida e valida o inventário de rotas/estados em `docs/design-system/migration-inventory.json` e as evidências de acessibilidade em `docs/design-system/accessibility-evidence.json` antes de desmontar os volumes. Os scripts de startup não removem volumes nem criam binários no repositório.
 
 Execute `./scripts/install-git-hooks.sh` uma vez por clone para ativar os hooks
 versionados em `.githooks/`. O `pre-push` chama `scripts/pre-push.sh`, que valida
@@ -31,6 +31,5 @@ O padrão `--cache-mode implicit` mede os acertos reportados pelo Gemini. `--cac
 O inventário pode ser revisado sem subir a stack:
 
 ```sh
-node scripts/lib/legacy-inventory.mjs generate --legacy-root apps/web --output /tmp/legacy-inventory.json
-node scripts/lib/legacy-inventory.mjs validate --input /tmp/legacy-inventory.json --baseline docs/legacy-inventory.json --fail-on-unclassified --fail-on-drift
+node scripts/lib/design-system-migration.mjs validate --repository . --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json
 ```

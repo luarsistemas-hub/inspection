@@ -46,6 +46,19 @@ export async function installFakeGetUserMedia(page: Page, options: FakeGetUserMe
       fake = async (constraints) => {
         if (config.captureConstraints) {
           (window as typeof window & { captureConstraints?: MediaStreamConstraints }).captureConstraints = constraints;
+          const observed = (window as typeof window & { observedMediaConstraints?: MediaStreamConstraints[] });
+          observed.observedMediaConstraints ??= [];
+          observed.observedMediaConstraints.push(constraints ?? {});
+        }
+        if (constraints?.audio === true && constraints.video === false) {
+          const context = new AudioContext();
+          const destination = context.createMediaStreamDestination();
+          const oscillator = context.createOscillator();
+          oscillator.connect(destination);
+          oscillator.start();
+          (window as typeof window & { fakeAudioContexts?: AudioContext[] }).fakeAudioContexts ??= [];
+          (window as typeof window & { fakeAudioContexts?: AudioContext[] }).fakeAudioContexts?.push(context);
+          return destination.stream;
         }
         const stream = canvas.captureStream(30);
         (window as typeof window & { lastCameraStream?: MediaStream }).lastCameraStream = stream;

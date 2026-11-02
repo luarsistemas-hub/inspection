@@ -100,6 +100,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/${{ matrix.product }}/package-lock.json
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.product }}-${{ hashFiles(format('apps/{0}/package-lock.json', matrix.product)) }}
       - run: npm ci
       - run: node ../../scripts/prepare-design-system.mjs
       - name: Audit production dependencies
@@ -107,9 +111,41 @@ jobs:
       - run: npm run codegen:check
       - run: npm run lint
       - run: npm run test
-      - run: npm run build
+      - name: Configure Capture build endpoints
+        if: matrix.product == 'capture'
+        run: |
+          {
+            echo "NEXT_PUBLIC_INSPECTION_API_URL=http://localhost:3113/graphql"
+            echo "NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3002"
+          } >> "$GITHUB_ENV"
+      - name: Configure Onboarding build Turnstile test key
+        if: matrix.product == 'onboarding'
+        run: echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA" >> "$GITHUB_ENV"
+      - name: Build frontend with mocked OIDC endpoints
+        env:
+          NEXT_PUBLIC_OIDC_AUTHORIZE_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/auth
+          NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token
+        run: npm run build
+      - name: Install required Playwright browsers
+        run: npx playwright install --with-deps ${{ matrix.product == 'capture' && 'webkit' || matrix.product == 'onboarding' && 'chromium webkit' || 'chromium' }}
+      - name: Run required Admin mocked journeys
+        if: matrix.product == 'admin'
+        env:
+          INSPECTION_E2E_MOCKS: 'true'
+        run: npx playwright test tests/e2e/admin-mocked-integration.spec.ts --project=chromium
+      - name: Run required Dashboard mocked journeys
+        if: matrix.product == 'dashboard'
+        env:
+          INSPECTION_E2E_MOCKS: 'true'
+        run: npx playwright test tests/e2e/design-system-migration.spec.ts --project=chromium
+      - name: Run Capture production journeys in WebKit
+        if: matrix.product == 'capture'
+        run: npx playwright test tests/e2e/design-system-migration.spec.ts --project=webkit-iphone
+      - name: Run Onboarding viewport journeys
+        if: matrix.product == 'onboarding'
+        run: npx playwright test tests/e2e/design-system-migration.spec.ts --project=viewport-320 --project=viewport-360 --project=viewport-768 --project=desktop-1440
   ci-required:
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [go, design-system, frontend]
     runs-on: ubuntu-latest
     steps:

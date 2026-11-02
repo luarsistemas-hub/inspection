@@ -10,6 +10,19 @@ Canonical test contract for the Autonomous Inspection Platform. Companion to `_t
 - IDs are permanent and sequential. `UT` covers pure components and contract logic, `IT` covers slice/infrastructure/API/message behavior, and `E2E` follows a user-visible journey.
 - Test data uses synthetic contacts and generated non-personal images. No production credentials, faces, documents, or tenant data enter fixtures.
 
+## Notas de rastreabilidade (task_06, item AI-A)
+
+- Os IDs deste catálogo colidem com os de outros workflows. Um teste só conta para este workflow quando leva o prefixo `AIP_` (`TestAIP_IT_241…`, `TestAIP_UT_034…`) e está na área cujo comportamento o ID define.
+- O manifesto `harness.AutonomousTask06Cases()` (`internal/integration/harness/case_manifest_autonomous_task06.go`) classifica os 148 IDs da task_06 como COVERED, PENDING ou OBSOLETE; `TestAutonomousTask06ManifestAccountsForEveryAssignedCase` falha se um ID COVERED não tiver teste rotulado na área indicada.
+- Superados por decisões posteriores: Gotenberg (PDF agora em Maroto) e modo consolidado de relatório (removido pela migration 50). Estão marcados `[OBSOLETO]` ou `[REVISADO]` na definição do caso.
+
+## Notas de rastreabilidade (task_06, item AI-B)
+
+- Cobre retenção (IT-301..310, IT-390), seeds de obra e limpeza pelo pipeline comum (IT-321..340), os negativos GraphQL em PostgreSQL com a role de runtime (IT-428, IT-430, IT-434) e os eventos com handler real e DLQ nomeada (IT-561/562, IT-567..586). Os testes levam o prefixo `TestAIP_` e rodam com `-tags integration` num banco descartável.
+- Eventos: cada caso publica o evento realmente emitido numa fila de prefixo único `aip-test-<uuid>.*`, com a topologia de produção (retry e `.dlq`), desvinculada do exchange compartilhado logo após declarada, consumida pelo `RabbitConsumer` e pelo inbox reais; a DLQ é conferida por `WaitQueue` e as filas são apagadas ao final.
+- Defeitos reais encontrados e corrigidos: purga de pedido de exclusão fora do tenant (RLS), descoberta de vencimentos do scheduler sem tenant (agora `retention/schedule_expiry`), `purge_due` repetido indo à DLQ, `configureRetentionPolicy` aberto a Manager/Employee, cursores não UUID virando INTERNAL, entregas de notificação sem escopo e com dados lidos fora da transação do tenant, `projectTimeline` do administrador sem NOT_FOUND.
+- Lacunas de implementação (não corrigidas, fora do escopo de teste): nenhuma rotina leva a etapa de projeto a COMPLETED; a âncora de retenção é a inspeção, não o encerramento do projeto; a purga das classes operacional/localização/segredos não tem fluxo; a descoberta de tenants do scheduler usa janela fixa de 5 anos e não enxerga políticas mais curtas (exigiria migration).
+
 ## Coverage Matrix
 
 | Source | Behavior | Unit | Integration | E2E |
@@ -555,8 +568,8 @@ Canonical test contract for the Autonomous Inspection Platform. Companion to `_t
 - **UT-012** (error): LLM gateway rejects malformed output and safely maps provider failures.
 - **UT-013** (happy): Channel registry selects a sender and aggregate succeeds after the first receipt.
 - **UT-014** (error): Unknown/all-failed channels remain typed; successful channels are not retried.
-- **UT-015** (happy): PDF renderer sends canonical sanitized HTML/assets with a timeout and returns bytes.
-- **UT-016** (error): PDF renderer rejects external asset URLs and partial/timeout responses.
+- **UT-015** (happy): PDF renderer sends canonical sanitized HTML/assets with a timeout and returns bytes. **[REVISADO · AI-A]** O renderizador atual é o Maroto (`features/reports/render_pdf`), em processo: vale o contrato de PDF a partir do snapshot canônico e dos ativos embutidos, sob o timeout do worker, devolvendo bytes. Teste: `TestAIP_UT_015…`.
+- **UT-016** (error): PDF renderer rejects external asset URLs and partial/timeout responses. **[REVISADO · AI-A]** Sem Gotenberg não há URL externa nem resposta HTTP parcial: valem a recusa de URL externa no snapshot e nos ativos, o limite de bytes/páginas (saída parcial ou grande demais), a divergência de digest de imagem lida e o prazo expirado. Teste: `TestAIP_UT_016…`.
 - **UT-017** (happy): Authorization requires a matching role plus tenant/resource scope.
 - **UT-018** (error): Authorization denies disabled/viewer/scope/cross-tenant access without disclosure.
 - **UT-019** (boundary): OTP/session accepts the final valid second/attempt and expires at the exact boundary.
@@ -650,8 +663,8 @@ Canonical test contract for the Autonomous Inspection Platform. Companion to `_t
 - **IT-371**: Valid LiteLLM output persists model, prompt, digest, usage, cost, and evidence.
 - **IT-372**: Malformed LiteLLM output retries without a partial finding.
 - **IT-373**: Exhausted LiteLLM failure persists inconclusive comparison and terminal report.
-- **IT-374**: Gotenberg renders immutable sanitized HTML and stores private hashed PDF.
-- **IT-375**: Exhausted Gotenberg failure publishes HTML-only without reclassification.
+- **IT-374**: Gotenberg renders immutable sanitized HTML and stores private hashed PDF. **[OBSOLETO · AI-A]** O Gotenberg foi removido; o PDF privado com hash é gerado em processo pelo Maroto. Cobertura equivalente: UT-015, UT-016, IT-263, IT-266.
+- **IT-375**: Exhausted Gotenberg failure publishes HTML-only without reclassification. **[OBSOLETO · AI-A]** Sem renderizador externo não existe HTML-only por falha dele; a falha do PDF fica registrada (FAILED) sem reclassificar. Cobertura equivalente: IT-266.
 - **IT-376**: One channel succeeds and another fails; aggregate delivers while failed channel retries.
 - **IT-377**: All channels exhaust; aggregate fails with no false delivery.
 - **IT-378**: Valid Twilio callback updates once; bad signature/stale timestamp makes no mutation.
@@ -666,7 +679,7 @@ Canonical test contract for the Autonomous Inspection Platform. Companion to `_t
 - **IT-387**: PWA saves offline state across reload and blocks final submit until online.
 - **IT-388**: At 500 global/100 tenant sessions targets hold; next tenant request gets retry guidance.
 - **IT-389**: Telemetry correlates failure while redacting sensitive fields and unbounded labels.
-- **IT-390**: Purge honors hold, then deletes personal associations/blobs/reports and keeps deidentified audit.
+- **IT-390**: Purge honors hold, then deletes personal associations/blobs/reports and keeps deidentified audit. **[COBERTO · AI-B]** `TestAIP_IT390…`: hold ativo bloqueia, após a liberação apaga tudo e mantém só auditoria desidentificada com manifesto completo.
 
 ## Integration Tests — API, Routes, and Messages
 
@@ -707,13 +720,13 @@ Canonical test contract for the Autonomous Inspection Platform. Companion to `_t
 - **IT-425**: `POST /graphql` executes `reportDownload` with authorized valid data and returns its schema-valid success payload.
 - **IT-426**: `POST /graphql` executes `reportDownload` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data.
 - **IT-427**: `POST /graphql` executes `dashboardSummary` with authorized valid data and returns its schema-valid success payload.
-- **IT-428**: `POST /graphql` executes `dashboardSummary` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data.
+- **IT-428**: `POST /graphql` executes `dashboardSummary` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data. **[COBERTO · AI-B]** `TestAIP_PostgresIT428…` (PostgreSQL, role de runtime): prova, entrada, escopo, estado e outro tenant. A versão SQLite do item AI-A permanece.
 - **IT-429**: `POST /graphql` executes `triageInspections` with authorized valid data and returns its schema-valid success payload.
-- **IT-430**: `POST /graphql` executes `triageInspections` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data.
+- **IT-430**: `POST /graphql` executes `triageInspections` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data. **[COBERTO · AI-B]** `TestAIP_PostgresIT430…`. Defeito corrigido: cursor com id que não é UUID virava erro INTERNAL no PostgreSQL; agora é INVALID_INPUT.
 - **IT-431**: `POST /graphql` executes `auditEvents` with authorized valid data and returns its schema-valid success payload.
 - **IT-432**: `POST /graphql` executes `auditEvents` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data.
 - **IT-433**: `POST /graphql` executes `notificationDeliveries` with authorized valid data and returns its schema-valid success payload.
-- **IT-434**: `POST /graphql` executes `notificationDeliveries` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data.
+- **IT-434**: `POST /graphql` executes `notificationDeliveries` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data. **[COBERTO · AI-B]** `TestAIP_PostgresIT434…`. Defeitos corrigidos: cursor não UUID (INTERNAL), listagem sem filtro de escopo para papéis com concessão, e consultas de destinatário/falha/responsabilidade fora da transação do tenant (sempre vazias sob RLS).
 - **IT-435**: `POST /graphql` executes `retentionPolicies` with authorized valid data and returns its schema-valid success payload.
 - **IT-436**: `POST /graphql` executes `retentionPolicies` with invalid proof, scope, input, or state and returns the stable code without internal/cross-tenant data.
 - **IT-437**: `POST /graphql` executes `usageSummary` with authorized valid data and returns its schema-valid success payload.
@@ -846,32 +859,32 @@ Canonical test contract for the Autonomous Inspection Platform. Companion to `_t
 - **IT-558**: Duplicate or invalid-major `media.verified.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
 - **IT-559**: Valid `media.screened.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
 - **IT-560**: Duplicate or invalid-major `media.screened.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-561**: Valid `capture.submitted.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-562**: Duplicate or invalid-major `capture.submitted.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
+- **IT-561**: Valid `capture.submitted.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT561IT562…` (harness): evento real publicado em fila isolada com DLQ nomeada, handler real do worker, resultado conferido no PostgreSQL.
+- **IT-562**: Duplicate or invalid-major `capture.submitted.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT561IT562…`: duplicata sem efeito, major inválido na DLQ `<fila>.dlq` com motivo seguro, payload inutilizável sem recibo no inbox.
 - **IT-563**: Valid `recapture.requested.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
 - **IT-564**: Duplicate or invalid-major `recapture.requested.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
 - **IT-565**: Valid `recapture.completed.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
 - **IT-566**: Duplicate or invalid-major `recapture.completed.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-567**: Valid `analysis.comparison_requested.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-568**: Duplicate or invalid-major `analysis.comparison_requested.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-569**: Valid `analysis.comparison_completed.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-570**: Duplicate or invalid-major `analysis.comparison_completed.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-571**: Valid `inspection.classified.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-572**: Duplicate or invalid-major `inspection.classified.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-573**: Valid `report.snapshot_created.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-574**: Duplicate or invalid-major `report.snapshot_created.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-575**: Valid `report.ready.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-576**: Duplicate or invalid-major `report.ready.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-577**: Valid `notification.delivery_requested.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-578**: Duplicate or invalid-major `notification.delivery_requested.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-579**: Valid `notification.channel_status.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-580**: Duplicate or invalid-major `notification.channel_status.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-581**: Valid `project.stage_changed.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-582**: Duplicate or invalid-major `project.stage_changed.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-583**: Valid `retention.purge_due.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-584**: Duplicate or invalid-major `retention.purge_due.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
-- **IT-585**: Valid `retention.purged.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once.
-- **IT-586**: Duplicate or invalid-major `retention.purged.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason.
+- **IT-567**: Valid `analysis.comparison_requested.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT567IT568…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-568**: Duplicate or invalid-major `analysis.comparison_requested.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT567IT568…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-569**: Valid `analysis.comparison_completed.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT569IT570…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-570**: Duplicate or invalid-major `analysis.comparison_completed.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT569IT570…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-571**: Valid `inspection.classified.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT571IT572…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-572**: Duplicate or invalid-major `inspection.classified.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT571IT572…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-573**: Valid `report.snapshot_created.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT573IT574…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-574**: Duplicate or invalid-major `report.snapshot_created.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT573IT574…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-575**: Valid `report.ready.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT575IT576…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-576**: Duplicate or invalid-major `report.ready.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT575IT576…` (harness): handler real, resultado único no PostgreSQL, duplicata sem efeito e DLQ nomeada com motivo seguro.
+- **IT-577**: Valid `notification.delivery_requested.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[REVISADO · AI-B]** A major vigente é `notification.delivery_requested.v2`; `TestAIP_IT577IT578…` cobre o consumidor real (validação da referência).
+- **IT-578**: Duplicate or invalid-major `notification.delivery_requested.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[REVISADO · AI-B]** `TestAIP_IT577IT578…`: referência inexistente e major inválida vão à DLQ nomeada.
+- **IT-579**: Valid `notification.channel_status.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[OBSOLETO · AI-B]** `notification.channel_status.v1` não existe mais no registro; o desfecho terminal é `notification.delivery_terminal.v1`. Cobertura equivalente: `TestAIP_IT579IT580…`.
+- **IT-580**: Duplicate or invalid-major `notification.channel_status.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[OBSOLETO · AI-B]** Ver IT-579.
+- **IT-581**: Valid `project.stage_changed.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT581IT582…`: consumo único; a linha do tempo deriva das etapas autoritativas, sem escrita adicional.
+- **IT-582**: Duplicate or invalid-major `project.stage_changed.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT581IT582…`.
+- **IT-583**: Valid `retention.purge_due.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT583IT584…` (harness): handler real de retenção, resultado único e DLQ nomeada.
+- **IT-584**: Duplicate or invalid-major `retention.purge_due.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT583IT584…` (harness): handler real de retenção, resultado único e DLQ nomeada.
+- **IT-585**: Valid `retention.purged.v1` serializes, publishes, consumes through inbox, and produces its documented local outcome once. **[COBERTO · AI-B]** `TestAIP_IT585IT586…` (harness): handler real de retenção, resultado único e DLQ nomeada.
+- **IT-586**: Duplicate or invalid-major `retention.purged.v1` does not duplicate state; invalid contract reaches its named DLQ/fallback with a safe reason. **[COBERTO · AI-B]** `TestAIP_IT585IT586…` (harness): handler real de retenção, resultado único e DLQ nomeada.
 
 ### GraphQL Transport and Stable Errors
 
@@ -1242,17 +1255,17 @@ These cases execute the owning slice through its registered GraphQL, command, co
 - **IT-266**: ``reports/generate_snapshot`, `reports/get_report`` — PDF generation fails → status remains visible and bounded retry leads to PDF or a recorded failure without changing analysis.
 - **IT-267**: ``reports/generate_snapshot`, `reports/get_report`` — Download or generation is retried → content and report identity remain stable.
 - **IT-268**: ``reports/generate_snapshot`, `reports/get_report`` — Report is requested before comparisons are terminal → pending status is shown.
-- **IT-269**: ``reports/generate_snapshot`, `reports/get_report`` — Inspection is invalidated later → report remains historical and is labeled invalidated.
+- **IT-269**: ``reports/generate_snapshot`, `reports/get_report`` — Inspection is invalidated later → report remains historical and is labeled invalidated. **[PENDENTE · item de publicação]** Exige que o tipo `Report` exponha o estado de publicação/invalidação; o item AI-A não edita o schema e o manifesto `AutonomousTask06Cases` o mantém PENDING.
 - **IT-270**: ``reports/generate_snapshot`, `reports/get_report`` — Report contains many evidence pairs → navigation and rendering remain usable and complete.
 
 ### US-028: Review consolidated or historical stage reports
 
-- **IT-271**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Unknown report mode → template cannot publish.
+- **IT-271**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Unknown report mode → template cannot publish. **[OBSOLETO · AI-A]** O modo consolidado e a configuração `report_mode` foram removidos (migration 50); não há modo de relatório desconhecido a recusar.
 - **IT-272**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — No stage has finalized → the project shows planned progress without pretending a report exists.
 - **IT-273**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Version or stage history exceeds one page → stable chronological pagination is used.
 - **IT-274**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — User lacks project scope → no report or timeline detail is exposed.
 - **IT-275**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Two stages finalize together → version order is deterministic and neither stage disappears.
-- **IT-276**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Consolidation stops → prior latest version stays available until the new version completes.
+- **IT-276**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Consolidation stops → prior latest version stays available until the new version completes. **[OBSOLETO · AI-A]** A consolidação de versões do projeto foi removida com o modo consolidado (migration 50).
 - **IT-277**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Same stage-final event repeats → no duplicate visible report version results.
 - **IT-278**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — A late earlier-stage result arrives → history uses actual stage sequence and records result timing without rewriting prior versions.
 - **IT-279**: ``reports/generate_snapshot`, `dashboard/project_timeline`` — Project reopens after closure → new versions append and closure history remains visible.
@@ -1275,8 +1288,8 @@ These cases execute the owning slice through its registered GraphQL, command, co
 
 - **IT-291**: ``notifications/request_delivery`` — Invalid recipient or channel → configuration is rejected.
 - **IT-292**: ``notifications/request_delivery`` — No internal recipient is configured → dashboard highlight remains and configuration warning is visible.
-- **IT-293**: ``notifications/request_delivery`` — Alert rate reaches configured protection limits → alerts are safely grouped or queued without losing critical inspection identity.
-- **IT-294**: ``notifications/request_delivery`` — Recipient later loses scope → link access is denied even if message was delivered.
+- **IT-293**: ``notifications/request_delivery`` — Alert rate reaches configured protection limits → alerts are safely grouped or queued without losing critical inspection identity. **[PENDENTE · alertas]** O teste rotulado em `handle_classified` verifica identidade por destino, não o agrupamento/fila sob limite de taxa.
+- **IT-294**: ``notifications/request_delivery`` — Recipient later loses scope → link access is denied even if message was delivered. **[PENDENTE · alertas]** O teste rotulado em `handle_classified` verifica apenas a interrupção de alertas futuros, não a negação do link de mensagem já entregue.
 - **IT-295**: ``notifications/request_delivery`` — Multiple critical findings arrive together → notification grouping does not hide any affected inspection.
 - **IT-296**: ``notifications/request_delivery`` — Provider delivery fails → bounded retry and final failure are recorded.
 - **IT-297**: ``notifications/request_delivery`` — Same analysis event is replayed → no duplicate first-critical alert is sent.
@@ -1286,16 +1299,16 @@ These cases execute the owning slice through its registered GraphQL, command, co
 
 ### US-031: Configure and enforce retention
 
-- **IT-301**: ``retention/configure_policy`, `retention/purge_data`` — Negative, malformed, or disallowed retention period → save is rejected.
-- **IT-302**: ``retention/configure_policy`, `retention/purge_data`` — Tenant has no custom policy → all platform defaults are displayed and applied.
-- **IT-303**: ``retention/configure_policy`, `retention/purge_data`` — Deletion batch exceeds processing capacity → it continues in bounded batches with status, never partial silent completion.
-- **IT-304**: ``retention/configure_policy`, `retention/purge_data`` — Non-administrator changes policy or requests tenant-wide deletion → access is denied.
-- **IT-305**: ``retention/configure_policy`, `retention/purge_data`` — Policy changes while data reaches expiry → each record follows one determinable effective policy and audit explanation.
-- **IT-306**: ``retention/configure_policy`, `retention/purge_data`` — Deletion stops after partial derivative cleanup → retry completes the same eligible scope and status remains visible.
-- **IT-307**: ``retention/configure_policy`, `retention/purge_data`` — Deletion processing repeats → already deleted data remains absent and audit does not imply duplicate evidence.
-- **IT-308**: ``retention/configure_policy`, `retention/purge_data`` — Relationship closure is recorded late → retention start is based on the authoritative closure and recalculated transparently.
-- **IT-309**: ``retention/configure_policy`, `retention/purge_data`` — Closed project reopens → future retention eligibility is recalculated without restoring already lawfully deleted data.
-- **IT-310**: ``retention/configure_policy`, `retention/purge_data`` — Large tenant reaches mass expiry → deletion remains tenant-isolated, observable, and complete across data classes.
+- **IT-301**: ``retention/configure_policy`, `retention/purge_data`` — Negative, malformed, or disallowed retention period → save is rejected. **[COBERTO · AI-B]** `features/retention/configure_policy` (`TestAIP_IT301…`, PostgreSQL) e `resolvers` (`TestAIP_PostgresIT301…`). Faixa aceita: 1 a 36500 dias (o teto evita estouro de `time.Duration` no purge); segurança 0 a 36500.
+- **IT-302**: ``retention/configure_policy`, `retention/purge_data`` — Tenant has no custom policy → all platform defaults are displayed and applied. **[COBERTO · AI-B]** `TestAIP_IT302…` (padrão de 5 anos aplicado na purga, sem gravar política) e `TestAIP_PostgresIT302…` (`retentionPolicies` mostra 1825/365/0 e depois o histórico de versões). Os relógios de operacional e segredos estão em `retention/core` (`TestDefaultClocksForEveryDataClass`); a purga de registros operacionais/localização não existe como fluxo e segue pendente na frente de retenção.
+- **IT-303**: ``retention/configure_policy`, `retention/purge_data`` — Deletion batch exceeds processing capacity → it continues in bounded batches with status, never partial silent completion. **[COBERTO · AI-B]** `TestAIP_IT303…`: lotes de 3 em 9 pedidos, restantes visíveis como REQUESTED, bloqueados (hold/prazo) como BLOCKED com motivo. Defeito corrigido: `process_deletion_requests` purgava fora do contexto de tenant e falhava com `record not found` sob RLS.
+- **IT-304**: ``retention/configure_policy`, `retention/purge_data`` — Non-administrator changes policy or requests tenant-wide deletion → access is denied. **[COBERTO · AI-B]** `TestAIP_PostgresIT304…` (resolvers, PostgreSQL com role de runtime). `configureRetentionPolicy` passou a ser exclusivo do administrador do tenant (Manager/Employee/Viewer negados); exclusão e retenção legal seguem exigindo Manager ou superior. Não existe operação de exclusão "do tenant inteiro": os pedidos são por inspeção, mídia ou origem.
+- **IT-305**: ``retention/configure_policy`, `retention/purge_data`` — Policy changes while data reaches expiry → each record follows one determinable effective policy and audit explanation. **[COBERTO · AI-B]** `TestAIP_IT305…`: versões únicas e consecutivas (inclusive com 8 gravações concorrentes), vale a versão mais recente no momento da avaliação, e a auditoria da purga explica o relógio aplicado (`class`, `start`, `due`) sem identificar o dado removido.
+- **IT-306**: ``retention/configure_policy`, `retention/purge_data`` — Deletion stops after partial derivative cleanup → retry completes the same eligible scope and status remains visible. **[COBERTO · AI-B]** `TestAIP_IT306…`: falha do object store após limpeza parcial não confirma nada no banco, o pedido segue REQUESTED e a nova tentativa conclui o mesmo escopo.
+- **IT-307**: ``retention/configure_policy`, `retention/purge_data`` — Deletion processing repeats → already deleted data remains absent and audit does not imply duplicate evidence. **[COBERTO · AI-B]** `TestAIP_IT307…`. Defeito corrigido: um `retention.purge_due.v1` repetido para inspeção já purgada ia à DLQ como permanente; agora é no-op, com uma única purga, uma auditoria e um `retention.purged.v1`.
+- **IT-308**: ``retention/configure_policy`, `retention/purge_data`` — Relationship closure is recorded late → retention start is based on the authoritative closure and recalculated transparently. **[REVISADO · AI-B]** `TestAIP_IT308…`. A âncora autêntica implementada é o instante de encerramento da inspeção (`inspection.updated_at` em estado terminal), não a criação; recalcula ao corrigir o encerramento. O encerramento do projeto/ocupação não é âncora (lacuna registrada na frente de retenção).
+- **IT-309**: ``retention/configure_policy`, `retention/purge_data`` — Closed project reopens → future retention eligibility is recalculated without restoring already lawfully deleted data. **[REVISADO · AI-B]** `TestAIP_IT309…`: a reabertura (inspeção volta a estado ativo) invalida o evento antigo e uma nova conclusão inicia novo relógio, sem restaurar o que já foi purgado. Reabrir um projeto não altera hoje a elegibilidade das inspeções (lacuna registrada).
+- **IT-310**: ``retention/configure_policy`, `retention/purge_data`` — Large tenant reaches mass expiry → deletion remains tenant-isolated, observable, and complete across data classes. **[COBERTO · AI-B]** `TestAIP_IT310…` (12 inspeções, todas as classes: original, derivado, snapshot, artefato, associações) e `TestAIP_ScheduleExpiry…`. Defeito corrigido: a descoberta de vencimentos do scheduler lia sem contexto de tenant (RLS devolvia nada e o evento repetido colidia na chave); agora `retention/schedule_expiry` roda no tenant, é idempotente e limitada por lote.
 
 ### US-032: Complete a periodic property inspection
 
@@ -1312,29 +1325,29 @@ These cases execute the owning slice through its registered GraphQL, command, co
 
 ### US-033: Report progress and nonconformities
 
-- **IT-321**: `Construction template seeds` — Progress value, checklist answer, or required evidence is invalid → affected requirement remains incomplete.
-- **IT-322**: `Construction template seeds` — Planned stage lacks an expected reference or checklist → it cannot start until corrected or explicitly configured as reference-free.
-- **IT-323**: `Construction template seeds` — Project or stage evidence limit is reached → additional items are rejected without losing accepted history.
-- **IT-324**: `Construction template seeds` — Responsible party attempts internal project administration or another project → access is denied.
-- **IT-325**: `Construction template seeds` — Exceptional stage and planned stage start together → timeline retains a deterministic order.
-- **IT-326**: `Construction template seeds` — Field capture stops → resumable progress remains scoped to the stage.
-- **IT-327**: `Construction template seeds` — Stage completion event repeats → one stage result and report version result.
-- **IT-328**: `Construction template seeds` — Later construction stage starts before a required predecessor → configured ordering rule is enforced.
-- **IT-329**: `Construction template seeds` — Closed project receives participant capture → access is denied until authorized reopening and a valid invitation.
-- **IT-330**: `Construction template seeds` — Long construction project contains many stages and findings → latest status and full history remain navigable.
+- **IT-321**: `Construction template seeds` — Progress value, checklist answer, or required evidence is invalid → affected requirement remains incomplete. **[REVISADO · AI-B]** Progresso/checklist deixaram de existir com o layout de ambientes (ADR-020, schema v2). Cobertura: `TestAIP_IT321IT331…` (limites de evidência inválidos nunca compilam) e `TestAIP_IT321To340…` (obra pelo pipeline comum, PostgreSQL).
+- **IT-322**: `Construction template seeds` — Planned stage lacks an expected reference or checklist → it cannot start until corrected or explicitly configured as reference-free. **[REVISADO · AI-B]** `TestAIP_IT322IT332…`: etapa/modo que depende de referência não inicia sem ela; os seeds são sem referência por definição (CHECKLIST_ONLY, ADR-021).
+- **IT-323**: `Construction template seeds` — Project or stage evidence limit is reached → additional items are rejected without losing accepted history. **[COBERTO · AI-B]** `TestAIP_IT323IT330…` (capacidade de 100 etapas, recusa sem alterar o histórico) e `TestAIP_IT323IT333…` (tetos de evidência).
+- **IT-324**: `Construction template seeds` — Responsible party attempts internal project administration or another project → access is denied. **[COBERTO · AI-B]** `TestAIP_IT324IT334…`: papéis sem administração de projeto e outro tenant são negados sem alterar o projeto.
+- **IT-325**: `Construction template seeds` — Exceptional stage and planned stage start together → timeline retains a deterministic order. **[COBERTO · AI-B]** `TestAIP_IT325…`: etapa excepcional e início concorrentes na mesma versão têm um vencedor e posições contíguas.
+- **IT-326**: `Construction template seeds` — Field capture stops → resumable progress remains scoped to the stage. **[PENDENTE · AI-B]** Retomada de captura por etapa não tem teste específico de obra; o rascunho é por responsabilidade (ver testes de captura). Fora deste item.
+- **IT-327**: `Construction template seeds` — Stage completion event repeats → one stage result and report version result. **[PARCIAL · AI-B]** `TestAIP_IT321To340…` prova um resultado de análise, uma classificação e uma versão de relatório mesmo com reentrega. Lacuna de implementação: nenhum consumidor leva a etapa a COMPLETED (`projects/core` só inicia/pula), então o projeto não fecha após etapa iniciada; "um resultado de etapa" depende dessa feature.
+- **IT-328**: `Construction template seeds` — Later construction stage starts before a required predecessor → configured ordering rule is enforced. **[COBERTO · AI-B]** `TestAIP_IT328…`: regra de ordem aplicada; projeto sem a regra inicia em qualquer ordem.
+- **IT-329**: `Construction template seeds` — Closed project receives participant capture → access is denied until authorized reopening and a valid invitation. **[COBERTO · AI-B]** `TestAIP_IT329IT339…`: projeto fechado recusa nova captura/etapa; reabertura exige motivo auditado.
+- **IT-330**: `Construction template seeds` — Long construction project contains many stages and findings → latest status and full history remain navigable. **[COBERTO · AI-B]** `TestAIP_IT323IT330…`: 100 etapas e histórico completo ordenados; sujeito à lacuna de conclusão de etapa descrita em IT-327.
 
 ### US-034: Demonstrate cleaning execution and quality
 
-- **IT-331**: `Cleaning template seeds` — Checklist answer, origin description, or stage evidence is invalid → stage cannot complete until corrected or marked impossible where allowed.
-- **IT-332**: `Cleaning template seeds` — No valid origin exists for an origin-based template → later comparison stage cannot start.
-- **IT-333**: `Cleaning template seeds` — Cleaning scope exceeds template evidence or stage limits → additional content is rejected with the limit explained.
-- **IT-334**: `Cleaning template seeds` — Cleaning participant accesses another service or internal report → access is denied.
-- **IT-335**: `Cleaning template seeds` — Origin replacement and later stage creation race → stage fixes one complete origin version.
-- **IT-336**: `Cleaning template seeds` — Before or after capture loses connectivity → progress resumes within the active session.
-- **IT-337**: `Cleaning template seeds` — Same cleaning stage is submitted twice → one stage result is accepted.
-- **IT-338**: `Cleaning template seeds` — After stage is attempted before required origin completion → start is blocked.
-- **IT-339**: `Cleaning template seeds` — Cleaning project is closed → new stage is blocked until authorized audited reopening.
-- **IT-340**: `Cleaning template seeds` — Cleaning operation spans many locations or checklist items → asset filters, grouped requirements, and report navigation remain usable.
+- **IT-331**: `Cleaning template seeds` — Checklist answer, origin description, or stage evidence is invalid → stage cannot complete until corrected or marked impossible where allowed. **[PARCIAL · AI-B]** Checklist/descrição de origem não existem no layout de ambientes. Limites inválidos: `TestAIP_IT321IT331…`. "Etapa não conclui" depende da conclusão de etapa não implementada (IT-327).
+- **IT-332**: `Cleaning template seeds` — No valid origin exists for an origin-based template → later comparison stage cannot start. **[REVISADO · AI-B]** `TestAIP_IT322IT332…`: modos baseados em origem exigem referência (ADR-021: seeds só CHECKLIST_ONLY, sem origem).
+- **IT-333**: `Cleaning template seeds` — Cleaning scope exceeds template evidence or stage limits → additional content is rejected with the limit explained. **[COBERTO · AI-B]** `TestAIP_IT323IT333…`: tetos de evidência por ambiente e agregado recusam o excedente.
+- **IT-334**: `Cleaning template seeds` — Cleaning participant accesses another service or internal report → access is denied. **[PARCIAL · AI-B]** `TestAIP_IT324IT334…` (projeto) e `TestAIP_PostgresCrossTenantDashboardAndReportResolversRevealNothing` (relatório interno/dashboard negados a outro escopo e a CustomerViewer). Sessão externa de limpeza é coberta pelas matrizes de relatório de outro workflow.
+- **IT-335**: `Cleaning template seeds` — Origin replacement and later stage creation race → stage fixes one complete origin version. **[PENDENTE · AI-B]** Corrida entre troca de origem e criação de etapa não foi tratada neste item (seeds de limpeza não usam origem, ADR-021).
+- **IT-336**: `Cleaning template seeds` — Before or after capture loses connectivity → progress resumes within the active session. **[PENDENTE · AI-B]** Perda de conectividade é comportamento do PWA de captura (Playwright), fora deste item.
+- **IT-337**: `Cleaning template seeds` — Same cleaning stage is submitted twice → one stage result is accepted. **[PARCIAL · AI-B]** `TestAIP_IT321To340…`: a mesma submissão duas vezes gera um único job/resultado; conclusão de etapa depende de IT-327.
+- **IT-338**: `Cleaning template seeds` — After stage is attempted before required origin completion → start is blocked. **[OBSOLETO · ADR-021]** Seeds de limpeza não exigem origem; cobertura equivalente em IT-332 (modos baseados em origem não iniciam sem referência).
+- **IT-339**: `Cleaning template seeds` — Cleaning project is closed → new stage is blocked until authorized audited reopening. **[COBERTO · AI-B]** `TestAIP_IT329IT339…`.
+- **IT-340**: `Cleaning template seeds` — Cleaning operation spans many locations or checklist items → asset filters, grouped requirements, and report navigation remain usable. **[PARCIAL · AI-B]** Linha do tempo de 100 etapas navegável (`TestAIP_IT323IT330…`); filtros por ativo e navegação do relatório são de frontend.
 
 ## End-to-End Tests — User Journeys
 

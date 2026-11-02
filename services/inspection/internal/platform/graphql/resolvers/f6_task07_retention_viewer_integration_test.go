@@ -15,7 +15,7 @@ import (
 
 func TestVV_IT_331ViewerCannotApplyReleaseHoldOrRequestPurge(t *testing.T) {
 	fx := newAPI14RetentionFixture(t)
-	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-331"})
+	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.tenantID, Principal: requestctx.Principal{IdentityID: fx.identityID, TenantID: fx.tenantID, Roles: []string{auth.Viewer}, ProductEntitlements: auth.ProductsForRole(auth.Viewer)}, CorrelationID: "vv-it-331"})
 	// An existing hold the viewer will try to release.
 	holdID := identity.NewID()
 	if err := fx.h.AdminDB.Create(&database.LegalHold{ID: holdID, TenantID: fx.tenantID, SourceMediaID: &fx.mediaID, Reason: "IT-331 existing hold", Active: true, CreatedAt: time.Now().UTC()}).Error; err != nil {

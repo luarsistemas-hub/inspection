@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, HEAD } from "../../app/api/media/videos/[id]/content/route";
 import { DELETE, POST } from "../../app/api/media/videos/session/route";
+import { GET as getAudioNoteVideo } from "../../app/api/media/audio-note-video/route";
 
 const videoId = "9f0fb54b-1709-4a0b-8bf1-a6312d4e8d90";
 const snapshotId = "acf40dce-5605-463b-956e-385298c0ee65";
@@ -120,7 +121,7 @@ describe("video playback BFF", () => {
     expect(response.status).toBe(204);
     expect(cookies).toContain("inspection_video_session=");
     expect(cookies).toContain(encodeURIComponent(JSON.stringify({ accessToken: "private-access-token", membershipId })));
-    expect(cookies).toContain("Path=/api/media/videos/");
+    expect(cookies).toContain("Path=/api/media/");
     expect(cookies).toContain("Max-Age=600");
     expect(cookies).toContain("HttpOnly");
     expect(cookies).toContain("SameSite=Strict");
@@ -159,5 +160,29 @@ describe("video playback BFF", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     await GET(new Request(`https://dashboard.example.test/api/media/videos/${videoId}/content?snapshotId=${snapshotId}&responsibilityId=${membershipId}&token=secret`, { headers: { Cookie: accessCookie } }), context);
     expect(String(fetchMock.mock.calls[0][0])).toBe(`https://api.example.test/media/videos/${videoId}/content?snapshotId=${snapshotId}`);
+  });
+
+  it("proxies authorized audio-note video ranges through the shared media session", async () => {
+    const fetchMock = vi.mocked(fetch).mockResolvedValue(new Response("video-range", { status: 206, headers: { "Content-Range": "bytes 0-10/20", "Content-Type": "video/mp4" } }));
+    const path = `/media/videos/${videoId}/content?inspectionId=${snapshotId}`;
+    const request = new Request(`https://dashboard.example.test/api/media/audio-note-video?${new URLSearchParams({ path })}`, { headers: { Cookie: accessCookie, Range: "bytes=0-10" } });
+    expect(request.headers.get("range")).toBe("bytes=0-10");
+    const response = await getAudioNoteVideo(request);
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 0-10/20");
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`https://api.example.test${path}`);
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("authorization")).toBe("Bearer private-access-token");
+    expect((fetchMock.mock.calls[0][1]?.headers as Record<string, string>).Range).toBe("bytes=0-10");
+  });
+
+  it("does not proxy arbitrary URLs, paths or unauthenticated audio-note media", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const missingSession = await getAudioNoteVideo(new Request("https://dashboard.example.test/api/media/audio-note-video?path=%2Fmedia%2Fvideos%2Fabc%2Fcontent"));
+    const external = await getAudioNoteVideo(new Request(`https://dashboard.example.test/api/media/audio-note-video?${new URLSearchParams({ path: `https://attacker.test/media/videos/${videoId}/content` })}`, { headers: { Cookie: accessCookie } }));
+    const unrelated = await getAudioNoteVideo(new Request(`https://dashboard.example.test/api/media/audio-note-video?${new URLSearchParams({ path: "/media/users/content" })}`, { headers: { Cookie: accessCookie } }));
+    expect(missingSession.status).toBe(401);
+    expect(external.status).toBe(404);
+    expect(unrelated.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

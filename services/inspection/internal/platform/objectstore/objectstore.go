@@ -172,6 +172,7 @@ type Store struct {
 	Client       Client
 	PublicClient Client
 	Clock        func() time.Time
+	AudioProbe   func(context.Context, []byte) (time.Duration, error)
 }
 
 type OrphanUpload struct {
@@ -214,7 +215,7 @@ func (s Store) Cleanup(ctx context.Context, catalog MultipartCatalog) (int, erro
 }
 
 func (s Store) CreateMultipart(ctx context.Context, tenantID identity.ID, mediaID identity.ID, contentType string) (string, string, error) {
-	if s.Client == nil || s.Bucket == "" || tenantID == (identity.ID{}) || mediaID == (identity.ID{}) || (!SupportedType(contentType) && !SupportedVideoType(contentType)) {
+	if s.Client == nil || s.Bucket == "" || tenantID == (identity.ID{}) || mediaID == (identity.ID{}) || (!SupportedType(contentType) && !SupportedVideoType(contentType) && !SupportedAudioType(contentType)) {
 		return "", "", ErrInvalid
 	}
 	key, err := opaqueKey(tenantID, mediaID)
@@ -232,6 +233,16 @@ func (s Store) CreateMultipart(ctx context.Context, tenantID identity.ID, mediaI
 func SupportedVideoType(contentType string) bool {
 	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
 	case "video/mp4", "video/quicktime", "video/webm":
+		return true
+	default:
+		return false
+	}
+}
+
+// SupportedAudioType lists the audio containers accepted for intentional voice notes.
+func SupportedAudioType(contentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+	case "audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg":
 		return true
 	default:
 		return false
@@ -368,6 +379,105 @@ func (s Store) Complete(ctx context.Context, key, uploadID string, parts []Part,
 	return nil
 }
 
+// CompleteAudio verifies the durable object receipt, bytes, digest and media container.
+func (s Store) CompleteAudio(ctx context.Context, key, uploadID, proof string, expectedSize, expectedDurationMS int64, expectedType, expectedHash string) error {
+	if s.Client == nil || key == "" || uploadID == "" || strings.TrimSpace(proof) == "" || expectedSize <= 0 || expectedSize > 5*1024*1024 || !SupportedAudioType(expectedType) || len(expectedHash) != 64 {
+		return ErrInvalid
+	}
+	inspector, ok := s.Client.(MultipartInspector)
+	if !ok {
+		return ErrInvalid
+	}
+	parts, err := inspector.ListMultipartParts(ctx, s.Bucket, key, uploadID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return mapError(err)
+	}
+	if err == nil {
+		completionParts := make([]Part, 0, len(parts))
+		for _, part := range parts {
+			if part.Number > 0 && part.ETag != "" {
+				completionParts = append(completionParts, Part{Number: part.Number, ETag: part.ETag})
+			}
+		}
+		if len(completionParts) == 0 {
+			return ErrInvalid
+		}
+		if err := s.Client.CompleteMultipart(ctx, s.Bucket, key, uploadID, completionParts); err != nil && !errors.Is(err, ErrNotFound) {
+			return mapError(err)
+		}
+	}
+	head, err := s.Client.Head(ctx, s.Bucket, key)
+	if err != nil {
+		return mapError(err)
+	}
+	if head.Size != expectedSize || !sameMediaType(head.ContentType, expectedType) {
+		return ErrInvalid
+	}
+	reader, err := s.Client.Get(ctx, s.Bucket, key)
+	if err != nil {
+		return mapError(err)
+	}
+	defer reader.Close()
+	data, err := io.ReadAll(io.LimitReader(reader, expectedSize+1))
+	if err != nil {
+		return mapError(err)
+	}
+	if int64(len(data)) != expectedSize {
+		return ErrInvalid
+	}
+	digest := sha256.Sum256(data)
+	if !strings.EqualFold(hex.EncodeToString(digest[:]), expectedHash) {
+		return ErrChecksum
+	}
+	if !validAudioContainer(data, expectedType) {
+		return ErrInvalid
+	}
+	probe := s.AudioProbe
+	if probe == nil {
+		probe = probeAudioDuration
+	}
+	duration, err := probe(ctx, data)
+	if err != nil {
+		if errors.Is(err, errAudioProbeUnavailable) {
+			return err
+		}
+		return ErrInvalid
+	}
+	actualDurationMS := duration.Milliseconds()
+	if actualDurationMS < 500 || actualDurationMS > 60_000 || absInt64(actualDurationMS-expectedDurationMS) > 500 {
+		return ErrInvalid
+	}
+	if head.ChecksumSHA256 != "" && !strings.EqualFold(head.ChecksumSHA256, expectedHash) {
+		return ErrChecksum
+	}
+	return nil
+}
+
+func absInt64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func validAudioContainer(data []byte, contentType string) bool {
+	if len(data) < 4 {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+	case "audio/webm":
+		return len(data) >= 4 && bytes.Equal(data[:4], []byte{0x1a, 0x45, 0xdf, 0xa3})
+	case "audio/ogg":
+		return bytes.Equal(data[:4], []byte("OggS"))
+	case "audio/mp4":
+		return len(data) >= 8 && bytes.Equal(data[4:8], []byte("ftyp"))
+	case "audio/mpeg":
+		return bytes.HasPrefix(data, []byte("ID3")) || (data[0] == 0xff && data[1]&0xe0 == 0xe0)
+	default:
+		return false
+	}
+}
+
 func ExpectedParts(size int64) int {
 	if size <= 0 {
 		return 0
@@ -399,7 +509,26 @@ func (s Store) Delete(ctx context.Context, key string) error {
 	if !ok || s.Bucket == "" || key == "" {
 		return ErrInvalid
 	}
-	return mapError(deleter.Delete(ctx, s.Bucket, key))
+	err := mapError(deleter.Delete(ctx, s.Bucket, key))
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+// DeleteUpload aborts a pending multipart upload, when uploadID is known, and
+// then removes the object. A missing upload or object counts as already
+// removed, so retries after a partial cleanup are idempotent.
+func (s Store) DeleteUpload(ctx context.Context, key, uploadID string) error {
+	if s.Client == nil || s.Bucket == "" || key == "" {
+		return ErrInvalid
+	}
+	if uploadID != "" {
+		if err := mapError(s.Client.AbortMultipart(ctx, s.Bucket, key, uploadID)); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	}
+	return s.Delete(ctx, key)
 }
 
 func (s Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {

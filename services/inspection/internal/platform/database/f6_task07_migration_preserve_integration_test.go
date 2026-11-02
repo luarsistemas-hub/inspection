@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/database/migrations"
 )
@@ -17,12 +16,17 @@ import (
 const preVideoSchemaVersion = 53
 
 // TestVV_IT_356VideoFeatureMigrationPreservesExistingPhotoRecords upgrades a
-// database that the pre-video (v53) code migrated and seeded. It runs only
-// through the upgrade script, which exports INSPECTION_TEST_V53_FIXTURE.
+// database that the pre-video (v53) code migrated and seeded. It needs its own
+// PostgreSQL cluster and runs only in the video-integration "upgrade-rehearsal"
+// CI job (.github/workflows/video-integration.yml), which migrates the base
+// commit, seeds PHOTO records with deploy/oci/ci/v53-seed.go.txt and exports
+// INSPECTION_TEST_V53_FIXTURE plus INSPECTION_TEST_MIGRATION_DATABASE_URL. It
+// is skipped everywhere else, so it never touches a shared database.
 func TestVV_IT_356VideoFeatureMigrationPreservesExistingPhotoRecords(t *testing.T) {
 	raw := os.Getenv("INSPECTION_TEST_V53_FIXTURE")
-	if raw == "" || os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" {
-		t.Skip("requires a v53 database seeded by the upgrade script")
+	migrationURL := os.Getenv("INSPECTION_TEST_MIGRATION_DATABASE_URL")
+	if raw == "" || migrationURL == "" {
+		t.Skip("requires a v53 database seeded by the upgrade-rehearsal CI job")
 	}
 	var fixture struct {
 		TenantID     string `json:"tenantId"`
@@ -34,12 +38,15 @@ func TestVV_IT_356VideoFeatureMigrationPreservesExistingPhotoRecords(t *testing.
 		t.Fatalf("invalid v53 fixture %q: %v", raw, err)
 	}
 	ctx := context.Background()
-	h, err := harness.NewFromEnv(ctx)
+	db, err := database.Open(migrationURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = h.Close() })
-	db := h.MigrationDB
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	version := func() int {
 		t.Helper()
 		var latest int

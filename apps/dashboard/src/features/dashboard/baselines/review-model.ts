@@ -1,4 +1,4 @@
-import type { GraphQLFailure } from "@/graphql/client";
+import { graphQLFailureText } from "@/graphql/client";
 import type * as G from "@/graphql/generated";
 
 /** Inventory draft as returned to the review screen. */
@@ -15,12 +15,12 @@ export const newClientMutationId = () => `baseline-${crypto.randomUUID()}`;
 
 /** failureText returns the user-facing text of a failed operation. */
 export function failureText(error: unknown) {
-  return error instanceof Error ? error.message : (error as GraphQLFailure).message ?? "Não foi possível concluir a operação.";
+  return graphQLFailureText(error);
 }
 
 /** throwUserErrors turns payload userErrors into an Error carrying the first code. */
 export function throwUserErrors(errors: Array<{ code: string; message: string }>) {
-  if (errors.length) throw Object.assign(new Error(errors.map((issue) => issue.message).join(" · ")), { code: errors[0].code });
+  if (errors.length) throw Object.assign(new Error(errors.map((issue) => issue.message).join(" · ")), { code: errors[0].code, isUserError: true });
 }
 
 /** isExpectedVersionConflict reports a stale expectedVersion rejection. */

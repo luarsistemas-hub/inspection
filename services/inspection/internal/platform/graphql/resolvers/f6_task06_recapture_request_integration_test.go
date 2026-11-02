@@ -153,7 +153,7 @@ func TestVV_IT_224RPT1AndEvidenceRemainPublishedAfterRC1(t *testing.T) {
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: fx.h.DB, Bus: bus, PublicationService: publication.Service{DB: fx.h.DB}}}))
 	server.SetErrorPresenter(graph.PresentError)
-	admin := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-it-224"})
+	admin := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "vv-it-224"})
 	recaptureFx := api10Fixture{fixedOriginGraphQLFixture: fixedOriginGraphQLFixture{ctx: admin, h: fx.h, seed: fx.seed, server: server, bus: bus}, componentKey: item.RequirementKey, currentMedia: fx.sourceMedia}
 	response := executeFixedOriginRequest(t, recaptureFx.fixedOriginGraphQLFixture, recaptureFx.valid("vv-it-224"), admin, "", "")
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"status":"REQUESTED"`) {
@@ -174,7 +174,8 @@ func TestVV_IT_224RPT1AndEvidenceRemainPublishedAfterRC1(t *testing.T) {
 }
 
 func TestVV_IT_003ActivePhotoTemplateV4DoesNotChangeVideoV1Capture(t *testing.T) {
-	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
+	// The frozen admission is the legacy (schema 1) video template with video:main.
+	fx := newLegacyVideoGraphQLFixture(t, catalog.ChecklistOnly)
 	setHistoricalVideoAdmissionDisabled(t, fx)
 	inspectionID := createGuidanceInspection(t, fx, "CHECKLIST_ONLY", "vv-it-003-video-v1")
 	var inspection database.Inspection

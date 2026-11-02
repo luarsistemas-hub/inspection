@@ -5,7 +5,7 @@ import { graphql } from "@/graphql/client";
 import { InventoryTrailView } from "@/features/dashboard/baselines/inventory-trail";
 import { sortTrail, trailActionLabel, trailAuthor, trailDetails, type TrailEntry } from "@/features/dashboard/baselines/trail-model";
 
-vi.mock("@/graphql/client", () => ({ graphql: vi.fn() }));
+vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql: vi.fn() }));
 
 const entry = (overrides: Partial<TrailEntry>): TrailEntry => ({ id: "entry", targetType: "ITEM", targetId: "item-a", action: "ACCEPT", before: null, after: null, reason: null, statement: null, resolutionReason: null, actorMembershipId: null, occurredAt: "2026-10-20T12:00:00Z", ...overrides });
 

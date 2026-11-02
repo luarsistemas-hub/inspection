@@ -39,13 +39,13 @@ type referenceEvidence struct {
 	AttentionItems []string    `json:"attentionItems"`
 }
 
-func (snapshot referenceSnapshot) attentionItemsFor(mediaID identity.ID) []string {
+func (snapshot referenceSnapshot) pinnedEvidence(mediaID identity.ID) (referenceEvidence, bool) {
 	for _, item := range snapshot.Items {
 		if item.MediaID == mediaID {
-			return item.AttentionItems
+			return item, true
 		}
 	}
-	return nil
+	return referenceEvidence{}, false
 }
 
 func addAttentionItemsToPrompt(userPrompt string, attentionItems []string) (string, error) {
@@ -166,11 +166,8 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 			current[index].Position = fmt.Sprintf("CURRENT_%d", index+1)
 		}
 		origin := make([]comparative.Evidence, 0, 1)
-		attentionItems := snapshot.attentionItemsFor(originMediaID)
-		for _, item := range snapshot.Items {
-			if item.MediaID != originMediaID {
-				continue
-			}
+		item, pinned := snapshot.pinnedEvidence(originMediaID)
+		if pinned {
 			var derivative database.MediaDerivative
 			if err := tx.Where("tenant_id=? AND media_id=? AND kind=?", job.TenantID, item.MediaID, "ANALYSIS").Order("created_at DESC").First(&derivative).Error; err != nil {
 				return llm.StructuredRequest{}, err
@@ -185,11 +182,11 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 				return llm.StructuredRequest{}, err
 			}
 			origin = append(origin, comparative.Evidence{ID: item.MediaID, Source: "ORIGIN", PairID: pairID, Position: "ORIGIN", Digest: hex.EncodeToString(digest[:]), DataURL: dataURL})
-			break
 		}
 		if len(origin) != 1 {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis: pinned origin evidence not found for requirement")
 		}
+		attentionItems := item.AttentionItems
 		comparisonMode = "COMPARE_ORIGIN_CURRENT"
 		userPrompt = fmt.Sprintf("requirement: %s\nconfidenceThreshold: %.2f\nModo: %s\n\nAs imagens seguintes estão identificadas individualmente por evidenceId e role.", requirement.Label+" — "+requirement.Instructions, float64(minimumConfidence)/10000, comparisonMode)
 		userPrompt, err = addAttentionItemsToPrompt(userPrompt, attentionItems)

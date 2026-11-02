@@ -22,50 +22,141 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// HandleDueEvent validates and processes one retention.purge_due.v1 event.
-// It is shared by the worker consumer and integration tests so the tested
-// handler is the same production path.
+// HandleDueEvent validates and processes one retention.purge_due.v1 event. The
+// payload class selects the purger: the whole inspection (EVIDENCE_REPORTS, the
+// default of events queued before classes existed), the capture location of one
+// inspection (OPERATIONAL_LOCATION) or the expired secrets of the tenant
+// (SECURITY_SECRETS). It is shared by the worker consumer and integration tests
+// so the tested handler is the same production path.
 func HandleDueEvent(ctx context.Context, tx *gorm.DB, store objectstore.Store, envelope events.RawEnvelope) error {
 	var payload struct {
 		InspectionID identity.ID `json:"inspectionId"`
+		Class        string      `json:"class"`
 	}
-	if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
+	if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
 		return messaging.ErrPermanent
 	}
-	var hold database.LegalHold
-	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND active", envelope.TenantID, payload.InspectionID).First(&hold).Error; err == nil {
+	switch payload.Class {
+	case retentioncore.Secrets:
+		return handleSecretsDue(ctx, tx, envelope)
+	case retentioncore.Operational:
+		if payload.InspectionID == (identity.ID{}) {
+			return messaging.ErrPermanent
+		}
+		return handleLocationDue(ctx, tx, envelope, payload.InspectionID)
+	case "", retentioncore.EvidenceReports:
+		if payload.InspectionID == (identity.ID{}) {
+			return messaging.ErrPermanent
+		}
+		return handleEvidenceDue(ctx, tx, store, envelope, payload.InspectionID)
+	default:
+		return messaging.ErrPermanent
+	}
+}
+
+// handleEvidenceDue purges the whole inspection once the evidence class elapsed.
+func handleEvidenceDue(ctx context.Context, tx *gorm.DB, store objectstore.Store, envelope events.RawEnvelope, inspectionID identity.ID) error {
+	// A repeated due event for an inspection that was already purged is a
+	// no-op: the data stays absent and the audit never implies a second purge.
+	var completed database.PurgeRun
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND status='COMPLETED'", envelope.TenantID, inspectionID).First(&completed).Error; err == nil {
 		return nil
 	} else if err != gorm.ErrRecordNotFound {
 		return err
 	}
-	// Never trust publication as proof that the retention clock elapsed.
-	var inspection database.Inspection
-	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
+	var hold database.LegalHold
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND active", envelope.TenantID, inspectionID).First(&hold).Error; err == nil {
+		return nil
+	} else if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	// Never trust publication as proof that the retention clock elapsed. The
+	// inspection (and its project) stay locked until the transaction ends, so a
+	// concurrent Reopen cannot slip in between the closure read and the purge.
+	if err := retentioncore.LockForRetention(ctx, tx, envelope.TenantID, inspectionID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return messaging.ErrPermanent
 		}
 		return err
 	}
-	policy := retentioncore.DefaultPolicy()
-	var configured database.RetentionPolicy
-	if err := tx.WithContext(ctx).Where("tenant_id=?", envelope.TenantID).Order("version DESC").First(&configured).Error; err == nil {
-		policy.EvidenceReports = time.Duration(configured.EvidenceDays) * 24 * time.Hour
-		policy.Operational = time.Duration(configured.OperationalDays) * 24 * time.Hour
-	} else if err != gorm.ErrRecordNotFound {
+	policy, err := retentioncore.LoadPolicy(ctx, tx, envelope.TenantID)
+	if err != nil {
 		return err
 	}
-	clock, err := retentioncore.NewClock(retentioncore.EvidenceReports, inspection.UpdatedAt, time.Time{}, policy)
+	closure, inRetention, err := retentioncore.Closure(ctx, tx, envelope.TenantID, inspectionID)
+	if err != nil {
+		return err
+	}
+	if !inRetention {
+		// An inspection of a project that is not closed has no retention clock.
+		return gorm.ErrInvalidData
+	}
+	clock, err := retentioncore.NewClock(retentioncore.EvidenceReports, closure, time.Time{}, policy)
 	if err != nil {
 		return err
 	}
 	if !clock.Eligible(time.Now().UTC()) {
 		return gorm.ErrInvalidData
 	}
-	purge, err := PurgeWithStore(ctx, tx, store, envelope.TenantID, payload.InspectionID, clock)
+	purge, err := PurgeWithStore(ctx, tx, store, envelope.TenantID, inspectionID, clock)
 	if err != nil {
 		return err
 	}
-	return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: identity.NewID(), Type: "retention.purged.v1", SchemaVersion: 1, OccurredAt: purge.CreatedAt, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"classes": []string{"originals", "parts", "derivatives", "reports", "associations"}}})
+	return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: identity.NewID(), Type: "retention.purged.v1", SchemaVersion: 1, OccurredAt: purge.CreatedAt, TenantID: envelope.TenantID, AggregateID: inspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"classes": []string{"originals", "parts", "derivatives", "reports", "associations"}}})
+}
+
+// handleLocationDue removes the capture location of one inspection after its
+// operational clock elapsed. A stale event (inspection already purged, held,
+// reopened or under an extended policy) changes nothing.
+func handleLocationDue(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, inspectionID identity.ID) error {
+	var hold database.LegalHold
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND active", envelope.TenantID, inspectionID).First(&hold).Error; err == nil {
+		return nil
+	} else if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	var present int64
+	if err := tx.WithContext(ctx).Model(&database.Inspection{}).Where("tenant_id=? AND id=?", envelope.TenantID, inspectionID).Count(&present).Error; err != nil {
+		return err
+	}
+	if present == 0 {
+		// The evidence class already removed the inspection, location included.
+		return nil
+	}
+	if err := retentioncore.LockForRetention(ctx, tx, envelope.TenantID, inspectionID); err != nil {
+		return err
+	}
+	closure, inRetention, err := retentioncore.Closure(ctx, tx, envelope.TenantID, inspectionID)
+	if err != nil {
+		return err
+	}
+	if !inRetention {
+		return gorm.ErrInvalidData
+	}
+	policy, err := retentioncore.LoadPolicy(ctx, tx, envelope.TenantID)
+	if err != nil {
+		return err
+	}
+	clock, err := retentioncore.NewClock(retentioncore.Operational, closure, time.Time{}, policy)
+	if err != nil {
+		return err
+	}
+	if !clock.Eligible(time.Now().UTC()) {
+		return gorm.ErrInvalidData
+	}
+	_, err = PurgeLocation(ctx, tx, envelope.TenantID, inspectionID, clock, envelope.CorrelationID)
+	return err
+}
+
+// handleSecretsDue removes the expired invitation, OTP and session secrets of
+// the event's tenant.
+func handleSecretsDue(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+	policy, err := retentioncore.LoadPolicy(ctx, tx, envelope.TenantID)
+	if err != nil {
+		return err
+	}
+	_, err = PurgeSecrets(ctx, tx, envelope.TenantID, time.Now().UTC(), policy, envelope.CorrelationID)
+	return err
 }
 
 // HandlePurgedEvent validates the informational retention.purged.v1 payload.
@@ -90,7 +181,7 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		return database.PurgeRun{}, fmt.Errorf("retention purge: missing identity")
 	}
 	if !clock.Eligible(time.Now().UTC()) {
-		return database.PurgeRun{}, apperror.New(apperror.InvalidState, "retention", "retention period has not elapsed or a legal hold is active")
+		return database.PurgeRun{}, apperror.New(apperror.InvalidState, "retention", "O prazo de retenção não terminou ou há retenção legal ativa.")
 	}
 	var completed database.PurgeRun
 	if err := db.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND status='COMPLETED'", tenantID, inspectionID).First(&completed).Error; err == nil {
@@ -378,7 +469,7 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			return err
 		}
 		now := time.Now().UTC()
-		if err := tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: identity.ID{}, Action: "retention.purged", TargetType: "inspection", TargetID: "purged", Outcome: "COMPLETED", Reason: "deidentified after retention purge", CorrelationID: "retention-" + inspectionID.String(), OccurredAt: now}).Error; err != nil {
+		if err := tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: identity.ID{}, Action: "retention.purged", TargetType: "inspection", TargetID: "purged", Outcome: "COMPLETED", Reason: purgeAuditReason(clock), CorrelationID: "retention-" + inspectionID.String(), OccurredAt: now}).Error; err != nil {
 			return err
 		}
 		manifest, _ := json.Marshal(retentioncore.Manifest{Originals: true, Parts: true, Derivatives: true, Reports: true, Associations: true})
@@ -392,6 +483,12 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		return database.PurgeRun{}, err
 	}
 	return result, nil
+}
+
+// purgeAuditReason explains which retention clock made the purge eligible. It
+// carries only the class and instants, never an identifier of deleted data.
+func purgeAuditReason(clock retentioncore.Clock) string {
+	return fmt.Sprintf("deidentified after retention purge; class=%s start=%s due=%s", clock.Class, clock.StartsAt.UTC().Format(time.RFC3339), clock.DueAt.UTC().Format(time.RFC3339))
 }
 
 func releasePurgedReportReferences(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
@@ -503,7 +600,7 @@ func purgeUnreferencedVideoFrames(ctx context.Context, tx *gorm.DB, store object
 			return err
 		}
 		if retainedOwners > 0 {
-			return apperror.New(apperror.InvalidState, "preparationId", "retained video evidence still depends on this frame bank")
+			return apperror.New(apperror.InvalidState, "preparationId", "A evidência de vídeo retida ainda depende deste banco de quadros.")
 		}
 		if references > 0 || heldOrigins > 0 || retainedInventoryEvidence > 0 {
 			continue
@@ -574,7 +671,7 @@ func lockInspectionAndCheckLegalHold(tx *gorm.DB, tenantID, inspectionID identit
 		return err
 	}
 	if activeHolds > 0 {
-		return apperror.New(apperror.InvalidState, "inspectionId", "legal hold prevents retention purge")
+		return apperror.New(apperror.InvalidState, "inspectionId", "Retenção legal impede a purga por retenção.")
 	}
 	return nil
 }
@@ -589,14 +686,14 @@ func lockVideoSourcesAndCheckHolds(tx *gorm.DB, tenantID identity.ID, mediaIDs [
 	}
 	for _, source := range sources {
 		if source.Status == "DELETING" {
-			return apperror.New(apperror.InvalidState, "sourceMediaId", "source deletion is already in progress")
+			return apperror.New(apperror.InvalidState, "sourceMediaId", "A exclusão da fonte já está em andamento.")
 		}
 		held, err := retentioncore.EffectiveSourceHeld(tx, tenantID, source.MediaID)
 		if err != nil {
 			return err
 		}
 		if held {
-			return apperror.New(apperror.InvalidState, "sourceMediaId", "legal hold prevents retention purge")
+			return apperror.New(apperror.InvalidState, "sourceMediaId", "Retenção legal impede a purga por retenção.")
 		}
 	}
 	return nil

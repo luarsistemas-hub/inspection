@@ -104,7 +104,7 @@ func ValidateAttributes(schema Schema, attributes map[string]any) error {
 }
 
 func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, idempotencyKey string, schemaJSON, uiJSON []byte) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.ParticipationAdmin}, Mutate: true}); err != nil {
 		return View{}, err
 	}
 	key, name = strings.TrimSpace(key), strings.TrimSpace(name)
@@ -159,7 +159,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 }
 
 func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, expectedDefinitionVersion int64) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.AdminProduct, Roles: []string{auth.TenantAdmin, auth.ParticipationAdmin}, Mutate: true}); err != nil {
 		return View{}, err
 	}
 	var out View

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Dialog, IconButton } from "@inspection/design-system";
-import { graphql } from "@/graphql/client";
+import { graphQLFailureText, graphql } from "@/graphql/client";
 import { InvalidateReportPublicationDocument, PublishReportDocument, ReportDownloadDocument, ReportWorkspaceDocument, ReportsDocument, type ReportDownloadQuery, type ReportWorkspaceQuery, type ReportsQuery } from "@/graphql/generated";
 import { presentClassification, presentReportPDFStatus } from "./presentation";
 import { ReportVisual } from "./report-visual";
@@ -16,6 +16,17 @@ type Report = NonNullable<ReportWorkspaceQuery["report"]>;
 /** Prevents a superseded report-list request from replacing the active filters. */
 export function isCurrentReportListRequest(request: number, currentRequest: number): boolean {
   return request === currentRequest;
+}
+
+/** Reports whether the empty-list state should appear after loading. */
+export function shouldShowEmptyReportState(itemCount: number, listError?: string | null): boolean {
+  return itemCount === 0 && !listError;
+}
+
+/** Describes the loaded rows as displayed results, never as the total number of reports. */
+export function describeDisplayedReports(count: number, hasMore: boolean): string {
+  const displayed = `${count} ${count === 1 ? "laudo exibido" : "laudos exibidos"}`;
+  return hasMore ? `${displayed} · há mais laudos para carregar` : displayed;
 }
 
 export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boolean; refreshKey?: number }) {
@@ -73,7 +84,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       setHasMore(data.reports.pageInfo.hasNextPage);
     } catch (error) {
       if (!isCurrentReportListRequest(request, listRequest.current)) return;
-      setListError((error as Error).message || "Não foi possível carregar os laudos.");
+      setListError(graphQLFailureText(error));
     } finally {
       if (isCurrentReportListRequest(request, listRequest.current)) setListLoading(false);
     }
@@ -100,7 +111,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       if (!result.report) setDetailError("Este laudo ainda não está disponível. Atualize a lista e tente novamente.");
       else setReport(result.report);
     } catch (error) {
-      if (request === detailRequest.current) setDetailError((error as Error).message || "Não foi possível abrir o laudo.");
+      if (request === detailRequest.current) setDetailError(graphQLFailureText(error));
     } finally {
       if (request === detailRequest.current) setDetailLoading(false);
     }
@@ -160,7 +171,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
         if (attempt < 9) await new Promise((resolve) => window.setTimeout(resolve, 1500));
       }
       setDetailMessage("O PDF continua em preparação. Você pode tentar novamente em instantes.");
-    } catch (error) { setDetailMessage((error as Error).message); }
+    } catch (error) { setDetailMessage(graphQLFailureText(error)); }
   };
 
   const updatePublication = async (document: typeof PublishReportDocument | typeof InvalidateReportPublicationDocument, input: Record<string, unknown>): Promise<string | undefined> => {
@@ -174,7 +185,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       setDetailMessage(failure ?? "Publicação atualizada.");
       if (!payload.userErrors?.length && requestedInspection) await loadDetail(requestedInspection);
       return failure;
-    } catch (error) { const failure = (error as Error).message; setDetailMessage(failure); return failure; }
+    } catch (error) { const failure = graphQLFailureText(error); setDetailMessage(failure); return failure; }
   };
 
   const currentReport = loadedInspectionId === inspectionId ? report : null;
@@ -183,7 +194,8 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       <label>Buscar laudo<input type="search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Imóvel, endereço, código ou responsável" /></label>
       <label>Classificação<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="">Todas</option><option value="NORMAL">Sem alertas identificados</option><option value="ATTENTION">Requer atenção</option><option value="CRITICAL">Crítica</option></select></label>
     </div>
-    {listError ? <div className="report-list-state" role="alert"><p>Não foi possível carregar os laudos. {listError}</p><button className="secondary" onClick={() => void loadList(true)}>Tentar novamente</button></div> : items.length > 0 ? <>
+    {listError && <div className="report-list-state" role="alert"><p>{listError}</p><button className="secondary" onClick={() => void loadList(true)}>Tentar novamente</button></div>}{items.length > 0 ? <>
+      <p className="report-count">{describeDisplayedReports(items.length, hasMore)}</p>
       <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Imóvel</th><th>Responsável</th><th>Gerado em</th><th>Classificação</th><th>Versão</th><th><span className="visually-hidden">Ação</span></th></tr></thead><tbody>{items.map((item) => <tr key={item.id}>
         <td data-label="Imóvel"><strong>{item.assetName}</strong><span>{item.assetAddress}</span><small>{item.assetExternalKey}</small></td>
         <td data-label="Responsável">{item.participantName}</td><td data-label="Gerado em">{formatGenerated(item.generatedAt)}</td>
@@ -192,7 +204,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       </tr>)}</tbody></table></div>
       {hasMore && <button className="secondary report-load-more" onClick={() => void loadList(false)} disabled={listLoading}>{listLoading ? "Carregando…" : "Carregar mais"}</button>}
       {listLoading && <p role="status">Atualizando laudos…</p>}
-    </> : <div className="report-list-state report-focus-empty" role="status">{listLoading ? <p>Carregando laudos…</p> : <><span className="report-focus-empty-icon" aria-hidden="true">▧</span><h2>{search || classification ? "Nenhum laudo encontrado" : "Nenhum laudo disponível"}</h2><p>{search || classification ? "Ajuste a busca ou a classificação para consultar outros laudos." : "Os laudos gerados neste contexto ficarão reunidos aqui."}</p><Link href="/inspections">Ver vistorias →</Link></>}</div>}
+    </> : shouldShowEmptyReportState(items.length, listError) && <div className="report-list-state report-focus-empty" role="status">{listLoading ? <p>Carregando laudos…</p> : <><span className="report-focus-empty-icon" aria-hidden="true">▧</span><h2>{search || classification ? "Nenhum laudo encontrado" : "Nenhum laudo disponível"}</h2><p>{search || classification ? "Ajuste a busca ou a classificação para consultar outros laudos." : "Os laudos gerados neste contexto ficarão reunidos aqui."}</p><Link href="/inspections">Ver vistorias →</Link></>}</div>}
 
     <Dialog isOpen={Boolean(inspectionId)} onClose={closeDialog} title="Laudo de vistoria" size="wide">
       <div className="report-dialog-body">

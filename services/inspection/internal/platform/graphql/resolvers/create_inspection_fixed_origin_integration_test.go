@@ -89,7 +89,7 @@ func TestCreateInspectionFixedOriginWithoutPreparedOriginGraphQLIT079(t *testing
 		InspectionService: inspectioncore.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}},
 	}}))
 	server.SetErrorPresenter(graph.PresentError)
-	meta := requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "it079"}
+	meta := requestctx.Metadata{TenantID: fixture.TenantID, Principal: requestctx.Principal{IdentityID: fixture.IdentityID, TenantID: fixture.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "it079"}
 	requestContext := requestctx.WithMetadata(context.Background(), meta)
 	query := `mutation { createInspection(input:{assetId:"` + fixture.AssetID.String() + `",participantId:"` + fixture.ParticipantID.String() + `",comparisonMode:FIXED_ORIGIN,dueAt:"2026-10-17T12:00:00Z",deadlineAt:"2026-10-18T12:00:00Z",reminderInstants:[],reason:"IT-079",clientMutationId:"IT-079"}) { inspection { id } userErrors { code field } clientMutationId } }`
 	response := executeTask06GraphQL(t, server, query, requestContext)
@@ -116,7 +116,14 @@ func createVideoInspectionTemplate(ctx context.Context, h *harness.Harness, fixt
 }
 
 func createVideoInspectionTemplateWithMode(ctx context.Context, h *harness.Harness, fixture harness.Task06Fixture, mode catalog.ComparisonMode) (identity.ID, identity.ID, error) {
-	document, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: catalog.SchemaVersion, IsVideo: true, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"})
+	return createVideoInspectionTemplateWithSchema(ctx, h, fixture, mode, catalog.EnvironmentSchemaVersion)
+}
+
+// createVideoInspectionTemplateWithSchema creates the video template for the
+// given template document schema. Schema 2 captures by environment; schema 1 is
+// the legacy video template whose capture exposes one video:main requirement.
+func createVideoInspectionTemplateWithSchema(ctx context.Context, h *harness.Harness, fixture harness.Task06Fixture, mode catalog.ComparisonMode, schemaVersion int) (identity.ID, identity.ID, error) {
+	document, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: schemaVersion, IsVideo: true, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"})
 	if err != nil {
 		return identity.ID{}, identity.ID{}, err
 	}

@@ -6,7 +6,7 @@ import { hashVideoBlobs } from "@/pwa/video-hash";
 import { startVideoRecorder } from "@/pwa/video-recorder";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MutedVideoPreview } from "../../app/capture/[linkToken]/video-capture";
+import { MutedVideoPreview, voicePolicyDescription } from "../../app/capture/[linkToken]/video-capture";
 import { visibleDrafts } from "@/pwa/video-capture-state";
 
 const videoBlob = (parts: string[], options?: BlobPropertyBag): Blob => new NodeBlob(parts, options) as unknown as Blob;
@@ -31,6 +31,11 @@ describe("C03 video capture", () => {
     }));
     expect(markup).toContain("muted=\"\"");
     expect(markup).toContain("playsInline=\"\"");
+  });
+
+  it("shows the effective voice quota before recording video notes", () => {
+    expect(voicePolicyDescription({ inspectionNoteLimit: 20, inspectionAudioLimitMs: 1_800_000 })).toBe("Limite desta vistoria: até 20 anotações e 30 min de áudio. Cada anotação tem no máximo 60 segundos.");
+    expect(voicePolicyDescription({ inspectionNoteLimit: null, inspectionAudioLimitMs: null })).toBe("Cada anotação tem no máximo 60 segundos.");
   });
 
   it("UT-010 hashes ordered persisted chunks incrementally", async () => {

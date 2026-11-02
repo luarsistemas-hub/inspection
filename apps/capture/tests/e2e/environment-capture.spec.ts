@@ -88,6 +88,7 @@ async function configurePhotoCapture(page: import("@playwright/test").Page, init
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "capture-csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: external });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("declareCaptureEnvironment")) {
@@ -179,6 +180,7 @@ test("E2E-002 records Sala and Cozinha clips, re-records Cozinha and submits env
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "capture-csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: external });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("declareCaptureEnvironment")) {
@@ -274,6 +276,7 @@ test("UT-339 unsupported video recorder offers impossibility and renders no phot
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
     if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
     if (query.includes("externalCapture")) return respond({ externalCapture: external });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("declareCaptureEnvironment")) {
@@ -334,6 +337,7 @@ test("E2E-004 review handoff opens ready and preparing Dashboard routes only for
       const respond = (data: unknown) => route.fulfill({ json: { data } });
       if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
       if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+      if (query.includes("CaptureVoicePolicy")) return respond({ voicePolicy: { enabled: false } });
       if (query.includes("externalCapture")) return respond({ externalCapture: external });
       if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
       if (query.includes("submitCapture")) { external = { ...external, status: "COMPLETED" }; return respond({ submitCapture: { submission: { id: "submission", complete: true, requiresAttention: false, submittedAt: "2026-10-25T00:00:00Z" }, userErrors: [] } }); }

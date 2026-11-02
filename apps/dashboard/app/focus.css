@@ -189,6 +189,7 @@
 .dashboard-shell .triage-detail { border: 0; border-radius: .75rem; background: var(--focus-wash); }
 .dashboard-shell .triage-case-detail { padding: 1.5rem; }
 .dashboard-shell .report-toolbar { padding: .75rem 0; border: 0; border-block: 1px solid var(--inspection-border); border-radius: 0; background: transparent; }
+.dashboard-shell .report-count { margin: 0; color: var(--inspection-muted); font-size: .8rem; }
 .dashboard-shell .report-visual { border-color: var(--inspection-border); border-radius: .65rem; box-shadow: none; }
 .dashboard-shell .collection { gap: 0; border: 0; background: transparent; }
 .dashboard-shell .collection li { padding: 1rem .35rem; border-block-end: 1px solid var(--inspection-border); }

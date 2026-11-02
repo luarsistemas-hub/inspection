@@ -33,19 +33,19 @@ type handler struct{ dependencies Dependencies }
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "Método não permitido.", http.StatusMethodNotAllowed)
 		return
 	}
 
 	cookie, err := r.Cookie("inspection_onboarding")
 	if err != nil && !errors.Is(err, http.ErrNoCookie) {
-		http.Error(w, "could not end the session", http.StatusBadRequest)
+		http.Error(w, "Não foi possível encerrar a sessão.", http.StatusBadRequest)
 		return
 	}
 	if cookie != nil && cookie.Value != "" {
 		csrf := r.Header.Get("X-CSRF-Token")
 		if csrf == "" {
-			http.Error(w, "could not end the session", http.StatusForbidden)
+			http.Error(w, "Não foi possível encerrar a sessão.", http.StatusForbidden)
 			return
 		}
 		if _, err := h.dependencies.Sessions.ValidateCSRF(r.Context(), cookie.Value, csrf); err != nil {
@@ -59,7 +59,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if code == apperror.Forbidden {
 				status = http.StatusForbidden
 			}
-			http.Error(w, "could not end the session", status)
+			http.Error(w, "Não foi possível encerrar a sessão.", status)
 			return
 		}
 	}
