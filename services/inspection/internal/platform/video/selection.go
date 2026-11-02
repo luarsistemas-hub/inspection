@@ -371,6 +371,7 @@ func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context
 	for _, batch := range ScopeBatches(frames) {
 		var accepted []ScopeObservation
 		valid := false
+		var lastInvalid error
 		for attempt := 0; attempt < 2; attempt++ {
 			observations, unresolved, err := invoke(ctx, batch, slices.Clone(known))
 			if err != nil {
@@ -378,6 +379,7 @@ func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context
 					return nil, err
 				}
 				if errors.Is(err, ErrModelOutputInvalid) {
+					lastInvalid = err
 					continue
 				}
 				return nil, err
@@ -387,9 +389,14 @@ func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context
 			} else if err == nil {
 				accepted, valid = observations, true
 				break
+			} else {
+				lastInvalid = err
 			}
 		}
 		if !valid {
+			if lastInvalid != nil {
+				return nil, fmt.Errorf("%w: %v", ErrModelOutputInvalid, lastInvalid)
+			}
 			return nil, ErrModelOutputInvalid
 		}
 		for i := range accepted {

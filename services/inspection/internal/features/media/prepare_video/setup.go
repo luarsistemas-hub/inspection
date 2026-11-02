@@ -13,6 +13,7 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -1315,6 +1316,9 @@ func (e *Executor) discoverAndSeal(ctx context.Context, r reservation, m databas
 		return response.Observations, response.Unresolved, nil
 	})
 	if err != nil {
+		if errors.Is(err, video.ErrModelOutputInvalid) {
+			log.Printf("video preparation scope output rejected: %v", err)
+		}
 		return err
 	}
 	if fixedEnvironment != "" {

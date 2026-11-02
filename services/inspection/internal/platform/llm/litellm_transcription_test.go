@@ -98,6 +98,10 @@ func TestTranscriptionProfilesAreKnownAndIndependentUT027(t *testing.T) {
 	if err != nil || profile.ModelAlias != "gemini-2.5-flash-lite" || profile.Version != 1 {
 		t.Fatalf("profile not resolved: %+v, %v", profile, err)
 	}
+	defaultProfile, err := ResolveTranscriptionProfile(DefaultTranscriptionProfile)
+	if err != nil || defaultProfile.ModelAlias != "gemini-2.5-flash-lite" {
+		t.Fatalf("default profile is not configured for the available baseline model: %+v, %v", defaultProfile, err)
+	}
 	if _, err := ResolveTranscriptionProfile("UNKNOWN"); err == nil {
 		t.Fatal("unknown profile must fail")
 	}
