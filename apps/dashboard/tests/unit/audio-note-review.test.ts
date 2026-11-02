@@ -2,7 +2,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { graphql } from "@/graphql/client";
-import { AudioNoteReview, anchorMediaLabel, approximateInterval, authorLabel, isTranscriptWithinLimit } from "@/features/dashboard/baselines/audio-note-review";
+import { AudioNoteReview, anchorMediaLabel, approximateInterval, authorLabel, canRetryTranscription, isTranscriptWithinLimit } from "@/features/dashboard/baselines/audio-note-review";
 
 vi.mock("@/graphql/client", async (importOriginal) => ({ ...await importOriginal<typeof import("@/graphql/client")>(), graphql: vi.fn() }));
 
@@ -57,6 +57,13 @@ describe("Dashboard audio note review", () => {
     expect(isTranscriptWithinLimit("x".repeat(10000))).toBe(true);
     expect(isTranscriptWithinLimit("x".repeat(10001))).toBe(false);
     expect(approximateInterval(20000, 62000)).toBe("Intervalo aproximado 00:20–01:02");
+  });
+
+  it("offers another transcription only when failed audio remains available and unconfirmed", () => {
+    expect(canRetryTranscription("FAILED", "AVAILABLE", false)).toBe(true);
+    expect(canRetryTranscription("COMPLETED", "AVAILABLE", false)).toBe(false);
+    expect(canRetryTranscription("FAILED", "UNAVAILABLE", false)).toBe(false);
+    expect(canRetryTranscription("FAILED", "AVAILABLE", true)).toBe(false);
   });
 
   it("IT-130 shows an empty speech result without inventing transcript content", async () => {

@@ -35,6 +35,11 @@ export function authorLabel(authorName: string | null | undefined, kind: string)
 /** Checks the editable transcript limit without changing the user's text. */
 export function isTranscriptWithinLimit(value: string) { return value.length <= textLimit; }
 
+/** Allows retry only while a failed note's source audio remains available. */
+export function canRetryTranscription(status: string, audioAvailability: string, textConfirmed: boolean) {
+  return status.toUpperCase() === "FAILED" && audioAvailability.toUpperCase() === "AVAILABLE" && !textConfirmed;
+}
+
 function revisionDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Data indisponível" : date.toLocaleString("pt-BR");
@@ -83,7 +88,7 @@ export function AudioNoteReview({ noteId, revisionId, attributeName, environment
   const citedRevision = useMemo(() => note?.revisions.find((revision) => revision.id === revisionId), [note, revisionId]);
   const selectedRevision = useMemo(() => note?.revisions.find((revision) => revision.id === historyRevisionId), [note, historyRevisionId]);
   const currentRevision = note?.revisions.find((revision) => revision.id === note.currentRevisionId) ?? note?.revisions.at(-1);
-  const run = async (action: () => Promise<void>, preserveDraft = false) => {
+  const run = async (action: () => Promise<void>, preserveDraft = false, failureMessage = "Não foi possível salvar a anotação. O último texto salvo foi mantido; tente novamente.") => {
     if (!note || busy) return;
     setBusy(true); setError("");
     try { await action(); setRetryText(undefined); mutationId.current = ""; await reload(); }
@@ -95,7 +100,7 @@ export function AudioNoteReview({ noteId, revisionId, attributeName, environment
       } else {
         setRetryText(preserveDraft ? text : undefined);
         await reload(true);
-        setError("Não foi possível salvar a anotação. O último texto salvo foi mantido; tente novamente.");
+        setError(failureMessage);
       }
     } finally { setBusy(false); }
   };
@@ -162,6 +167,13 @@ export function AudioNoteReview({ noteId, revisionId, attributeName, environment
     {note.highlighted && <p className="audio-note-highlight" role="status">Destaque do participante</p>}
     {error && <p role="alert">{error}</p>}
     <div className="audio-note-actions">
+      {canRetryTranscription(note.status, note.audioAvailability, note.textConfirmed) && <Button variant="secondary" disabled={busy} onClick={() => {
+        if (!mutationId.current) mutationId.current = newClientMutationId();
+        void run(async () => {
+          const result = await graphql<G.RetryAudioNoteMutation, G.RetryAudioNoteMutationVariables>(G.RetryAudioNoteDocument, { input: { noteId: note.id, expectedVersion: note.version, clientMutationId: mutationId.current } });
+          throwUserErrors(result.retryAudioNote.userErrors);
+        }, false, "Não foi possível solicitar nova transcrição. Atualize os dados e tente novamente.");
+      }}>Tentar transcrição novamente</Button>}
       {!noSpeech && !note.textConfirmed && note.revisions.length > 0 && <Button variant="secondary" disabled={busy || !text.trim() || text.length > textLimit || text.trim() === currentRevision?.text} onClick={() => {
         if (!mutationId.current) mutationId.current = newClientMutationId();
         void run(async () => {
