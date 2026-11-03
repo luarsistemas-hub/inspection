@@ -20,7 +20,13 @@ export function failureText(error: unknown) {
 
 /** throwUserErrors turns payload userErrors into an Error carrying the first code. */
 export function throwUserErrors(errors: Array<{ code: string; message: string }>) {
-  if (errors.length) throw Object.assign(new Error(errors.map((issue) => issue.message).join(" · ")), { code: errors[0].code, isUserError: true });
+  const messages: Record<string, string> = {
+    VERSION_NOT_EDITABLE: "Esta versão não pode mais ser editada. Atualize a tela; para revisar outros itens, inicie um novo rascunho da vistoria.",
+    DRAFT_DISCARDED: "Este rascunho foi descartado e não pode mais ser editado.",
+    SOURCE_INVALIDATED: "A vistoria de origem foi invalidada. Este inventário está disponível somente para consulta.",
+    "draft is not ready": "Este inventário ainda não está pronto para revisão. Atualize a tela em instantes.",
+  };
+  if (errors.length) throw Object.assign(new Error(errors.map((issue) => messages[issue.message] ?? issue.message).join(" · ")), { code: errors[0].code, isUserError: true });
 }
 
 /** isExpectedVersionConflict reports a stale expectedVersion rejection. */

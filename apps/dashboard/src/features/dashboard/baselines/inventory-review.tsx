@@ -191,6 +191,7 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
     setStatus("Atualização das sugestões de voz solicitada para este ambiente.");
   });
   const activationSummary = draft ? buildActivationSummary(draft.environments.flatMap((environment) => environment.items), draft.progress.pending) : { included: 0, rejected: 0, notReviewed: 0 };
+  const canEditDraft = Boolean(draft && !draft.readOnly && draft.version.status === "DRAFT" && draft.version.draftState === "READY");
   const voiceSummary = draft?.voiceSummary ?? emptyVoiceSummary;
   const eligibleCounterparties = participants.filter((participant) => participant.businessUnitId === businessUnitId);
   const reviewGroups = draft ? buildReviewGroups(draft) : [];
@@ -214,9 +215,11 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
     {reloadConflict && <p className="baseline-warning">Use “Atualizar” para carregar a versão mais recente do rascunho.</p>}
     {!draft ? <p role="status">Carregando inventário…</p>
       : isPreparingDraft(draft) ? <p role="status">O inventário está sendo preparado. Você pode voltar a esta página mais tarde.</p>
-        : draft.readOnly ? <><p role="status">Este inventário está em modo somente leitura.</p><ReadOnlyInventory environments={draft.environments} /></>
+        : !canEditDraft ? <><p role="status">{reviewUnavailableMessage(draft)}</p>
+            {!draft.readOnly && draft.version.status === "DRAFT" && draft.version.draftState === "FAILED" && <div role="alert"><p>Não foi possível preparar este inventário.</p><Button variant="secondary" disabled={busy} onClick={() => void retry()}>Tentar novamente</Button></div>}
+            <ReadOnlyInventory environments={draft.environments} />
+          </>
           : <>
-            {draft.version.draftState === "FAILED" && <div role="alert"><p>Não foi possível preparar este inventário.</p><Button variant="secondary" disabled={busy} onClick={() => void retry()}>Tentar novamente</Button></div>}
             {draft.warnings.map((warning) => <p className="baseline-warning" key={warning}>{warning}</p>)}
             {(voiceSummary.pendingVoiceItems + voiceSummary.conflictItems + voiceSummary.staleSuggestions + voiceSummary.notesWithoutItem > 0 || inspectionNotes.length > 0) && <section className="baseline-voice-summary" aria-label="Resumo das anotações de voz">
               <h3>Resumo de voz</h3>
@@ -382,4 +385,16 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
     <ConfirmationDialog isOpen={confirmActivation} onClose={() => setConfirmActivation(false)} title="Ativar inventário" target={`Versão ${draft?.version.versionNumber ?? ""}`} scope="Imóvel selecionado" consequence={`${draft?.progress.pending ?? 0} item(ns) não revisado(s) ficarão registrados como tal.`} confirmLabel="Ativar inventário" onConfirm={async () => { mustSucceed(await activate()); setConfirmActivation(false); }} />
     <ConfirmationDialog isOpen={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Descartar rascunho" target={`Versão ${draft?.version.versionNumber ?? ""}`} scope="Inventário em revisão" consequence="O descarte ficará registrado no histórico e a versão não poderá ser ativada." confirmLabel="Descartar rascunho" onConfirm={async () => { mustSucceed(await discard()); setConfirmDiscard(false); }} />
   </section>;
+}
+
+function reviewUnavailableMessage(draft: InventoryDraft) {
+  if (draft.noticeCode === "SOURCE_INVALIDATED") return "A vistoria de origem foi invalidada. Este inventário está disponível somente para consulta.";
+  switch (draft.version.status) {
+    case "ACTIVE": return "Este inventário já está ativo e não pode mais ser alterado. Para revisar outros itens, inicie um novo rascunho da vistoria.";
+    case "SUPERSEDED": return "Esta versão foi substituída e está disponível somente para consulta.";
+    case "INVALIDATED": return "Esta versão foi invalidada e está disponível somente para consulta.";
+    case "DISCARDED": return "Este rascunho foi descartado e está disponível somente para consulta.";
+  }
+  if (draft.version.draftState === "FAILED") return "A preparação deste inventário falhou. Tente novamente para continuar a revisão.";
+  return "Este rascunho ainda não está pronto para revisão.";
 }
