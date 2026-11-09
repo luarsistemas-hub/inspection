@@ -324,7 +324,10 @@ func (r *Resolver) inventoryVersionSummaries(ctx context.Context, tenant identit
 }
 func inventoryItem(view inventorycore.ItemView) *graphql1.InventoryItem {
 	row := view.Item
-	out := &graphql1.InventoryItem{ID: row.ID.String(), IdentityID: row.IdentityID.String(), EnvironmentID: row.EnvironmentID.String(), TypeCode: row.TypeCode, Name: row.Name, Material: row.Material, Color: row.Color, Quantity: row.Quantity, Condition: row.Condition, Observation: row.Observation, Limitation: row.Limitation, ConfidenceBps: row.ConfidenceBps, Origin: row.Origin, Declared: row.Declared, Decision: row.Decision, RejectionReason: row.RejectionReason, RejectionText: row.RejectionText, Version: row.Version, Evidence: []*graphql1.InventoryEvidence{}, AttributeSources: inventoryAttributeSources(view.Sources)}
+	out := &graphql1.InventoryItem{ID: row.ID.String(), IdentityID: row.IdentityID.String(), EnvironmentID: row.EnvironmentID.String(), TypeCode: row.TypeCode, Name: row.Name, Description: row.Description, AssessedScope: row.AssessedScope, ComponentKey: row.ComponentKey, Material: row.Material, Color: row.Color, Quantity: row.Quantity, Condition: row.Condition, Observation: row.Observation, Limitation: row.Limitation, ConfidenceBps: row.ConfidenceBps, Origin: row.Origin, Declared: row.Declared, Decision: row.Decision, RejectionReason: row.RejectionReason, RejectionText: row.RejectionText, Version: row.Version, Evidence: []*graphql1.InventoryEvidence{}, AttributeSources: inventoryAttributeSources(view.Sources)}
+	if len(row.NotAssessed) > 0 {
+		_ = json.Unmarshal(row.NotAssessed, &out.NotAssessed)
+	}
 	if len(row.Suggested) > 0 {
 		var value map[string]any
 		_ = json.Unmarshal(row.Suggested, &value)

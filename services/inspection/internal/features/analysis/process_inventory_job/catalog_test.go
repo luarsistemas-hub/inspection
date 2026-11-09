@@ -280,6 +280,29 @@ func TestUT193LastCatalogFailureFailsDraftAndKeepsSucceededItems(t *testing.T) {
 	}
 }
 
+func TestTask03UT034FailedCatalogIsDistinctFromSuccessfulEmptyCatalog(t *testing.T) {
+	t.Run("empty response succeeds without items", func(t *testing.T) {
+		h, _, envs := catalogFixture(t, 1)
+		h.gateway.Respond = func(llm.StructuredRequest) (string, error) {
+			return `{"environments":[]}`, nil
+		}
+		h.drain(t)
+		job := reloadJob(t, h.seed.DB, envs[0].job.ID)
+		if job.Status != "SUCCEEDED" || len(itemsOf(t, h.seed, envs[0].env.ID)) != 0 {
+			t.Fatalf("successful empty catalog job=%+v items=%v", job, itemsOf(t, h.seed, envs[0].env.ID))
+		}
+	})
+	t.Run("gateway failure remains failed", func(t *testing.T) {
+		h, _, envs := catalogFixture(t, 1)
+		h.gateway.Respond = func(llm.StructuredRequest) (string, error) { return "", errGateway }
+		h.drain(t)
+		job := reloadJob(t, h.seed.DB, envs[0].job.ID)
+		if job.Status != "FAILED" || len(itemsOf(t, h.seed, envs[0].env.ID)) != 0 {
+			t.Fatalf("failed catalog job=%+v items=%v", job, itemsOf(t, h.seed, envs[0].env.ID))
+		}
+	})
+}
+
 func TestCatalogReplayReplacesSuggestions(t *testing.T) {
 	h, _, envs := catalogFixture(t, 1)
 	photo := envs[0].photos[0].String()

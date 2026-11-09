@@ -22,6 +22,7 @@ import (
 	"inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
+	projectcore "inspection/services/inspection/internal/features/projects/core"
 	"inspection/services/inspection/internal/features/schedules/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	templateresolve "inspection/services/inspection/internal/features/templates/resolve_template"
@@ -438,6 +439,10 @@ func newLegacyVideoGraphQLFixture(t *testing.T, mode catalog.ComparisonMode) fix
 }
 
 func newInspectionModeGraphQLFixtureWithSchema(t *testing.T, photoOrigin bool, mode catalog.ComparisonMode, schemaVersion int) fixedOriginGraphQLFixture {
+	return newInspectionModeGraphQLFixtureWithSchemaAndVideo(t, photoOrigin, mode, schemaVersion, true)
+}
+
+func newInspectionModeGraphQLFixtureWithSchemaAndVideo(t *testing.T, photoOrigin bool, mode catalog.ComparisonMode, schemaVersion int, isVideo bool) fixedOriginGraphQLFixture {
 	t.Helper()
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
@@ -452,7 +457,7 @@ func newInspectionModeGraphQLFixtureWithSchema(t *testing.T, photoOrigin bool, m
 	if err != nil {
 		t.Fatal(err)
 	}
-	templateID, templateVersionID, err := createVideoInspectionTemplateWithSchema(ctx, h, seed, mode, schemaVersion)
+	templateID, templateVersionID, err := createVideoInspectionTemplateWithSchema(ctx, h, seed, mode, schemaVersion, isVideo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +494,11 @@ func newInspectionModeGraphQLFixtureWithSchema(t *testing.T, photoOrigin bool, m
 	}); err != nil {
 		t.Fatal(err)
 	}
-	document, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: schemaVersion, IsVideo: true, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"})
+	definition := catalog.TemplateDocument{SchemaVersion: schemaVersion, IsVideo: isVideo, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"}
+	if !isVideo && schemaVersion == catalog.DescriptiveSchemaVersion {
+		definition.AssetProfile = "PROPERTY_COMPONENTS"
+	}
+	document, err := json.Marshal(definition)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,6 +525,7 @@ func newInspectionModeGraphQLFixtureWithSchema(t *testing.T, photoOrigin bool, m
 		DB: h.DB, Bus: bus,
 		InspectionService: inspectioncore.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}},
 		ScheduleService:   core.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}},
+		ProjectService:    projectcore.Service{DB: h.DB, Bus: bus, Authorizer: auth.Authorizer{}},
 	}}))
 	server.SetErrorPresenter(graph.PresentError)
 	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}, ProductEntitlements: auth.ProductsForRole(auth.TenantAdmin)}, CorrelationID: "it45x"}

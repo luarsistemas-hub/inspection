@@ -39,10 +39,12 @@ import (
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
 	capturefinalize "inspection/services/inspection/internal/features/capture/finalize_submission"
 	capturemanageenvironment "inspection/services/inspection/internal/features/capture/manage_environment"
+	capturerecordanswer "inspection/services/inspection/internal/features/capture/record_component_answer"
 	capturequalitywarning "inspection/services/inspection/internal/features/capture/record_quality_warning"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
+	capturehandover "inspection/services/inspection/internal/features/capture/upsert_handover_record"
 	counterpartyacknowledge "inspection/services/inspection/internal/features/counterparty/acknowledge"
 	counterpartycontest "inspection/services/inspection/internal/features/counterparty/contest"
 	counterpartycore "inspection/services/inspection/internal/features/counterparty/core"
@@ -523,6 +525,12 @@ func run() error {
 			return capturequalitywarning.Setup(capturequalitywarning.Dependencies{Bus: bus, Service: captureService})
 		},
 		func() error {
+			return capturerecordanswer.Setup(capturerecordanswer.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturehandover.Setup(capturehandover.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
 			return capturesubmit.Setup(capturesubmit.Dependencies{Bus: bus, Service: captureService, AnalysisDisabled: cfg.LLMMode == "disabled"})
 		},
 		func() error { return mediacreate.Setup(mediacreate.Dependencies{Bus: bus, Service: mediaService}) },
@@ -605,10 +613,8 @@ func run() error {
 		// Public onboarding requests do not carry an authenticated principal, but
 		// they still need the transport correlation ID for resolver diagnostics.
 		ctx = requestctx.WithMetadata(ctx, requestctx.Metadata{CorrelationID: correlationID, StartedAt: time.Now().UTC()})
-		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
-			ctx = requestctx.WithClientIP(ctx, host)
-		} else if r.RemoteAddr != "" {
-			ctx = requestctx.WithClientIP(ctx, r.RemoteAddr)
+		if clientIP := clientIPFromRequest(r, cfg.TrustedProxyCIDRs); clientIP != "" {
+			ctx = requestctx.WithClientIP(ctx, clientIP)
 		}
 		ctx = requestctx.WithSecureCookies(ctx, cfg.Environment != "local" || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 		_, hasExternalCookie := r.Cookie("inspection_external")
@@ -674,6 +680,46 @@ func run() error {
 		return err
 	}
 	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, observability.HTTPMetrics(metrics, mux)), cfg.ShutdownTimeout)
+}
+
+// clientIPFromRequest honors forwarding headers only when the immediate peer
+// belongs to INSPECTION_TRUSTED_PROXY_CIDRS. Trusted proxies must overwrite or
+// safely append X-Forwarded-For before forwarding requests.
+func clientIPFromRequest(r *http.Request, trustedCIDRs []string) string {
+	remoteHost := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(remoteHost); err == nil {
+		remoteHost = host
+	}
+	remote := net.ParseIP(strings.Trim(remoteHost, "[]"))
+	if remote == nil {
+		return ""
+	}
+	if !trustedProxyIP(remote, trustedCIDRs) {
+		return remote.String()
+	}
+	forwarded := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	current := remote
+	for i := len(forwarded) - 1; i >= 0; i-- {
+		if !trustedProxyIP(current, trustedCIDRs) {
+			break
+		}
+		candidate := net.ParseIP(strings.TrimSpace(forwarded[i]))
+		if candidate == nil {
+			break
+		}
+		current = candidate
+	}
+	return current.String()
+}
+
+func trustedProxyIP(ip net.IP, configured []string) bool {
+	for _, value := range configured {
+		_, network, err := net.ParseCIDR(strings.TrimSpace(value))
+		if err == nil && network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func authenticateMediaRead(r *http.Request, testAuth bool, authenticator auth.Authenticator, memberships auth.GORMMembershipStore, invitations invitationcore.Service) (requestctx.Metadata, bool) {

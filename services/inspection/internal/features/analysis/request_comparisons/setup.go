@@ -78,12 +78,19 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if len(answers) == 0 {
 			return messaging.ErrPermanent
 		}
-		var snapshot database.AnalysisPromptSnapshot
-		if err := tx.WithContext(ctx).Where("id=? AND analysis_type=?", inspection.AnalysisPromptSnapshotID, "REAL_ESTATE").First(&snapshot).Error; err != nil {
-			return err
-		}
 		var reference database.ReferenceSnapshot
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, in.InspectionID).First(&reference).Error; err != nil {
+			return err
+		}
+		snapshotID := inspection.FindingsCurrentSnapshotID
+		if reference.ComparisonMode == "FIXED_ORIGIN" {
+			snapshotID = inspection.FindingsCompareSnapshotID
+		}
+		if snapshotID == nil {
+			snapshotID = &inspection.AnalysisPromptSnapshotID
+		}
+		var snapshot database.AnalysisPromptSnapshot
+		if err := tx.WithContext(ctx).Where("id=? AND analysis_type=?", *snapshotID, "REAL_ESTATE").First(&snapshot).Error; err != nil {
 			return err
 		}
 		now := deps.Now().UTC()

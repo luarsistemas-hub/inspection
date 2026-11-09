@@ -41,6 +41,46 @@ func TestRequestStopsOnCanceledContextBeforeDatabaseAccess(t *testing.T) {
 	}
 }
 
+func TestReanalyzeCopiesPinnedSchemaFromPromptSnapshotUT090(t *testing.T) {
+	seed := inventorytest.New(t, inventorytest.InspectionOptions{})
+	var snapshot database.AnalysisPromptSnapshot
+	if err := seed.DB.Where("id=?", seed.ComparePrompt).Take(&snapshot).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.DB.Model(&snapshot).Update("schema_version", 2).Error; err != nil {
+		t.Fatal(err)
+	}
+	digest := snapshot.CanonicalDigest
+	first := database.InventoryJob{ID: identity.NewID(), TenantID: seed.Tenant, InspectionID: seed.Inspection, OriginVersionID: identity.NewID(), Kind: "COMPARE", RequirementKey: "env:room", Generation: 1, Status: "SUCCEEDED", NextAttemptAt: seed.Now, PromptSnapshotID: &snapshot.ID, SchemaVersion: 2, SchemaDigest: &digest, CreatedAt: seed.Now, UpdatedAt: seed.Now}
+	if err := seed.DB.Create(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+	created, err := Reanalyze(context.Background(), seed.DB, seed.Tenant, seed.Inspection, seed.Now.Add(time.Minute))
+	if err != nil || created != 1 {
+		t.Fatalf("Reanalyze()=%d err=%v", created, err)
+	}
+	var next database.InventoryJob
+	if err := seed.DB.Where("inspection_id=? AND generation=2", seed.Inspection).Take(&next).Error; err != nil {
+		t.Fatal(err)
+	}
+	if next.SchemaVersion != 2 || next.SchemaDigest == nil || *next.SchemaDigest != digest || next.PromptSnapshotID == nil || *next.PromptSnapshotID != snapshot.ID {
+		t.Fatalf("reanalysis did not inherit pinned v2 schema: %+v", next)
+	}
+}
+
+func TestReanalyzeInProgressMessageIsPortugueseForReissueReport(t *testing.T) {
+	seed := inventorytest.New(t, inventorytest.InspectionOptions{})
+	now := seed.Now
+	job := database.InventoryJob{ID: identity.NewID(), TenantID: seed.Tenant, InspectionID: seed.Inspection, OriginVersionID: identity.NewID(), Kind: "COMPARE", RequirementKey: "env:room", Generation: 1, Status: "RUNNING", NextAttemptAt: now, CreatedAt: now, UpdatedAt: now}
+	if err := seed.DB.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err := Reanalyze(context.Background(), seed.DB, seed.Tenant, seed.Inspection, now.Add(time.Minute))
+	if err == nil || err.Error() != "A análise do inventário já está em andamento." {
+		t.Fatalf("in-progress message=%v; want stable Portuguese user-facing message", err)
+	}
+}
+
 func TestUT180SubmittedPhotoCatalogCreatesDraftAndOneJobPerCapturedEnvironment(t *testing.T) {
 	seed := inventorytest.New(t, inventorytest.InspectionOptions{Requirements: []capturecore.Requirement{
 		inventorytest.EnvironmentRequirement("env:new:"+identity.NewID().String(), "LIVING_ROOM", "Sala", true),

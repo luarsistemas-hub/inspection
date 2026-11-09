@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/features/analysis/prompt"
 	resolveprompt "inspection/services/inspection/internal/features/analysis/resolve_prompt"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -176,15 +177,16 @@ func (s Service) requestLegacyCatalogJob(ctx context.Context, tx *gorm.DB, tenan
 		return err
 	}
 	snapshotID := catalogPrompt.Snapshot.ID
+	schemaVersion, schemaDigest := prompt.SchemaPin(catalogPrompt.Snapshot.SchemaVersion, catalogPrompt.Snapshot.CanonicalDigest)
 	// A discarded earlier draft of the same legacy origin used this key; the job
 	// is re-pointed at the new draft instead of violating uniqueness.
 	var existing database.InventoryJob
 	if err := tx.Where("tenant_id=? AND inspection_id=? AND kind='CATALOG' AND requirement_key=?", tenantID, inspectionID, legacyCatalogKey).Take(&existing).Error; err == nil {
-		return tx.Model(&existing).Updates(map[string]any{"origin_version_id": draft.ID, "status": "PENDING", "attempts": 0, "next_attempt_at": now, "error_code": nil, "lease_token": nil, "lease_until": nil, "prompt_snapshot_id": snapshotID, "updated_at": now}).Error
+		return tx.Model(&existing).Updates(map[string]any{"origin_version_id": draft.ID, "status": "PENDING", "attempts": 0, "next_attempt_at": now, "error_code": nil, "lease_token": nil, "lease_until": nil, "prompt_snapshot_id": snapshotID, "schema_version": schemaVersion, "schema_digest": schemaDigest, "updated_at": now}).Error
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, OriginVersionID: draft.ID, Kind: "CATALOG", RequirementKey: legacyCatalogKey, Generation: 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: &snapshotID, CreatedAt: now, UpdatedAt: now}
+	job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, OriginVersionID: draft.ID, Kind: "CATALOG", RequirementKey: legacyCatalogKey, Generation: 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: &snapshotID, SchemaVersion: schemaVersion, SchemaDigest: schemaDigest, CreatedAt: now, UpdatedAt: now}
 	return tx.Create(&job).Error
 }
 

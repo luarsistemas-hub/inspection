@@ -19,6 +19,7 @@ import (
 	classifyinspection "inspection/services/inspection/internal/features/analysis/classify_inspection"
 	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
 	"inspection/services/inspection/internal/features/analysis/inventory/inventorytest"
+	"inspection/services/inspection/internal/features/analysis/prompt"
 	"inspection/services/inspection/internal/features/analysis/request_inventory_jobs"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	inventorycore "inspection/services/inspection/internal/features/inventory/core"
@@ -52,6 +53,9 @@ type flow struct {
 	compare   identity.ID
 	// originFrames makes pinned items cite retained video frames.
 	originFrames bool
+	// openCapture keeps the capture of a created move-out OPEN, to be
+	// submitted with the real capture service.
+	openCapture bool
 }
 
 var pngBytes = []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 64))
@@ -74,9 +78,17 @@ func newFlow(t *testing.T, mediaKind string) *flow {
 	f := &flow{t: t, ctx: ctx, h: h, seed: seed, gateway: &inventorytest.Gateway{}, clock: &atomic.Int64{}}
 	f.clock.Store(time.Now().UTC().Truncate(time.Microsecond).UnixNano())
 	for task, target := range map[string]*identity.ID{"INVENTORY_CATALOG": &f.catalog, "INVENTORY_COMPARE": &f.compare} {
+		definition := prompt.DefaultDefinitionForTask(task)
+		payload, digest, err := prompt.CanonicalizeTask(task, definition)
+		if err != nil {
+			t.Fatalf("canonicalize %s prompt: %v", task, err)
+		}
 		var snapshot database.AnalysisPromptSnapshot
-		if err := h.AdminDB.Where("task=?", task).Order("created_at DESC").Take(&snapshot).Error; err != nil {
-			t.Fatalf("seeded %s prompt: %v", task, err)
+		if err := h.AdminDB.Where("analysis_type=? AND task=? AND canonical_digest=? AND schema_version=1", "REAL_ESTATE", task, digest).Take(&snapshot).Error; err != nil {
+			snapshot = database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: "REAL_ESTATE", Task: task, DefinitionJSON: payload, CanonicalDigest: digest, SchemaVersion: 1, CreatedAt: time.Now().UTC()}
+			if err := h.AdminDB.Create(&snapshot).Error; err != nil {
+				t.Fatalf("seeded %s prompt: %v", task, err)
+			}
 		}
 		*target = snapshot.ID
 	}

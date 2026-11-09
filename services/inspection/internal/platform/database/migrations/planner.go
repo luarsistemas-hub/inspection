@@ -3444,6 +3444,140 @@ $function$;
 REVOKE ALL ON FUNCTION usage.read_llm_usage_calls_v4(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION usage.read_llm_usage_calls_v4(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean,text) TO inspection_runtime;
 `},
+		{Version: 117, Name: "inspection_scope_snapshots_rls", Compatible: true, SQL: `
+ALTER TABLE inspections.scope_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inspections.scope_snapshots FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON inspections.scope_snapshots;
+CREATE POLICY tenant_isolation ON inspections.scope_snapshots
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT USAGE ON SCHEMA inspections TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON inspections.scope_snapshots TO inspection_runtime;`},
+		{Version: 118, Name: "template_schema_v3", Compatible: true, SQL: `
+ALTER TABLE templates.template_versions DROP CONSTRAINT IF EXISTS chk_template_schema_version;
+ALTER TABLE templates.template_versions ADD CONSTRAINT chk_template_schema_version CHECK (schema_version IN (1,2,3));`},
+		{Version: 119, Name: "capture_descriptive_coverage_and_handover_rls", Compatible: true, SQL: `
+ALTER TABLE media.media_objects ADD COLUMN IF NOT EXISTS received_at timestamptz;
+ALTER TABLE media.media_objects ADD COLUMN IF NOT EXISTS captured_at_source varchar(24) NOT NULL DEFAULT 'SERVER_FALLBACK';
+ALTER TABLE capture.component_answers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE capture.component_answers FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON capture.component_answers;
+CREATE POLICY tenant_isolation ON capture.component_answers USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+ALTER TABLE capture.handover_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE capture.handover_records FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON capture.handover_records;
+CREATE POLICY tenant_isolation ON capture.handover_records USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON capture.component_answers, capture.handover_records TO inspection_runtime;`},
+		{Version: 120, Name: "capture_handover_revision_history", Compatible: true, SQL: `
+DROP INDEX IF EXISTS capture.uq_handover_record;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_handover_record_revision
+  ON capture.handover_records (tenant_id, draft_id, record_key, version);
+DROP TRIGGER IF EXISTS immutable_handover_record ON capture.handover_records;
+CREATE TRIGGER immutable_handover_record
+  BEFORE UPDATE OR DELETE ON capture.handover_records
+  FOR EACH ROW EXECUTE FUNCTION platform.reject_append_only_mutation();`},
+		{Version: 121, Name: "allow_handover_purge_deletion", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.guard_handover_revision_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND current_setting('app.retention_purge', true) = 'on' THEN
+    RETURN OLD;
+  END IF;
+  RAISE EXCEPTION 'append-only record is immutable';
+END $$;
+DROP TRIGGER IF EXISTS immutable_handover_record ON capture.handover_records;
+CREATE TRIGGER immutable_handover_record
+  BEFORE UPDATE OR DELETE ON capture.handover_records
+  FOR EACH ROW EXECUTE FUNCTION platform.guard_handover_revision_mutation();`},
+		{Version: 122, Name: "descriptive_inventory_and_pinned_analysis_diagnostics", Compatible: true, SQL: `
+ALTER TABLE origins.inventory_items ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '';
+ALTER TABLE origins.inventory_items ADD COLUMN IF NOT EXISTS assessed_scope varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE origins.inventory_items ADD COLUMN IF NOT EXISTS not_assessed jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE origins.inventory_items ADD COLUMN IF NOT EXISTS component_key varchar(160);
+ALTER TABLE analysis.prompt_snapshots ADD COLUMN IF NOT EXISTS schema_version integer NOT NULL DEFAULT 1;
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS schema_version integer NOT NULL DEFAULT 1;
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS schema_digest varchar(64);
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS model_revision varchar(200) NOT NULL DEFAULT 'UNKNOWN';
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS media_transform_digest varchar(64);
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS candidate_returned integer NOT NULL DEFAULT 0;
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS candidate_invalid integer NOT NULL DEFAULT 0;
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS candidate_rejected_evidence integer NOT NULL DEFAULT 0;
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS candidate_truncated integer NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_inventory_item_component_key ON origins.inventory_items(tenant_id, origin_version_id, component_key);
+GRANT SELECT, INSERT, UPDATE, DELETE ON origins.inventory_items, analysis.prompt_snapshots, analysis.inventory_jobs TO inspection_runtime;`},
+		{Version: 123, Name: "pin_mode_specific_findings_prompts", Compatible: true, SQL: `
+ALTER TABLE inspections.inspections ADD COLUMN IF NOT EXISTS findings_current_snapshot_id uuid;
+ALTER TABLE inspections.inspections ADD COLUMN IF NOT EXISTS findings_compare_snapshot_id uuid;
+GRANT SELECT, INSERT, UPDATE, DELETE ON inspections.inspections TO inspection_runtime;`},
+		{Version: 124, Name: "allow_mode_specific_findings_prompts", Compatible: true, SQL: `
+ALTER TABLE analysis.prompts DROP CONSTRAINT IF EXISTS chk_analysis_prompt_task;
+ALTER TABLE analysis.prompts ADD CONSTRAINT chk_analysis_prompt_task CHECK(task IN ('FINDINGS','FINDINGS_CURRENT','FINDINGS_COMPARE','INVENTORY_CATALOG','INVENTORY_COMPARE'));
+ALTER TABLE analysis.prompt_snapshots DROP CONSTRAINT IF EXISTS chk_analysis_snapshot_task;
+ALTER TABLE analysis.prompt_snapshots ADD CONSTRAINT chk_analysis_snapshot_task CHECK(task IN ('FINDINGS','FINDINGS_CURRENT','FINDINGS_COMPARE','INVENTORY_CATALOG','INVENTORY_COMPARE'));`},
+		{Version: 125, Name: "inventory_image_truncation_diagnostic", Compatible: true, SQL: `
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS candidate_image_truncated integer NOT NULL DEFAULT 0;`},
+		{Version: 126, Name: "inventory_not_assessed_default_and_component_index", Compatible: true, SQL: `
+UPDATE origins.inventory_items SET not_assessed='[]'::jsonb WHERE not_assessed IS NULL;
+ALTER TABLE origins.inventory_items ALTER COLUMN not_assessed SET DEFAULT '[]'::jsonb;
+ALTER TABLE origins.inventory_items ALTER COLUMN not_assessed SET NOT NULL;
+DROP INDEX IF EXISTS origins.idx_inventory_items_component_key;`},
+		{Version: 127, Name: "public_report_verification_lookup", Compatible: true, SQL: `
+-- Intentionally a no-op: verification is implemented by the hash lookup in migration 129.`},
+		{Version: 128, Name: "report_snapshot_schema_v3", Compatible: true, SQL: `
+ALTER TABLE reports.report_snapshots DROP CONSTRAINT IF EXISTS chk_report_snapshot_schema_version;
+ALTER TABLE reports.report_snapshots ADD CONSTRAINT chk_report_snapshot_schema_version CHECK(schema_version IN (1,2,3));`},
+		{Version: 129, Name: "exact_public_report_verification_lookup", Compatible: true, SQL: `
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TABLE IF NOT EXISTS reports.report_verification_codes (
+  tenant_id uuid NOT NULL,
+  snapshot_id uuid NOT NULL,
+  inspection_id uuid NOT NULL,
+  code_hash char(64) NOT NULL UNIQUE,
+  verification_code text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, snapshot_id),
+  FOREIGN KEY (snapshot_id, tenant_id, inspection_id) REFERENCES reports.report_snapshots(id, tenant_id, inspection_id)
+);
+ALTER TABLE reports.report_verification_codes ADD COLUMN IF NOT EXISTS verification_code text NOT NULL DEFAULT '';
+DROP INDEX IF EXISTS reports.idx_report_verification_codes_tenant_snapshot;
+ALTER TABLE reports.report_verification_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports.report_verification_codes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON reports.report_verification_codes;
+CREATE POLICY tenant_isolation ON reports.report_verification_codes
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, DELETE ON reports.report_verification_codes TO inspection_runtime;
+INSERT INTO reports.report_verification_codes(tenant_id, snapshot_id, inspection_id, code_hash)
+SELECT r.tenant_id, r.id, r.inspection_id, encode(public.digest(r.canonical_json->>'verificationCode', 'sha256'), 'hex')
+FROM reports.report_snapshots r
+WHERE r.schema_version >= 3 AND coalesce(r.canonical_json->>'verificationCode','') <> ''
+ON CONFLICT DO NOTHING;
+UPDATE reports.report_verification_codes c
+SET verification_code = r.canonical_json->>'verificationCode'
+FROM reports.report_snapshots r
+WHERE r.id=c.snapshot_id AND r.tenant_id=c.tenant_id AND c.verification_code=''
+  AND coalesce(r.canonical_json->>'verificationCode','') <> '';
+CREATE OR REPLACE FUNCTION reports.public_verification_lookup(p_code_hash char(64), p_version integer)
+RETURNS TABLE(report_number text, version_number integer, json_digest varchar, publication_status text, issued_at timestamptz)
+LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,reports AS $$
+  SELECT r.canonical_json->>'reportId', r.version_number, r.json_digest, p.status, r.created_at
+  FROM reports.report_verification_codes c
+  JOIN reports.report_snapshots r ON r.tenant_id=c.tenant_id AND r.id=c.snapshot_id AND r.inspection_id=c.inspection_id
+  JOIN reports.report_publications p ON p.tenant_id=r.tenant_id AND p.snapshot_id=r.id
+  WHERE c.code_hash=p_code_hash AND r.version_number=p_version
+    AND r.schema_version>=3 AND p.status IN ('PUBLISHED','SUPERSEDED','INVALIDATED')
+  LIMIT 1
+$$;
+REVOKE ALL ON FUNCTION reports.public_verification_lookup(char,integer) FROM PUBLIC;
+GRANT USAGE ON SCHEMA reports TO inspection_runtime;
+GRANT EXECUTE ON FUNCTION reports.public_verification_lookup(char,integer) TO inspection_runtime;`},
+		{Version: 130, Name: "evidence_backed_comparison_reasons_and_staff_pairing", Compatible: true, SQL: `
+ALTER TABLE analysis.inventory_evidence_pairs ADD COLUMN IF NOT EXISTS source varchar(16) NOT NULL DEFAULT 'MATCHER';
+ALTER TABLE analysis.inventory_evidence_pairs DROP CONSTRAINT IF EXISTS chk_inventory_pair_source;
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT chk_inventory_pair_source CHECK(source IN ('MATCHER','STAFF'));
+ALTER TABLE analysis.inventory_item_results DROP CONSTRAINT IF EXISTS chk_inventory_result_reason;
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT chk_inventory_result_reason CHECK(reason_code IS NULL OR reason_code IN ('OBSTRUCTED','FRAMING','QUALITY','NO_CORRESPONDING_VIEW','ENVIRONMENT_NOT_CAPTURED','ANALYSIS_FAILED','NO_BASELINE_VIEW','PAIR_REJECTED','ROOM_COVERAGE_INSUFFICIENT','INCONSISTENT_CLAIM','BASELINE_CONDITION_UNASSESSED','ENVIRONMENT_UNMATCHED'));
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS capture_answer_ref varchar(120);
+GRANT SELECT, INSERT, UPDATE, DELETE ON analysis.inventory_evidence_pairs, analysis.inventory_item_results TO inspection_runtime;`},
 	}
 }
 

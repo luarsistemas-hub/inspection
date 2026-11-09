@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -75,12 +76,14 @@ func TestAdvancedModeAddsReplacedAndDiscardedLineageUT034UT037(t *testing.T) {
 func TestSensitiveEvidenceIsBlockedUT035(t *testing.T) {
 	flagged := current("flagged", "a")
 	flagged.Flags = []string{"sensitive"}
+	unavailable := current("unavailable", "d")
+	unavailable.Availability = "UNAVAILABLE"
 	mapper := Mapper{Published: true, Sensitive: map[string]bool{"screened": true}}
-	items, err := mapper.Map(snapshotWith(flagged, current("screened", "b"), current("clear", "c")), Simple)
+	items, err := mapper.Map(snapshotWith(flagged, current("screened", "b"), current("clear", "c"), unavailable), Simple)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"flagged": BlockedAvailability, "screened": BlockedAvailability, "clear": "AVAILABLE"}
+	want := map[string]string{"flagged": BlockedAvailability, "screened": BlockedAvailability, "clear": "AVAILABLE", "unavailable": BlockedAvailability}
 	for _, item := range items {
 		if item.MediaAvailability != want[item.ID] {
 			t.Errorf("%s availability = %s, want %s", item.ID, item.MediaAvailability, want[item.ID])
@@ -183,6 +186,61 @@ func TestURLIssuerFailuresReturnNoURLUT039UT040(t *testing.T) {
 	}
 	if url, err := (URLIssuer{}).Issue(context.Background(), identity.NewID().String()); url != "" || !apperror.Is(err, apperror.NotFound) {
 		t.Fatalf("unconfigured issuer url=%q err=%v", url, err)
+	}
+}
+
+// UT-055: an expired or failed media fetch leaves the approved report facts
+// intact and never returns the storage provider's partial URL.
+func TestUT055MediaFailureDoesNotRewriteSnapshotOrLeakURL(t *testing.T) {
+	snapshot := reportcore.Snapshot{SchemaVersion: 3, Checklist: &reportcore.ChecklistSection{Rooms: []reportcore.ChecklistRoom{{Name: "Cozinha", Components: []reportcore.ChecklistComponent{{Label: "Piso", Status: "OBSERVED", Description: "Piso descrito", EvidenceIDs: []string{"media-1"}}}}}}}
+	before, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := &fakePresigner{err: errors.New("storage URL https://private.example/token")}
+	issuer := URLIssuer{Store: signer, Bucket: "private", Authorized: func(context.Context, string) (string, bool, bool, error) {
+		return "private/object-key", true, false, nil
+	}}
+	url, err := issuer.Issue(context.Background(), "media-1")
+	if url != "" || !apperror.Is(err, apperror.DependencyUnavailable) || strings.Contains(err.Error(), "private.example") {
+		t.Fatalf("failed fetch url=%q err=%v, want safe failure without URL", url, err)
+	}
+	view := ProjectChecklist(snapshot)
+	if view == nil || view.Rooms[0].Components[0].Description != "Piso descrito" {
+		t.Fatalf("customer facts changed after failed fetch: %+v", view)
+	}
+	after, err := json.Marshal(snapshot)
+	if err != nil || string(before) != string(after) {
+		t.Fatalf("snapshot changed after failed fetch: before=%s after=%s err=%v", before, after, err)
+	}
+}
+
+// UT-056: a new media URL can be minted only while authorization is current;
+// URL expiry or refresh never changes the already issued PDF digest.
+func TestUT056MediaRefreshRechecksAuthorizationWithoutRewritingPDF(t *testing.T) {
+	snapshot := reportcore.Snapshot{SchemaVersion: 3, Advisory: "Laudo emitido", Checklist: &reportcore.ChecklistSection{Rooms: []reportcore.ChecklistRoom{{Name: "Sala", Components: []reportcore.ChecklistComponent{{Label: "Parede", Status: "OBSERVED", Description: "Parede registrada", EvidenceIDs: []string{"media-2"}}}}}}}
+	canonical, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdfSourceDigest := sha256.Sum256(canonical)
+	signer := &fakePresigner{}
+	authorized := true
+	issuer := URLIssuer{Store: signer, Bucket: "customer", TTL: 5 * time.Minute, Authorized: func(context.Context, string) (string, bool, bool, error) {
+		return "display/object", authorized, false, nil
+	}}
+	first, err := issuer.Issue(context.Background(), "media-2")
+	if err != nil || first == "" {
+		t.Fatalf("initial media URL=%q err=%v", first, err)
+	}
+	authorized = false
+	refreshed, err := issuer.Issue(context.Background(), "media-2")
+	if refreshed != "" || !apperror.Is(err, apperror.NotFound) {
+		t.Fatalf("revoked refresh url=%q err=%v, want NOT_FOUND without URL", refreshed, err)
+	}
+	canonicalAfter, err := json.Marshal(snapshot)
+	if err != nil || sha256.Sum256(canonicalAfter) != pdfSourceDigest || signer.calls != 1 {
+		t.Fatalf("issued PDF source changed or revoked media was signed: calls=%d err=%v", signer.calls, err)
 	}
 }
 

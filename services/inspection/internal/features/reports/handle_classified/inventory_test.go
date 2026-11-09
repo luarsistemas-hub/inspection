@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/features/analysis/inventory/inventorytest"
@@ -132,7 +133,7 @@ func build(t *testing.T, seed *inventorytest.Seed) (*core.InventorySection, []co
 	seed.DB.Where("id=?", seed.Inspection).Take(&inspection)
 	seed.DB.Where("inspection_id=?", seed.Inspection).Take(&reference)
 	var evidence []core.Evidence
-	section, err := buildInventoryReport(context.Background(), seed.DB, seed.Tenant, inspection, reference, &evidence)
+	section, err := buildInventoryReport(context.Background(), seed.DB, seed.Tenant, inspection, reference, time.Now().UTC(), &evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,8 +236,13 @@ func TestUT262CatalogingInspectionHasNoCoverage(t *testing.T) {
 	if err := seed.DB.Create(&draft).Error; err != nil {
 		t.Fatal(err)
 	}
+	imageTruncated := 4
+	truncationCode := "TRUNCATED_IMAGES"
+	if err := seed.DB.Create(&database.InventoryJob{ID: identity.NewID(), TenantID: seed.Tenant, InspectionID: seed.Inspection, OriginVersionID: draft.ID, Kind: "CATALOG", RequirementKey: "legacy:origin", Generation: 1, Status: "SUCCEEDED", NextAttemptAt: seed.Now, ErrorCode: &truncationCode, CandidateImageTruncated: imageTruncated, CreatedAt: seed.Now, UpdatedAt: seed.Now}).Error; err != nil {
+		t.Fatal(err)
+	}
 	section, _ := build(t, seed)
-	if section == nil || section.Coverage != nil || section.Reference.VersionID != draft.ID.String() || len(section.Problems) != 0 {
+	if section == nil || section.Coverage != nil || section.Reference.VersionID != draft.ID.String() || len(section.Problems) != 0 || section.CatalogDiagnostics == nil || section.CatalogDiagnostics.ImagesTruncated != imageTruncated {
 		t.Fatalf("cataloging section = %+v", section)
 	}
 }

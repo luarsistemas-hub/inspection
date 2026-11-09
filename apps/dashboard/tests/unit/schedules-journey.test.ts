@@ -46,8 +46,8 @@ describe("schedule presentation and form rules", () => {
   });
 
   it("explains blocked origin schedules in Portuguese with their first blocked time", () => {
-    expect(scheduleBlockedMessage("ORIGIN_UNAVAILABLE", "2026-09-26T12:00:00.000Z")).toContain("Sem origem válida desde");
-    expect(scheduleBlockedMessage("ORIGIN_UNAVAILABLE")).toBe("Sem origem válida. A agenda tentará novamente automaticamente.");
+    expect(scheduleBlockedMessage("ORIGIN_UNAVAILABLE", "2026-09-26T12:00:00.000Z")).toContain("A origem de referência não está disponível desde");
+    expect(scheduleBlockedMessage("ORIGIN_UNAVAILABLE")).toBe("A origem de referência não está disponível. Para vistorias fotográficas, catalogue e aprove um inventário para liberar as próximas ocorrências. A agenda tentará novamente automaticamente.");
   });
 
   it("accepts zero, one, or several distinct reminder offsets within the deadline", () => {

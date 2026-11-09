@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	"inspection/services/inspection/internal/features/media/normalize"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -565,7 +567,19 @@ func (s Service) Complete(ctx context.Context, tenantID, responsibilityID, media
 			return dependency(err)
 		}
 		now := s.now()
-		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND status='UPLOADING'", tenantID, mediaID).Update("status", "VERIFIED").Error; err != nil {
+		updates := map[string]any{"status": "VERIFIED", "received_at": now}
+		if exifAt, ok := s.readEXIFCaptureTime(ctx, upload.ObjectKey, media.ContentType); ok {
+			updates["captured_at"], updates["captured_at_source"] = exifAt, "EXIF"
+			media.CapturedAt, media.CapturedAtSource = &exifAt, "EXIF"
+			if exifAt.Location().String() == "device-local" {
+				var flags []string
+				_ = json.Unmarshal(media.Flags, &flags)
+				flags = appendUnique(flags, "CAPTURE_TIME_DEVICE_LOCAL")
+				encoded, _ := json.Marshal(flags)
+				updates["flags"], media.Flags = encoded, encoded
+			}
+		}
+		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND status='UPLOADING'", tenantID, mediaID).Updates(updates).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&database.MultipartUpload{}).Where("tenant_id=? AND media_id=?", tenantID, mediaID).Updates(map[string]any{"status": "COMPLETED", "completed_at": now}).Error; err != nil {
@@ -578,9 +592,40 @@ func (s Service) Complete(ctx context.Context, tenantID, responsibilityID, media
 			}
 		}
 		media.Status = "VERIFIED"
+		media.ReceivedAt = &now
 		return nil
 	})
 	return media, err
+}
+
+func (s Service) readEXIFCaptureTime(ctx context.Context, key, contentType string) (time.Time, bool) {
+	if !strings.HasPrefix(strings.ToLower(contentType), "image/") || s.Store.Client == nil {
+		return time.Time{}, false
+	}
+	reader, err := s.Store.Client.Get(ctx, s.Store.Bucket, key)
+	if err != nil {
+		return time.Time{}, false
+	}
+	defer reader.Close()
+	// The EXIF APP1 segment precedes the image data and is at most 64 KiB,
+	// so only the head of the original is read while the draft is locked.
+	data, err := io.ReadAll(io.LimitReader(reader, exifHeadBytes))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return normalize.ExifCaptureTime(data)
+}
+
+// exifHeadBytes bounds the bytes read from an original to find its EXIF date.
+const exifHeadBytes = 256 << 10
+
+func appendUnique(values []string, value string) []string {
+	for _, current := range values {
+		if current == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func (s Service) completeVideoReceipt(ctx context.Context, tenantID, responsibilityID, mediaID identity.ID, parts []objectstore.Part) (database.MediaObject, error) {

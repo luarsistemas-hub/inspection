@@ -52,7 +52,7 @@ func TestCreateKeepsSnapshotsImmutableAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if persisted.PDFRenderVersion != 1 {
-		t.Fatalf("new snapshot renderer version=%d, want 1", persisted.PDFRenderVersion)
+		t.Fatalf("new snapshot renderer version=%d, want stable version 1", persisted.PDFRenderVersion)
 	}
 	var references int64
 	if err := db.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND preparation_id=? AND owner_type='REPORT_SNAPSHOT' AND owner_id=?", tenant, prep, first.SnapshotID).Count(&references).Error; err != nil || references != 1 {
@@ -256,5 +256,35 @@ func TestUT260And271InventorySnapshotIsV2AndVersionedPerInspection(t *testing.T)
 	db.First(&v1Row, "id=?", v1.SnapshotID)
 	if v1Row.SchemaVersion != 1 {
 		t.Fatalf("snapshot without inventory = v%d, want v1", v1Row.SchemaVersion)
+	}
+}
+
+func TestV3SnapshotKeepsStoredPDFRenderVersionStable(t *testing.T) {
+	db := snapshotDB(t)
+	input := Input{
+		TenantID: identity.NewID(), InspectionID: identity.NewID(), Mode: "HISTORICAL",
+		Classification: "NORMAL", TemplateVersionID: "template-v3", ReferenceVersionID: "reference-v3",
+		PromptDigest: "prompt", Context: report.Context{
+			Asset:       report.AssetContext{ID: "asset", Name: "Imóvel", Address: "Rua 1"},
+			Participant: report.ParticipantContext{ID: "participant", Name: "Responsável"},
+			Template:    report.TemplateContext{ID: "template", Name: "Modelo", Version: 3},
+			Inspection:  report.InspectionContext{GeneratedAt: "2026-11-08T00:00:00Z"},
+		},
+		Checklist:  &report.ChecklistSection{Rooms: []report.ChecklistRoom{}, Coverage: report.ChecklistCoverage{UnknownScope: true}},
+		Processing: &report.ProcessingState{Status: "COMPLETED"},
+		Scope:      &report.ScopeSnapshot{Digest: "scope-v3", Version: 1, Profile: "PROPERTY_COMPONENTS"},
+		Handover:   &report.HandoverSection{Entries: []report.HandoverEntry{}},
+		Provenance: &report.Provenance{PromptRevision: "prompt", ModelRevision: "UNKNOWN", ScopeDigest: "scope-v3"},
+	}
+	created, err := Create(t.Context(), db, input, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row database.ReportSnapshot
+	if err := db.First(&row, "id=?", created.SnapshotID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.SchemaVersion != 3 || row.PDFRenderVersion != 1 {
+		t.Fatalf("schema/render versions = %d/%d, want v3 with stable PDF render version 1", row.SchemaVersion, row.PDFRenderVersion)
 	}
 }

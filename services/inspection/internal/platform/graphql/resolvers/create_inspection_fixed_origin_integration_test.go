@@ -122,8 +122,16 @@ func createVideoInspectionTemplateWithMode(ctx context.Context, h *harness.Harne
 // createVideoInspectionTemplateWithSchema creates the video template for the
 // given template document schema. Schema 2 captures by environment; schema 1 is
 // the legacy video template whose capture exposes one video:main requirement.
-func createVideoInspectionTemplateWithSchema(ctx context.Context, h *harness.Harness, fixture harness.Task06Fixture, mode catalog.ComparisonMode, schemaVersion int) (identity.ID, identity.ID, error) {
-	document, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: schemaVersion, IsVideo: true, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"})
+func createVideoInspectionTemplateWithSchema(ctx context.Context, h *harness.Harness, fixture harness.Task06Fixture, mode catalog.ComparisonMode, schemaVersion int, videoOption ...bool) (identity.ID, identity.ID, error) {
+	isVideo := true
+	if len(videoOption) > 0 {
+		isVideo = videoOption[0]
+	}
+	definition := catalog.TemplateDocument{SchemaVersion: schemaVersion, IsVideo: isVideo, DefaultComparisonMode: mode, AnalysisType: "REAL_ESTATE"}
+	if !isVideo && schemaVersion == catalog.DescriptiveSchemaVersion {
+		definition.AssetProfile = "PROPERTY_COMPONENTS"
+	}
+	document, err := json.Marshal(definition)
 	if err != nil {
 		return identity.ID{}, identity.ID{}, err
 	}

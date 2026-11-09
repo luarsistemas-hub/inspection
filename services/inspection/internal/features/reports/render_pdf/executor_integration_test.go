@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
+	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/objectstore"
 
@@ -32,6 +34,13 @@ func TestPostgresConcurrentExecutorsProcessEachJobOnce(t *testing.T) {
 	}
 	ctx := context.Background()
 	if err := (database.Migrator{DB: db}).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Keep jobs left by earlier integration runs from affecting this test's
+	// object count. The disposable database is shared across serial packages.
+	if err := db.Model(&database.ReportPDFJob{}).
+		Where("status = ?", "QUEUED").
+		Update("next_attempt_at", time.Now().Add(24*time.Hour)).Error; err != nil {
 		t.Fatal(err)
 	}
 	tenantID := identity.NewID()
@@ -102,5 +111,83 @@ func TestPostgresConcurrentExecutorsProcessEachJobOnce(t *testing.T) {
 	var forced bool
 	if err := db.Raw(`SELECT c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='reports' AND c.relname='report_pdf_jobs'`).Row().Scan(&forced); err != nil || !forced {
 		t.Fatalf("report_pdf_jobs RLS forced=%v err=%v", forced, err)
+	}
+}
+
+// TestIT043PostgresRendererTimeoutKeepsSnapshotAndPDFJobRetryable checks the
+// retry boundary on PostgreSQL without requiring a RabbitMQ broker.
+func TestIT043PostgresRendererTimeoutKeepsSnapshotAndPDFJobRetryable(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	ctx := context.Background()
+	h, err := harness.NewPostgresFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	f, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{InspectionStatus: "COMPLETED", ComparisonMode: "CURRENT_ONLY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This disposable database is shared by serial integration packages. Keep
+	// previously queued jobs out of this executor run so the assertion covers
+	// the job created below.
+	if err := h.AdminDB.Model(&database.ReportPDFJob{}).
+		Where("status = ?", "QUEUED").
+		Update("next_attempt_at", time.Now().Add(24*time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := h.AdminDB.Model(&database.ReportPDFJob{}).
+		Where("status = ?", "PROCESSING").
+		Update("lease_expires_at", time.Now().Add(24*time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	snapshotValue := validPDFSnapshot()
+	canonical, digest, err := reportcore.CanonicalJSON(snapshotValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	snapshot := database.ReportSnapshot{ID: identity.NewID(), TenantID: f.TenantID, InspectionID: f.InspectionID, Mode: "HISTORICAL", Classification: "ATTENTION", JSONDigest: digest, HTMLDigest: "it043-html", SchemaVersion: 2, VersionNumber: 1, PDFRenderVersion: rendererVersion, CanonicalJSON: json.RawMessage(canonical), HTML: json.RawMessage(`""`), CreatedAt: now}
+	if err := h.AdminDB.Create(&snapshot).Error; err != nil {
+		t.Fatal(err)
+	}
+	job := database.ReportPDFJob{ID: identity.NewID(), TenantID: f.TenantID, SnapshotID: snapshot.ID, Audience: "PDF", RendererVersion: rendererVersion, Status: "QUEUED", NextAttemptAt: now.Add(-time.Second), CreatedAt: now, UpdatedAt: now}
+	if err := h.AdminDB.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	limits := DefaultLimits()
+	limits.Timeout = time.Nanosecond
+	limits.LeaseDuration = time.Second
+	store := objectstore.Store{Bucket: "private", Client: &memoryClient{objects: map[string][]byte{}}}
+	executor, err := SetupExecutor(h.AdminDB, store, limits, time.Now, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	worked, err := executor.RunDue(ctx)
+	if err != nil || !worked {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	var got database.ReportPDFJob
+	if err := h.AdminDB.Where("tenant_id=? AND id=?", f.TenantID, job.ID).Take(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "QUEUED" || got.Attempts != 1 || got.ArtifactID != nil || got.PendingObjectKey != "" {
+		t.Fatalf("failed render job was not retryable: %+v", got)
+	}
+	var after database.ReportSnapshot
+	if err := h.AdminDB.Where("tenant_id=? AND id=?", f.TenantID, snapshot.ID).Take(&after).Error; err != nil {
+		t.Fatal(err)
+	}
+	var beforeJSON, afterJSON any
+	if err := json.Unmarshal(canonical, &beforeJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(after.CanonicalJSON, &afterJSON); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(beforeJSON, afterJSON) || after.JSONDigest != digest {
+		t.Fatal("renderer failure changed the immutable report snapshot")
 	}
 }

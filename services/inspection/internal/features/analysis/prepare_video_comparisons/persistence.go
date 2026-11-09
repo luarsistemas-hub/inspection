@@ -93,7 +93,8 @@ func (w DBPlanWriter) SealPlan(ctx context.Context, plan Plan) error {
 			return err
 		}
 		var prompt database.AnalysisPromptSnapshot
-		if err := tx.Where("id=? AND analysis_type='REAL_ESTATE'", inspection.AnalysisPromptSnapshotID).Take(&prompt).Error; err != nil {
+		promptSnapshotID := findingsComparisonSnapshotID(inspection)
+		if err := tx.Where("id=? AND analysis_type='REAL_ESTATE'", promptSnapshotID).Take(&prompt).Error; err != nil {
 			return err
 		}
 		for _, item := range plan.Items {
@@ -176,6 +177,13 @@ func (w DBPlanWriter) SealPlan(ctx context.Context, plan Plan) error {
 		}
 		return advanceActiveVideoPlan(tx, &inspection, row)
 	})
+}
+
+func findingsComparisonSnapshotID(inspection database.Inspection) identity.ID {
+	if inspection.FindingsCompareSnapshotID != nil {
+		return *inspection.FindingsCompareSnapshotID
+	}
+	return inspection.AnalysisPromptSnapshotID
 }
 
 func persistVideoPlanPreparations(tx *gorm.DB, plan Plan, now time.Time) error {

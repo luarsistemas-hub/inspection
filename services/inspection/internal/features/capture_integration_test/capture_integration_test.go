@@ -32,7 +32,7 @@ func captureDB(t *testing.T) *gorm.DB {
 			t.Fatal(err)
 		}
 	}
-	models := []any{&database.AuditEvent{}, &database.OutboxIntent{}, &database.Invitation{}, &database.ExternalSession{}, &database.ProcessingAcceptance{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.SubmissionVersion{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.MediaDerivative{}, &database.ScreeningRun{}, &database.RecaptureRequest{}, &database.RecaptureRequirement{}, &database.Inspection{}, &database.Responsibility{}, &database.TemplateVersion{}, &database.VideoSource{}, &database.VideoPreparationJob{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}}
+	models := []any{&database.AuditEvent{}, &database.OutboxIntent{}, &database.Invitation{}, &database.ExternalSession{}, &database.ProcessingAcceptance{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.ComponentAnswer{}, &database.HandoverRecord{}, &database.SubmissionVersion{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.MediaDerivative{}, &database.ScreeningRun{}, &database.RecaptureRequest{}, &database.RecaptureRequirement{}, &database.Inspection{}, &database.Responsibility{}, &database.InspectionScopeSnapshot{}, &database.TemplateVersion{}, &database.VideoSource{}, &database.VideoPreparationJob{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)

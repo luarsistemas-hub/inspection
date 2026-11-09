@@ -57,7 +57,7 @@ func (s Service) AddItem(ctx context.Context, in AddItemInput) (database.Invento
 			return err
 		}
 		now := s.now()
-		out = database.InventoryItem{ID: identity.NewID(), TenantID: in.TenantID, OriginVersionID: in.OriginVersionID, EnvironmentID: in.EnvironmentID, IdentityID: identity.NewID(), TypeCode: in.TypeCode, Name: in.Name, Material: in.Material, Color: in.Color, Quantity: in.Quantity, Condition: in.Condition, Observation: in.Observation, Limitation: in.Limitation, Origin: "MANUAL", Declared: len(in.Evidence) == 0, Decision: "ADDED", Version: 1, DecidedBy: &in.ActorMembershipID, DecidedAt: &now, CreatedAt: now, UpdatedAt: now}
+		out = database.InventoryItem{ID: identity.NewID(), TenantID: in.TenantID, OriginVersionID: in.OriginVersionID, EnvironmentID: in.EnvironmentID, IdentityID: identity.NewID(), TypeCode: in.TypeCode, Name: in.Name, Material: in.Material, Color: in.Color, Quantity: in.Quantity, Condition: in.Condition, Observation: in.Observation, Limitation: in.Limitation, NotAssessed: []byte(`[]`), Origin: "MANUAL", Declared: len(in.Evidence) == 0, Decision: "ADDED", Version: 1, DecidedBy: &in.ActorMembershipID, DecidedAt: &now, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&out).Error; err != nil {
 			return err
 		}
@@ -263,7 +263,7 @@ func (s Service) SplitItem(ctx context.Context, in SplitItemInput) ([]database.I
 			if !IsCondition(condition) {
 				return apperror.New(apperror.InvalidInput, "condition", "unknown condition")
 			}
-			part := database.InventoryItem{ID: identity.NewID(), TenantID: in.TenantID, OriginVersionID: in.OriginVersionID, EnvironmentID: original.EnvironmentID, IdentityID: identity.NewID(), TypeCode: p.TypeCode, Name: p.Name, Condition: condition, Observation: original.Observation, Origin: "MANUAL", Declared: len(p.EvidenceIDs) == 0, Decision: "ADDED", Version: 1, DecidedBy: &in.ActorMembershipID, DecidedAt: &now, CreatedAt: now, UpdatedAt: now}
+			part := database.InventoryItem{ID: identity.NewID(), TenantID: in.TenantID, OriginVersionID: in.OriginVersionID, EnvironmentID: original.EnvironmentID, IdentityID: identity.NewID(), TypeCode: p.TypeCode, Name: p.Name, Condition: condition, Observation: original.Observation, NotAssessed: []byte(`[]`), Origin: "MANUAL", Declared: len(p.EvidenceIDs) == 0, Decision: "ADDED", Version: 1, DecidedBy: &in.ActorMembershipID, DecidedAt: &now, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&part).Error; err != nil {
 				return err
 			}

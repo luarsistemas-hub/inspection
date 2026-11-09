@@ -41,16 +41,21 @@ type Task06FixtureOptions struct {
 	MediaKind             string
 	ComparisonMode        string
 	SchemaVersion         int
+	CaptureDraftStatus    string
+	CapturePolicyPayload  json.RawMessage
 }
 
 // InventoryBaselineFixture identifies the ACTIVE inventory seeded for a fixture tenant.
 type InventoryBaselineFixture struct {
 	Task06Fixture
 	OriginID, OriginVersionID identity.ID
-	EnvironmentIdentityIDs    []identity.ID
-	EnvironmentIDs            []identity.ID
-	ItemIDs                   []identity.ID
-	EvidenceIDs               []identity.ID
+	// OriginMediaID is the baseline photo of the item, captured when the
+	// baseline was made: it is never the current inspection's media.
+	OriginMediaID          identity.ID
+	EnvironmentIdentityIDs []identity.ID
+	EnvironmentIDs         []identity.ID
+	ItemIDs                []identity.ID
+	EvidenceIDs            []identity.ID
 }
 
 // VideoEnvironmentFixture identifies a VIDEO inspection captured through an environment key.
@@ -78,6 +83,7 @@ type fixtureRequirement struct {
 	EnvironmentName       string `json:"environmentName,omitempty"`
 	AddedDuringCapture    bool   `json:"addedDuringCapture,omitempty"`
 	Expected              bool   `json:"expected,omitempty"`
+	AllowConfirmedGap     bool   `json:"allowConfirmedGap,omitempty"`
 }
 
 // VideoOriginFixture is a ready, active VIDEO origin with retained frame scope.
@@ -371,6 +377,10 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 			maximumMedia = catalog.MaxEnvironmentClips
 		}
 		requirement := fixtureRequirement{Key: options.RequirementKey, Section: "LIVING_ROOM", Label: "Sala", EvidenceKind: options.MediaKind, Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: maximumMedia, EnvironmentIdentityID: options.EnvironmentIdentityID.String(), EnvironmentTypeCode: "LIVING_ROOM", EnvironmentName: "Sala", AddedDuringCapture: true}
+		if options.SchemaVersion >= 3 {
+			requirement.Expected = true
+			requirement.AllowConfirmedGap = true
+		}
 		if options.SchemaVersion == catalog.LegacySchemaVersion {
 			requirement = fixtureRequirement{Key: options.RequirementKey, Section: "room", Label: "Sala", EvidenceKind: "PHOTO", Required: true, MinimumMedia: 1, MaximumMedia: 1}
 		}
@@ -378,7 +388,15 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err != nil {
 			return err
 		}
-		if err := tx.Create(&database.CaptureDraft{ID: f.DraftID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "INSPECTION", MediaKind: options.MediaKind, TemplateVersionID: f.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: requirementsJSON, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
+		captureDraftStatus := options.CaptureDraftStatus
+		if captureDraftStatus == "" {
+			captureDraftStatus = "SUBMITTED"
+		}
+		policyPayload := options.CapturePolicyPayload
+		if len(policyPayload) == 0 {
+			policyPayload = json.RawMessage(`{}`)
+		}
+		if err := tx.Create(&database.CaptureDraft{ID: f.DraftID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "INSPECTION", MediaKind: options.MediaKind, TemplateVersionID: f.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: policyPayload, Requirements: requirementsJSON, Status: captureDraftStatus, Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		mediaIDs, _ := json.Marshal([]identity.ID{f.MediaID})
@@ -399,7 +417,7 @@ func (h *Harness) SeedInventoryBaseline(ctx context.Context, options Task06Fixtu
 	if err != nil {
 		return InventoryBaselineFixture{}, err
 	}
-	result := InventoryBaselineFixture{Task06Fixture: base, OriginID: identity.NewID(), OriginVersionID: identity.NewID()}
+	result := InventoryBaselineFixture{Task06Fixture: base, OriginID: identity.NewID(), OriginVersionID: identity.NewID(), OriginMediaID: identity.NewID()}
 	environmentID, environmentIdentityID, itemID, evidenceID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	result.EnvironmentIDs = []identity.ID{environmentID}
 	result.EnvironmentIdentityIDs = []identity.ID{environmentIdentityID}
@@ -421,7 +439,24 @@ func (h *Harness) SeedInventoryBaseline(ctx context.Context, options Task06Fixtu
 		if err := tx.Create(&database.InventoryItem{ID: itemID, TenantID: base.TenantID, OriginVersionID: result.OriginVersionID, EnvironmentID: environmentID, IdentityID: identity.NewID(), TypeCode: "SOFA", Name: "Sofá", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.InventoryItemEvidence{ID: evidenceID, TenantID: base.TenantID, ItemID: itemID, Kind: "PHOTO", MediaID: base.MediaID, Position: 0, CreatedAt: now}).Error
+		// The baseline photo is its own media (with its display derivative),
+		// separate from the current capture's media.
+		originKey := "tenant/" + base.TenantID.String() + "/media/" + result.OriginMediaID.String()
+		originBytes := fixturePNG()
+		if h.Store.Client != nil {
+			for _, key := range []string{originKey, originKey + "/display"} {
+				if err := h.Store.Client.Put(ctx, h.Store.Bucket, key, bytes.NewReader(originBytes), int64(len(originBytes)), "image/png"); err != nil {
+					return err
+				}
+			}
+		}
+		if err := tx.Create(&database.MediaObject{ID: result.OriginMediaID, TenantID: base.TenantID, ResponsibilityID: base.ResponsibilityID, ObjectKey: originKey, ContentType: "image/png", SHA256: digest(originBytes), SizeBytes: int64(len(originBytes)), Status: "READY", MediaKind: "PHOTO", IdempotencyKey: "baseline-origin-" + result.OriginMediaID.String(), RequirementKey: "origin", Description: "Sofá na referência", CaptureSource: "CAMERA", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now.Add(-time.Hour)}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.MediaDerivative{ID: identity.NewID(), TenantID: base.TenantID, MediaID: result.OriginMediaID, ObjectKey: originKey + "/display", Kind: "DISPLAY", SHA256: digest(originBytes), ContentType: "image/png", Width: 1, Height: 1, SizeBytes: int64(len(originBytes)), CreatedAt: now.Add(-time.Hour)}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.InventoryItemEvidence{ID: evidenceID, TenantID: base.TenantID, ItemID: itemID, Kind: "PHOTO", MediaID: result.OriginMediaID, Position: 0, CreatedAt: now}).Error
 	})
 	if err != nil {
 		return InventoryBaselineFixture{}, fmt.Errorf("seed inventory baseline: %w", err)

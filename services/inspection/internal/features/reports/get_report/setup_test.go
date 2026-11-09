@@ -62,3 +62,23 @@ func TestGetReportReturnsNewestOrRequestedVersionWithinTheTenantOnly(t *testing.
 		}
 	}
 }
+
+// UT-051: malformed and unknown version references resolve to the same empty
+// not-found result and cannot select another inspection's report.
+func TestUT051UnknownOrAlteredVersionDoesNotExposeAnotherReport(t *testing.T) {
+	db := snapshotDB(t)
+	tenant, inspection := identity.NewID(), identity.NewID()
+	if err := db.Create(&database.ReportSnapshot{ID: identity.NewID(), TenantID: tenant, InspectionID: inspection, Mode: "HISTORICAL", Classification: "NORMAL", JSONDigest: "private-digest", HTMLDigest: "private-html", VersionNumber: 1, CanonicalJSON: []byte(`{"verificationCode":"secret"}`), HTML: []byte(`"private"`), CreatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	query, err := Setup(Dependencies{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []int{0, 2, 999} {
+		row, err := query(context.Background(), Input{TenantID: tenant, InspectionID: inspection, Version: &version})
+		if !errors.Is(err, gorm.ErrRecordNotFound) || row.ID != (identity.ID{}) || row.JSONDigest != "" {
+			t.Fatalf("version %d returned %+v (%v), want an empty not-found result", version, row, err)
+		}
+	}
+}

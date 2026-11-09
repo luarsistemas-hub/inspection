@@ -450,6 +450,21 @@ type CloseOriginInvitationInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type ComparisonCounts struct {
+	Total       int `json:"total"`
+	Unchanged   int `json:"unchanged"`
+	Changed     int `json:"changed"`
+	Improved    int `json:"improved"`
+	Missing     int `json:"missing"`
+	NotObserved int `json:"notObserved"`
+	NoBasis     int `json:"noBasis"`
+}
+
+type ComparisonPairInput struct {
+	BaselineEvidenceID string `json:"baselineEvidenceId"`
+	CurrentEvidenceID  string `json:"currentEvidenceId"`
+}
+
 type CompleteAudioNoteUploadInput struct {
 	NoteID           string `json:"noteId"`
 	UploadProof      string `json:"uploadProof"`
@@ -474,6 +489,22 @@ type CompleteOnboardingInput struct {
 type CompletedPartInput struct {
 	PartNumber int    `json:"partNumber"`
 	Etag       string `json:"etag"`
+}
+
+type ComponentAnswerPayload struct {
+	Answer           *ComponentCaptureAnswer `json:"answer,omitempty"`
+	UserErrors       []*UserError            `json:"userErrors"`
+	ClientMutationID string                  `json:"clientMutationId"`
+}
+
+type ComponentCaptureAnswer struct {
+	RequirementKey string   `json:"requirementKey"`
+	ComponentKey   string   `json:"componentKey"`
+	ViewKey        *string  `json:"viewKey,omitempty"`
+	State          string   `json:"state"`
+	Reason         string   `json:"reason"`
+	EvidenceIds    []string `json:"evidenceIds"`
+	Version        int      `json:"version"`
 }
 
 type ConfigureNotificationPreferencesInput struct {
@@ -518,6 +549,13 @@ type ConfirmAudioNoteTextInput struct {
 	NoteID           string `json:"noteId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ConfirmInspectionScopeInput struct {
+	InspectionID     string              `json:"inspectionId"`
+	ScopeOverride    *ScopeOverrideInput `json:"scopeOverride"`
+	ExpectedVersion  int                 `json:"expectedVersion"`
+	ClientMutationID string              `json:"clientMutationId"`
 }
 
 type ContactInput struct {
@@ -651,6 +689,7 @@ type CreateInspectionInput struct {
 	ReviewerMembershipID *string               `json:"reviewerMembershipId,omitempty"`
 	ProjectID            *string               `json:"projectId,omitempty"`
 	StageID              *string               `json:"stageId,omitempty"`
+	ScopeOverride        *ScopeOverrideInput   `json:"scopeOverride,omitempty"`
 	DueAt                string                `json:"dueAt"`
 	DeadlineAt           string                `json:"deadlineAt"`
 	ReminderInstants     []string              `json:"reminderInstants"`
@@ -706,6 +745,63 @@ type CreateTenantPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type CustomerChecklist struct {
+	Coverage *ReportChecklistCoverage `json:"coverage"`
+	Rooms    []*CustomerChecklistRoom `json:"rooms"`
+}
+
+type CustomerChecklistComponent struct {
+	Label       string   `json:"label"`
+	Status      string   `json:"status"`
+	Description *string  `json:"description,omitempty"`
+	Condition   *string  `json:"condition,omitempty"`
+	ReviewLabel *string  `json:"reviewLabel,omitempty"`
+	EvidenceIds []string `json:"evidenceIds"`
+	Limitations []string `json:"limitations"`
+}
+
+type CustomerChecklistRoom struct {
+	Name       string                        `json:"name"`
+	Components []*CustomerChecklistComponent `json:"components"`
+}
+
+type CustomerComparison struct {
+	BaselineVersionNumber int                              `json:"baselineVersionNumber"`
+	Purpose               string                           `json:"purpose"`
+	PurposeLabel          string                           `json:"purposeLabel"`
+	ActivatedAt           string                           `json:"activatedAt"`
+	Status                string                           `json:"status"`
+	StatusLabel           string                           `json:"statusLabel"`
+	Counts                *ComparisonCounts                `json:"counts"`
+	Displayed             int                              `json:"displayed"`
+	Items                 []*CustomerComparisonItem        `json:"items"`
+	OutsideBaseline       []*CustomerComparisonObservation `json:"outsideBaseline"`
+	Disclaimer            string                           `json:"disclaimer"`
+}
+
+type CustomerComparisonItem struct {
+	Room              string                    `json:"room"`
+	Name              string                    `json:"name"`
+	Outcome           ComparisonOutcome         `json:"outcome"`
+	OutcomeLabel      string                    `json:"outcomeLabel"`
+	BaselineCondition *string                   `json:"baselineCondition,omitempty"`
+	CurrentCondition  *string                   `json:"currentCondition,omitempty"`
+	Limitations       []string                  `json:"limitations"`
+	Pairs             []*CustomerComparisonPair `json:"pairs"`
+}
+
+type CustomerComparisonObservation struct {
+	Room string `json:"room"`
+	Name string `json:"name"`
+}
+
+type CustomerComparisonPair struct {
+	BaselineEvidence     string `json:"baselineEvidence"`
+	CurrentEvidence      string `json:"currentEvidence"`
+	BaselineAvailability string `json:"baselineAvailability"`
+	CurrentAvailability  string `json:"currentAvailability"`
+}
+
 type CustomerEvidenceConnection struct {
 	Nodes    []*CustomerEvidenceItem `json:"nodes"`
 	PageInfo *PageInfo               `json:"pageInfo"`
@@ -716,6 +812,7 @@ type CustomerEvidenceItem struct {
 	RequirementKey     string   `json:"requirementKey"`
 	Section            *string  `json:"section,omitempty"`
 	Label              *string  `json:"label,omitempty"`
+	Reference          string   `json:"reference"`
 	Role               string   `json:"role"`
 	Description        *string  `json:"description,omitempty"`
 	CaptureSource      *string  `json:"captureSource,omitempty"`
@@ -737,6 +834,22 @@ type CustomerEvidenceItem struct {
 	URL                *string  `json:"url,omitempty"`
 }
 
+type CustomerHandover struct {
+	Entries []*CustomerHandoverEntry `json:"entries"`
+}
+
+type CustomerHandoverEntry struct {
+	Label       string   `json:"label"`
+	Kind        string   `json:"kind"`
+	Status      string   `json:"status"`
+	Type        *string  `json:"type,omitempty"`
+	Value       *string  `json:"value,omitempty"`
+	Unit        *string  `json:"unit,omitempty"`
+	Date        *string  `json:"date,omitempty"`
+	Declarant   *string  `json:"declarant,omitempty"`
+	EvidenceIds []string `json:"evidenceIds"`
+}
+
 type CustomerInventory struct {
 	ReferenceVersionNumber int                        `json:"referenceVersionNumber"`
 	Purpose                string                     `json:"purpose"`
@@ -749,6 +862,7 @@ type CustomerInventoryCoverage struct {
 	ExpectedItems                  int      `json:"expectedItems"`
 	AssessedItems                  int      `json:"assessedItems"`
 	NotObserved                    int      `json:"notObserved"`
+	NoBasis                        int      `json:"noBasis"`
 	EnvironmentsNotCaptured        []string `json:"environmentsNotCaptured"`
 	EnvironmentsAddedDuringCapture []string `json:"environmentsAddedDuringCapture"`
 }
@@ -758,6 +872,7 @@ type CustomerInventoryEntry struct {
 	Type            string                   `json:"type"`
 	Name            string                   `json:"name"`
 	Status          string                   `json:"status"`
+	StatusLabel     *string                  `json:"statusLabel,omitempty"`
 	ConditionBefore *string                  `json:"conditionBefore,omitempty"`
 	ConditionAfter  *string                  `json:"conditionAfter,omitempty"`
 	Reason          *string                  `json:"reason,omitempty"`
@@ -796,16 +911,25 @@ type CustomerPortfolioItem struct {
 }
 
 type CustomerReport struct {
-	InspectionID   string               `json:"inspectionId"`
-	SnapshotID     string               `json:"snapshotId"`
-	Version        int                  `json:"version"`
-	Classification string               `json:"classification"`
-	Advisory       string               `json:"advisory"`
-	Status         string               `json:"status"`
-	Historical     bool                 `json:"historical"`
-	Context        *ReportContext       `json:"context"`
-	Requirements   []*ReportRequirement `json:"requirements"`
-	Inventory      *CustomerInventory   `json:"inventory,omitempty"`
+	InspectionID        string               `json:"inspectionId"`
+	SnapshotID          string               `json:"snapshotId"`
+	Version             int                  `json:"version"`
+	Classification      string               `json:"classification"`
+	ClassificationLabel string               `json:"classificationLabel"`
+	Limited             bool                 `json:"limited"`
+	Advisory            string               `json:"advisory"`
+	Status              string               `json:"status"`
+	Historical          bool                 `json:"historical"`
+	EvidenceNotice      string               `json:"evidenceNotice"`
+	ScopeStatements     []string             `json:"scopeStatements"`
+	ReasonLabels        []string             `json:"reasonLabels"`
+	Context             *ReportContext       `json:"context"`
+	Requirements        []*ReportRequirement `json:"requirements"`
+	Inventory           *CustomerInventory   `json:"inventory,omitempty"`
+	Checklist           *CustomerChecklist   `json:"checklist,omitempty"`
+	Processing          *ReportProcessing    `json:"processing,omitempty"`
+	Handover            *CustomerHandover    `json:"handover,omitempty"`
+	Comparison          *CustomerComparison  `json:"comparison,omitempty"`
 }
 
 type CustomerTimelineConnection struct {
@@ -897,24 +1021,28 @@ type EffectiveAccessEntryConnection struct {
 }
 
 type ExternalCapture struct {
-	ResponsibilityID      string                  `json:"responsibilityId"`
-	RecaptureRequestID    *string                 `json:"recaptureRequestId,omitempty"`
-	RecaptureDeadlineAt   *string                 `json:"recaptureDeadlineAt,omitempty"`
-	ReplacementDeadlineAt *string                 `json:"replacementDeadlineAt,omitempty"`
-	Status                string                  `json:"status"`
-	ConfirmationOnly      bool                    `json:"confirmationOnly"`
-	Kind                  string                  `json:"kind"`
-	MediaKind             string                  `json:"mediaKind"`
-	TemplateVersionID     string                  `json:"templateVersionId"`
-	CaptureLayout         *string                 `json:"captureLayout,omitempty"`
-	Reference             map[string]any          `json:"reference"`
-	ReferenceItems        []*CaptureReferenceItem `json:"referenceItems"`
-	Policy                map[string]any          `json:"policy"`
-	Requirements          []*CaptureRequirement   `json:"requirements"`
-	Environments          []*CaptureEnvironment   `json:"environments"`
-	ReviewHandoff         *CaptureReviewHandoff   `json:"reviewHandoff,omitempty"`
-	Answers               []*CaptureAnswer        `json:"answers"`
-	DisclosureVersion     string                  `json:"disclosureVersion"`
+	ResponsibilityID      string                    `json:"responsibilityId"`
+	RecaptureRequestID    *string                   `json:"recaptureRequestId,omitempty"`
+	RecaptureDeadlineAt   *string                   `json:"recaptureDeadlineAt,omitempty"`
+	ReplacementDeadlineAt *string                   `json:"replacementDeadlineAt,omitempty"`
+	Status                string                    `json:"status"`
+	ConfirmationOnly      bool                      `json:"confirmationOnly"`
+	Kind                  string                    `json:"kind"`
+	MediaKind             string                    `json:"mediaKind"`
+	TemplateVersionID     string                    `json:"templateVersionId"`
+	CaptureLayout         *string                   `json:"captureLayout,omitempty"`
+	Reference             map[string]any            `json:"reference"`
+	ReferenceItems        []*CaptureReferenceItem   `json:"referenceItems"`
+	Policy                map[string]any            `json:"policy"`
+	Requirements          []*CaptureRequirement     `json:"requirements"`
+	Environments          []*CaptureEnvironment     `json:"environments"`
+	Scope                 map[string]any            `json:"scope"`
+	ComponentAnswers      []*ComponentCaptureAnswer `json:"componentAnswers"`
+	HandoverRecords       []*HandoverCaptureRecord  `json:"handoverRecords"`
+	Coverage              *InspectionCoverage       `json:"coverage"`
+	ReviewHandoff         *CaptureReviewHandoff     `json:"reviewHandoff,omitempty"`
+	Answers               []*CaptureAnswer          `json:"answers"`
+	DisclosureVersion     string                    `json:"disclosureVersion"`
 }
 
 type ExternalSessionPayload struct {
@@ -966,6 +1094,21 @@ type GlobalLLMCallUsage struct {
 	FinishedAt          *string             `json:"finishedAt,omitempty"`
 }
 
+type HandoverCaptureRecord struct {
+	RecordKey string         `json:"recordKey"`
+	Kind      string         `json:"kind"`
+	Payload   map[string]any `json:"payload"`
+	MediaIds  []string       `json:"mediaIds"`
+	Declarant string         `json:"declarant"`
+	Version   int            `json:"version"`
+}
+
+type HandoverRecordPayload struct {
+	Record           *HandoverCaptureRecord `json:"record,omitempty"`
+	UserErrors       []*UserError           `json:"userErrors"`
+	ClientMutationID string                 `json:"clientMutationId"`
+}
+
 type Inspection struct {
 	ID                          string               `json:"id"`
 	BusinessUnitID              string               `json:"businessUnitId"`
@@ -993,6 +1136,9 @@ type Inspection struct {
 	PromotedOriginVersionNumber *int                 `json:"promotedOriginVersionNumber,omitempty"`
 	PromotedOriginMediaKind     *string              `json:"promotedOriginMediaKind,omitempty"`
 	PromotedOriginIsActive      *bool                `json:"promotedOriginIsActive,omitempty"`
+	ScopeDigest                 *string              `json:"scopeDigest,omitempty"`
+	ScopeVersion                *int                 `json:"scopeVersion,omitempty"`
+	Scope                       *InspectionScope     `json:"scope"`
 	EvidenceCount               int                  `json:"evidenceCount"`
 	DueAt                       string               `json:"dueAt"`
 	DeadlineAt                  string               `json:"deadlineAt"`
@@ -1015,6 +1161,18 @@ type InspectionAttention struct {
 type InspectionConnection struct {
 	Nodes    []*Inspection `json:"nodes"`
 	PageInfo *PageInfo     `json:"pageInfo"`
+}
+
+type InspectionCoverage struct {
+	Expected          int                    `json:"expected"`
+	FullyAssessed     int                    `json:"fullyAssessed"`
+	PartiallyAssessed int                    `json:"partiallyAssessed"`
+	NotObserved       int                    `json:"notObserved"`
+	NotApplicable     int                    `json:"notApplicable"`
+	Impossible        int                    `json:"impossible"`
+	UnknownScope      bool                   `json:"unknownScope"`
+	Suggestions       []*RecaptureSuggestion `json:"suggestions"`
+	PendingRecords    []string               `json:"pendingRecords"`
 }
 
 type InspectionLLMUsage struct {
@@ -1093,6 +1251,40 @@ type InspectionPayload struct {
 	Inspection       *Inspection  `json:"inspection,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type InspectionScope struct {
+	Profile         string                           `json:"profile"`
+	Rooms           []*InspectionScopeRoom           `json:"rooms"`
+	HandoverRecords []*InspectionScopeHandoverRecord `json:"handoverRecords"`
+	Version         int                              `json:"version"`
+	Digest          string                           `json:"digest"`
+}
+
+type InspectionScopeComponent struct {
+	Key      string   `json:"key"`
+	TypeCode string   `json:"typeCode"`
+	Label    string   `json:"label"`
+	Views    []string `json:"views"`
+}
+
+type InspectionScopeHandoverRecord struct {
+	Key      string `json:"key"`
+	Kind     string `json:"kind"`
+	Required bool   `json:"required"`
+}
+
+type InspectionScopePayload struct {
+	Scope            map[string]any `json:"scope"`
+	UserErrors       []*UserError   `json:"userErrors"`
+	ClientMutationID string         `json:"clientMutationId"`
+}
+
+type InspectionScopeRoom struct {
+	Key        string                      `json:"key"`
+	TypeCode   string                      `json:"typeCode"`
+	Name       string                      `json:"name"`
+	Components []*InspectionScopeComponent `json:"components"`
 }
 
 type InspectionTransitionInput struct {
@@ -1215,6 +1407,10 @@ type InventoryItem struct {
 	EnvironmentID    string                      `json:"environmentId"`
 	TypeCode         string                      `json:"typeCode"`
 	Name             string                      `json:"name"`
+	Description      string                      `json:"description"`
+	AssessedScope    string                      `json:"assessedScope"`
+	NotAssessed      []string                    `json:"notAssessed"`
+	ComponentKey     *string                     `json:"componentKey,omitempty"`
 	Material         *string                     `json:"material,omitempty"`
 	Color            *string                     `json:"color,omitempty"`
 	Quantity         *int                        `json:"quantity,omitempty"`
@@ -1238,6 +1434,8 @@ type InventoryItemPatchInput struct {
 	EnvironmentID *string `json:"environmentId,omitempty"`
 	TypeCode      *string `json:"typeCode,omitempty"`
 	Name          *string `json:"name,omitempty"`
+	Description   *string `json:"description,omitempty"`
+	AssessedScope *string `json:"assessedScope,omitempty"`
 	Material      *string `json:"material,omitempty"`
 	Color         *string `json:"color,omitempty"`
 	Quantity      *int    `json:"quantity,omitempty"`
@@ -2083,6 +2281,15 @@ type RecapturePayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type RecaptureSuggestion struct {
+	RequirementKey string `json:"requirementKey"`
+	RoomKey        string `json:"roomKey"`
+	RoomName       string `json:"roomName"`
+	ComponentKey   string `json:"componentKey"`
+	ComponentLabel string `json:"componentLabel"`
+	MissingView    string `json:"missingView"`
+}
+
 type RecipientNotification struct {
 	ID           string         `json:"id"`
 	Kind         string         `json:"kind"`
@@ -2119,6 +2326,17 @@ type RecordCaptureQualityWarningInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type RecordComponentAnswerInput struct {
+	RequirementKey   string   `json:"requirementKey"`
+	ComponentKey     string   `json:"componentKey"`
+	ViewKey          *string  `json:"viewKey,omitempty"`
+	State            string   `json:"state"`
+	Reason           *string  `json:"reason,omitempty"`
+	EvidenceIds      []string `json:"evidenceIds"`
+	ExpectedVersion  int      `json:"expectedVersion"`
+	ClientMutationID string   `json:"clientMutationId"`
+}
+
 type RecordDeletionRequestInput struct {
 	InspectionID     *string `json:"inspectionId,omitempty"`
 	SourceMediaID    *string `json:"sourceMediaId,omitempty"`
@@ -2140,6 +2358,18 @@ type RegisterAssetInput struct {
 	ClientMutationID string      `json:"clientMutationId"`
 }
 
+type ReissueReportInput struct {
+	InspectionID     string `json:"inspectionId"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ReissueReportPayload struct {
+	Report           *Report      `json:"report,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type RemoveInventoryEnvironmentInput struct {
 	OriginVersionID      string `json:"originVersionId"`
 	EnvironmentID        string `json:"environmentId"`
@@ -2155,26 +2385,35 @@ type ReopenProjectInput struct {
 }
 
 type Report struct {
-	ID             string                    `json:"id"`
-	InspectionID   string                    `json:"inspectionId"`
-	ProjectID      *string                   `json:"projectId,omitempty"`
-	Version        int                       `json:"version"`
-	Mode           string                    `json:"mode"`
-	Classification string                    `json:"classification"`
-	JSONDigest     string                    `json:"jsonDigest"`
-	HTMLDigest     string                    `json:"htmlDigest"`
-	CanonicalJSON  map[string]any            `json:"canonicalJSON"`
-	HTML           string                    `json:"html"`
-	CreatedAt      string                    `json:"createdAt"`
-	Advisory       string                    `json:"advisory"`
-	Context        *ReportContext            `json:"context"`
-	Requirements   []*ReportRequirement      `json:"requirements"`
-	Inventory      *CustomerInventory        `json:"inventory,omitempty"`
-	Evidence       *ReportEvidenceConnection `json:"evidence"`
-	Findings       []*ReportFinding          `json:"findings"`
-	Timeline       []*ReportTimelineEntry    `json:"timeline"`
-	PDFStatus      string                    `json:"pdfStatus"`
-	Publication    *ReportPublication        `json:"publication,omitempty"`
+	ID                  string                    `json:"id"`
+	InspectionID        string                    `json:"inspectionId"`
+	ProjectID           *string                   `json:"projectId,omitempty"`
+	Version             int                       `json:"version"`
+	Mode                string                    `json:"mode"`
+	Classification      string                    `json:"classification"`
+	ClassificationLabel string                    `json:"classificationLabel"`
+	Limited             bool                      `json:"limited"`
+	JSONDigest          string                    `json:"jsonDigest"`
+	HTMLDigest          string                    `json:"htmlDigest"`
+	CanonicalJSON       map[string]any            `json:"canonicalJSON"`
+	HTML                string                    `json:"html"`
+	CreatedAt           string                    `json:"createdAt"`
+	Advisory            string                    `json:"advisory"`
+	EvidenceNotice      string                    `json:"evidenceNotice"`
+	ScopeStatements     []string                  `json:"scopeStatements"`
+	ReasonLabels        []string                  `json:"reasonLabels"`
+	Context             *ReportContext            `json:"context"`
+	Requirements        []*ReportRequirement      `json:"requirements"`
+	Inventory           *CustomerInventory        `json:"inventory,omitempty"`
+	Checklist           *ReportChecklist          `json:"checklist,omitempty"`
+	Processing          *ReportProcessing         `json:"processing,omitempty"`
+	Handover            *ReportHandover           `json:"handover,omitempty"`
+	Comparison          *ReportComparison         `json:"comparison,omitempty"`
+	Evidence            *ReportEvidenceConnection `json:"evidence"`
+	Findings            []*ReportFinding          `json:"findings"`
+	Timeline            []*ReportTimelineEntry    `json:"timeline"`
+	PDFStatus           string                    `json:"pdfStatus"`
+	Publication         *ReportPublication        `json:"publication,omitempty"`
 }
 
 type ReportAssetContext struct {
@@ -2182,6 +2421,90 @@ type ReportAssetContext struct {
 	Name        string `json:"name"`
 	ExternalKey string `json:"externalKey"`
 	Address     string `json:"address"`
+}
+
+type ReportChecklist struct {
+	Coverage *ReportChecklistCoverage `json:"coverage"`
+	Rooms    []*ReportChecklistRoom   `json:"rooms"`
+}
+
+type ReportChecklistComponent struct {
+	Key              string   `json:"key"`
+	TypeCode         *string  `json:"typeCode,omitempty"`
+	Label            string   `json:"label"`
+	Status           string   `json:"status"`
+	Description      *string  `json:"description,omitempty"`
+	Condition        *string  `json:"condition,omitempty"`
+	ReviewStatus     *string  `json:"reviewStatus,omitempty"`
+	ReviewLabel      *string  `json:"reviewLabel,omitempty"`
+	AssessedScope    *string  `json:"assessedScope,omitempty"`
+	NotAssessed      []string `json:"notAssessed"`
+	EvidenceIds      []string `json:"evidenceIds"`
+	Limitations      []string `json:"limitations"`
+	Conflict         bool     `json:"conflict"`
+	OutsideScope     bool     `json:"outsideScope"`
+	AttributeSources []string `json:"attributeSources"`
+}
+
+type ReportChecklistCoverage struct {
+	Expected          int  `json:"expected"`
+	FullyAssessed     int  `json:"fullyAssessed"`
+	PartiallyAssessed int  `json:"partiallyAssessed"`
+	NotObserved       int  `json:"notObserved"`
+	NotApplicable     int  `json:"notApplicable"`
+	Impossible        int  `json:"impossible"`
+	UnknownScope      bool `json:"unknownScope"`
+}
+
+type ReportChecklistRoom struct {
+	Key        string                      `json:"key"`
+	TypeCode   string                      `json:"typeCode"`
+	Name       string                      `json:"name"`
+	Components []*ReportChecklistComponent `json:"components"`
+}
+
+type ReportComparison struct {
+	Baseline        *ReportComparisonBaseline      `json:"baseline"`
+	Status          string                         `json:"status"`
+	StatusLabel     string                         `json:"statusLabel"`
+	Counts          *ComparisonCounts              `json:"counts"`
+	Items           []*ReportComparisonItem        `json:"items"`
+	OutsideBaseline []*ReportComparisonObservation `json:"outsideBaseline"`
+}
+
+type ReportComparisonBaseline struct {
+	VersionID     string `json:"versionId"`
+	VersionNumber int    `json:"versionNumber"`
+	Purpose       string `json:"purpose"`
+	PurposeLabel  string `json:"purposeLabel"`
+	ActivatedAt   string `json:"activatedAt"`
+}
+
+type ReportComparisonItem struct {
+	ItemIdentityID    *string                 `json:"itemIdentityId,omitempty"`
+	Room              string                  `json:"room"`
+	TypeCode          *string                 `json:"typeCode,omitempty"`
+	Name              string                  `json:"name"`
+	Outcome           ComparisonOutcome       `json:"outcome"`
+	OutcomeLabel      string                  `json:"outcomeLabel"`
+	BaselineCondition *string                 `json:"baselineCondition,omitempty"`
+	CurrentCondition  *string                 `json:"currentCondition,omitempty"`
+	Description       *string                 `json:"description,omitempty"`
+	Limitations       []string                `json:"limitations"`
+	Pairs             []*ReportComparisonPair `json:"pairs"`
+	PairingRevised    bool                    `json:"pairingRevised"`
+}
+
+type ReportComparisonObservation struct {
+	Room        string  `json:"room"`
+	TypeCode    *string `json:"typeCode,omitempty"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+}
+
+type ReportComparisonPair struct {
+	BaselineEvidenceID string `json:"baselineEvidenceId"`
+	CurrentEvidenceID  string `json:"currentEvidenceId"`
 }
 
 type ReportConnection struct {
@@ -2224,6 +2547,7 @@ type ReportEvidence struct {
 	SourceMediaID      *string  `json:"sourceMediaId,omitempty"`
 	Component          *string  `json:"component,omitempty"`
 	Label              *string  `json:"label,omitempty"`
+	Reference          *string  `json:"reference,omitempty"`
 	Flags              []string `json:"flags"`
 	URL                *string  `json:"url,omitempty"`
 }
@@ -2245,6 +2569,19 @@ type ReportFinding struct {
 	EvidenceIds       []string `json:"evidenceIds"`
 }
 
+type ReportHandover struct {
+	Entries []*ReportHandoverEntry `json:"entries"`
+}
+
+type ReportHandoverEntry struct {
+	Key         string         `json:"key"`
+	Kind        string         `json:"kind"`
+	Status      string         `json:"status"`
+	Payload     map[string]any `json:"payload,omitempty"`
+	EvidenceIds []string       `json:"evidenceIds"`
+	Declarant   *string        `json:"declarant,omitempty"`
+}
+
 type ReportInspectionContext struct {
 	ProjectID   *string `json:"projectId,omitempty"`
 	StageID     *string `json:"stageId,omitempty"`
@@ -2257,6 +2594,11 @@ type ReportInspectionContext struct {
 type ReportParticipantContext struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+type ReportProcessing struct {
+	Status  string  `json:"status"`
+	Message *string `json:"message,omitempty"`
 }
 
 type ReportPublication struct {
@@ -2297,6 +2639,8 @@ type ReportSummary struct {
 	GeneratedAt      string             `json:"generatedAt"`
 	Classification   string             `json:"classification"`
 	Version          int                `json:"version"`
+	ScopeLabel       string             `json:"scopeLabel"`
+	ReviewLabel      string             `json:"reviewLabel"`
 	Publication      *ReportPublication `json:"publication,omitempty"`
 }
 
@@ -2311,6 +2655,14 @@ type ReportTimelineEntry struct {
 	Classification *string `json:"classification,omitempty"`
 	Status         string  `json:"status"`
 	Position       int     `json:"position"`
+}
+
+type ReportVerification struct {
+	ReportNumber *string `json:"reportNumber,omitempty"`
+	Version      *int    `json:"version,omitempty"`
+	Digest       *string `json:"digest,omitempty"`
+	Status       *string `json:"status,omitempty"`
+	IssuedAt     *string `json:"issuedAt,omitempty"`
 }
 
 type ReprocessVideoPreparationInput struct {
@@ -2468,6 +2820,20 @@ type ReviseAudioNoteInput struct {
 	ClientMutationID string                 `json:"clientMutationId"`
 }
 
+type ReviseComparisonPairingInput struct {
+	InspectionID     string                 `json:"inspectionId"`
+	ItemIdentityID   string                 `json:"itemIdentityId"`
+	Pairs            []*ComparisonPairInput `json:"pairs"`
+	ExpectedVersion  int                    `json:"expectedVersion"`
+	ClientMutationID string                 `json:"clientMutationId"`
+}
+
+type ReviseComparisonPairingPayload struct {
+	Report           *Report      `json:"report,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type RevokeInvitationInput struct {
 	LinkToken        string `json:"linkToken"`
 	ClientMutationID string `json:"clientMutationId"`
@@ -2478,6 +2844,7 @@ type SaveCaptureMetadataInput struct {
 	RequirementKey   string           `json:"requirementKey"`
 	Description      string           `json:"description"`
 	CaptureSource    string           `json:"captureSource"`
+	CapturedAt       *string          `json:"capturedAt,omitempty"`
 	Gps              *CaptureGPSInput `json:"gps,omitempty"`
 	DeviceContext    map[string]any   `json:"deviceContext,omitempty"`
 	ReplacesMediaID  *string          `json:"replacesMediaId,omitempty"`
@@ -2527,9 +2894,19 @@ type ScopeAssignmentInput struct {
 	ResourceID string `json:"resourceId"`
 }
 
+type ScopeOverrideInput struct {
+	Profile    string                 `json:"profile"`
+	Selections []*ScopeSelectionInput `json:"selections"`
+}
+
 type ScopePreview struct {
 	Target      *AccessResource                 `json:"target"`
 	Descendants *EffectiveAccessEntryConnection `json:"descendants"`
+}
+
+type ScopeSelectionInput struct {
+	RoomKey      string `json:"roomKey"`
+	ComponentKey string `json:"componentKey"`
 }
 
 type SegmentDefinition struct {
@@ -2870,6 +3247,16 @@ type UpsertBusinessUnitInput struct {
 	ClientMutationID      string  `json:"clientMutationId"`
 }
 
+type UpsertHandoverRecordInput struct {
+	RecordKey        string         `json:"recordKey"`
+	Kind             string         `json:"kind"`
+	Payload          map[string]any `json:"payload"`
+	MediaIds         []string       `json:"mediaIds"`
+	Declarant        string         `json:"declarant"`
+	ExpectedVersion  int            `json:"expectedVersion"`
+	ClientMutationID string         `json:"clientMutationId"`
+}
+
 type UpsertInventoryEnvironmentInput struct {
 	OriginVersionID  string  `json:"originVersionId"`
 	EnvironmentID    *string `json:"environmentId,omitempty"`
@@ -3069,19 +3456,23 @@ type AnalysisPromptTask string
 
 const (
 	AnalysisPromptTaskFindings         AnalysisPromptTask = "FINDINGS"
+	AnalysisPromptTaskFindingsCurrent  AnalysisPromptTask = "FINDINGS_CURRENT"
+	AnalysisPromptTaskFindingsCompare  AnalysisPromptTask = "FINDINGS_COMPARE"
 	AnalysisPromptTaskInventoryCatalog AnalysisPromptTask = "INVENTORY_CATALOG"
 	AnalysisPromptTaskInventoryCompare AnalysisPromptTask = "INVENTORY_COMPARE"
 )
 
 var AllAnalysisPromptTask = []AnalysisPromptTask{
 	AnalysisPromptTaskFindings,
+	AnalysisPromptTaskFindingsCurrent,
+	AnalysisPromptTaskFindingsCompare,
 	AnalysisPromptTaskInventoryCatalog,
 	AnalysisPromptTaskInventoryCompare,
 }
 
 func (e AnalysisPromptTask) IsValid() bool {
 	switch e {
-	case AnalysisPromptTaskFindings, AnalysisPromptTaskInventoryCatalog, AnalysisPromptTaskInventoryCompare:
+	case AnalysisPromptTaskFindings, AnalysisPromptTaskFindingsCurrent, AnalysisPromptTaskFindingsCompare, AnalysisPromptTaskInventoryCatalog, AnalysisPromptTaskInventoryCompare:
 		return true
 	}
 	return false
@@ -3280,6 +3671,69 @@ func (e *CaptureComparisonMode) UnmarshalJSON(b []byte) error {
 }
 
 func (e CaptureComparisonMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ComparisonOutcome string
+
+const (
+	ComparisonOutcomeUnchanged   ComparisonOutcome = "UNCHANGED"
+	ComparisonOutcomeChanged     ComparisonOutcome = "CHANGED"
+	ComparisonOutcomeImproved    ComparisonOutcome = "IMPROVED"
+	ComparisonOutcomeMissing     ComparisonOutcome = "MISSING"
+	ComparisonOutcomeNotObserved ComparisonOutcome = "NOT_OBSERVED"
+	ComparisonOutcomeNoBasis     ComparisonOutcome = "NO_BASIS"
+)
+
+var AllComparisonOutcome = []ComparisonOutcome{
+	ComparisonOutcomeUnchanged,
+	ComparisonOutcomeChanged,
+	ComparisonOutcomeImproved,
+	ComparisonOutcomeMissing,
+	ComparisonOutcomeNotObserved,
+	ComparisonOutcomeNoBasis,
+}
+
+func (e ComparisonOutcome) IsValid() bool {
+	switch e {
+	case ComparisonOutcomeUnchanged, ComparisonOutcomeChanged, ComparisonOutcomeImproved, ComparisonOutcomeMissing, ComparisonOutcomeNotObserved, ComparisonOutcomeNoBasis:
+		return true
+	}
+	return false
+}
+
+func (e ComparisonOutcome) String() string {
+	return string(e)
+}
+
+func (e *ComparisonOutcome) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ComparisonOutcome(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ComparisonOutcome", str)
+	}
+	return nil
+}
+
+func (e ComparisonOutcome) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ComparisonOutcome) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ComparisonOutcome) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

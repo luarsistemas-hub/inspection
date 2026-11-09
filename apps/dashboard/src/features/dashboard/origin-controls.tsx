@@ -37,7 +37,13 @@ export function originVersionStatus(version: Pick<OriginVersion, "status" | "pre
 
 export function selectableOriginVersions(versions: OriginVersion[], mediaKind?: string | null): OriginVersion[] {
   if (!mediaKind) return [];
-  return versions.filter((version) => (version.status === "ACTIVE" && version.selectable || version.hasInventory && version.status === "SUPERSEDED") && (version.hasInventory || version.mediaKind === mediaKind));
+  return versions.filter((version) => {
+    const approvedInventory = version.hasInventory && (version.status === "ACTIVE" && version.selectable || version.status === "SUPERSEDED");
+    // Photo move-out comparisons require a reviewed inventory. Legacy media-only
+    // origins remain selectable only in the existing video workflow.
+    if (mediaKind === "PHOTO") return version.mediaKind === "PHOTO" && approvedInventory;
+    return (version.status === "ACTIVE" && version.selectable || version.hasInventory && version.status === "SUPERSEDED") && (version.hasInventory || version.mediaKind === mediaKind);
+  });
 }
 
 /** activeCompatibleOriginId finds the active version accepted by the existing selector rules. */
@@ -108,7 +114,7 @@ export function FixedOriginSelector({ assetId, mediaKind, value, onChange }: {
       <option value="">Selecione uma origem de referência</option>
       {choices.map((origin) => <option key={origin.id} value={origin.id}>Versão {origin.versionNumber}{origin.purpose ? ` · ${purposeLabel(origin.purpose)}` : ""}{origin.status === "SUPERSEDED" ? " · anterior" : " · ativa"} · {origin.hasInventory ? "Inventário" : origin.mediaKind === "VIDEO" ? "Vídeo" : "Fotos"}</option>)}
     </select></label>
-    <p role="status">{!mediaKind ? "Carregando a modalidade do modelo…" : choices.length ? `${choices.length} origem(ns) pronta(s) para este modelo.` : "Não há origens de referência prontas para seleção."}</p>
+      <p role="status">{!mediaKind ? "Carregando a modalidade do modelo…" : choices.length ? `${choices.length} origem(ns) pronta(s) para este modelo.` : mediaKind === "PHOTO" ? "Não há inventário de referência aprovado. Catalogue e aprove uma origem antes de criar a vistoria de saída." : "Não há origens de referência prontas para seleção."}</p>
     <span className="visually-hidden" aria-live="polite">{status}</span>
   </div>;
 }

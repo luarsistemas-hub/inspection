@@ -33,6 +33,26 @@ func inventoryOutputSchema(task Task) map[string]any {
 	return schema
 }
 
+// inventoryCatalogSchema returns the strict schema reader for a pinned catalog
+// generation. Version 1 remains available for historical snapshots.
+func inventoryCatalogSchema(version int) map[string]any {
+	if version == 1 {
+		return inventoryOutputSchema(InventoryCatalog)
+	}
+	if version != CurrentCatalogSchemaVersion {
+		return nil
+	}
+	schema := inventoryOutputSchema(InventoryCatalog)
+	items := schema["properties"].(map[string]any)["environments"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["items"].(map[string]any)["items"].(map[string]any)
+	properties := items["properties"].(map[string]any)
+	properties["description"] = map[string]any{"type": "string", "maxLength": float64(1000)}
+	properties["assessedScope"] = map[string]any{"type": "string", "maxLength": float64(200)}
+	properties["notAssessed"] = map[string]any{"type": "array", "items": map[string]any{"type": "string", "maxLength": float64(200)}}
+	properties["componentKey"] = map[string]any{"type": []any{"string", "null"}, "maxLength": float64(160)}
+	items["required"] = append(items["required"].([]any), "description", "assessedScope", "notAssessed", "componentKey")
+	return schema
+}
+
 // inventorySystemPrompt is the seeded, editable instruction of an inventory task.
 func inventorySystemPrompt(task Task) string {
 	var b strings.Builder
@@ -61,6 +81,10 @@ func inventorySystemPrompt(task Task) string {
 	}
 	b.WriteString("\nResponda em português do Brasil, somente no formato JSON do schema.")
 	return b.String()
+}
+
+func inventoryCatalogV2Instruction() string {
+	return "- Descreva somente o que é visível, indique assessedScope e notAssessed, e associe componentKey apenas a uma chave fornecida que corresponda ao componente; objetos sem correspondência usam null."
 }
 
 // ValidateInventoryCompareOutput enforces the nullable identity fields' status

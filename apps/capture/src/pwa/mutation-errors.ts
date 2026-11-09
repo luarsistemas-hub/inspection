@@ -14,3 +14,7 @@ export function throwOnUserErrors(payload: { userErrors: MutationUserError[] }):
   const error = payload.userErrors[0];
   if (error) throw new CaptureMutationError(error);
 }
+
+export function isCaptureConflict(error: unknown): error is CaptureMutationError {
+  return error instanceof CaptureMutationError && error.code === "CONFLICT";
+}

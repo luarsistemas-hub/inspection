@@ -74,6 +74,10 @@ type Bootstrap struct {
 	SchemaVersion    int
 	Requirements     []Requirement
 	Answers          []database.RequirementAnswer
+	Scope            json.RawMessage
+	ComponentAnswers []database.ComponentAnswer
+	HandoverRecords  []database.HandoverRecord
+	Coverage         CoverageSummary
 	ConfirmationOnly bool
 }
 
@@ -142,12 +146,36 @@ func (s Service) Load(ctx context.Context, tenantID, responsibilityID identity.I
 			return err
 		}
 		result.Requirements = requirements
+		if result.Draft.Kind == "INSPECTION" {
+			var responsibility database.Responsibility
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibilityID).Take(&responsibility).Error; err == nil {
+				var scope database.InspectionScopeSnapshot
+				if err := tx.Where("tenant_id=? AND inspection_id=?", tenantID, responsibility.InspectionID).Take(&scope).Error; err == nil {
+					result.Scope = append(json.RawMessage(nil), scope.Document...)
+				}
+			}
+			if err := tx.Where("tenant_id=? AND draft_id=?", tenantID, result.Draft.ID).Find(&result.ComponentAnswers).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("tenant_id=? AND draft_id=?", tenantID, result.Draft.ID).Order("record_key ASC, version DESC").Find(&result.HandoverRecords).Error; err != nil {
+				return err
+			}
+			result.HandoverRecords = latestHandoverRecords(result.HandoverRecords)
+		}
 		if result.Draft.TemplateVersionID != (identity.ID{}) {
 			var templateVersion database.TemplateVersion
 			if err := tx.Where("tenant_id=? AND id=?", tenantID, result.Draft.TemplateVersionID).Take(&templateVersion).Error; err != nil {
 				return err
 			}
 			result.SchemaVersion = templateVersion.SchemaVersion
+		}
+		if result.Draft.Kind == "INSPECTION" && result.SchemaVersion >= catalog.DescriptiveSchemaVersion {
+			result.Coverage, err = coverageInTx(tx, tenantID, responsibilityID)
+			if err != nil {
+				return err
+			}
+		} else {
+			result.Coverage = CoverageSummary{UnknownScope: true, Suggestions: []RecaptureSuggestion{}, PendingRecords: []string{}}
 		}
 		if s.DisableRequiredGPS {
 			policy, err := withoutRequiredGPS(result.Draft.PolicyPayload)
@@ -172,10 +200,10 @@ func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentIn
 	err := s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		var draft database.CaptureDraft
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", in.TenantID, in.ResponsibilityID).First(&draft).Error; err != nil {
-			return apperror.New(apperror.NotFound, "responsibility", "capture not found")
+			return apperror.New(apperror.NotFound, "responsibility", "A captura não foi encontrada.")
 		}
 		if draft.Status != "OPEN" || draft.Kind == "RECAPTURE" {
-			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			return apperror.New(apperror.InvalidState, "responsibility", "A captura não está disponível.")
 		}
 		var version database.TemplateVersion
 		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, draft.TemplateVersionID).Take(&version).Error; err != nil {
@@ -404,6 +432,24 @@ func appendUniqueFlag(flags []string, value string) []string {
 	return append(flags, value)
 }
 
+func timestampDifference(value time.Duration) time.Duration {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func captureTimeConflict(source, capturedAtSource string, receivedAt, capturedAt *time.Time, flags []string) bool {
+	if (source != "GALLERY" && source != "FILE") || capturedAtSource != "EXIF" || receivedAt == nil || capturedAt == nil {
+		return false
+	}
+	tolerance := 5 * time.Minute
+	if slices.Contains(flags, "CAPTURE_TIME_DEVICE_LOCAL") {
+		tolerance = 14 * time.Hour
+	}
+	return timestampDifference(receivedAt.Sub(*capturedAt)) > tolerance
+}
+
 func captureProfileDigest(requirementKey string) string {
 	if strings.HasPrefix(requirementKey, "env:") {
 		return video.DefaultProfile().Digest()
@@ -503,6 +549,9 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 			}
 			return err
 		}
+		if !capturedAtProvided && out.CapturedAtSource == "EXIF" && out.CapturedAt != nil {
+			in.CapturedAt = *out.CapturedAt
+		}
 		if out.Status != "READY" && out.Status != "SCREENED" && !(draft.MediaKind == "VIDEO" && out.MediaKind == "VIDEO" && out.Status == "RECEIVED") {
 			return apperror.New(apperror.InvalidState, "mediaId", "media verification and screening are pending")
 		}
@@ -511,11 +560,11 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		}
 		// Video upload reserves its requirement key before capture metadata is saved.
 		// CapturedAt is written only by SaveMetadata and distinguishes that reservation.
-		if out.RequirementKey != "" && out.CapturedAt != nil {
+		if out.CaptureSource != "" {
 			if metadataMatches(out, in, reading, device, capturedAtProvided) {
 				return nil
 			}
-			return apperror.New(apperror.Conflict, "mediaId", "capture metadata was already saved")
+			return apperror.New(apperror.Conflict, "mediaId", "Os dados da captura já foram salvos e não podem ser alterados.")
 		}
 		var replacedMediaIDs []identity.ID
 		if in.ReplacesMediaID != nil {
@@ -540,7 +589,7 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND id<>? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, out.ID, []string{"ABORTED", "PURGED"}).Order("created_at,id").Find(&active).Error; err != nil {
 				return err
 			}
-			if len(active) >= selected.MaximumMedia && len(replacedMediaIDs) == 0 {
+			if ValidateMediaLimit(len(active), 1, selected.MaximumMedia) != nil && len(replacedMediaIDs) == 0 {
 				if strings.HasPrefix(in.RequirementKey, "env:") {
 					return apperror.New(apperror.InvalidInput, in.RequirementKey, "LIMIT_MEDIA_PER_ENVIRONMENT")
 				}
@@ -578,11 +627,24 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		}
 		var existingFlags []string
 		_ = json.Unmarshal(out.Flags, &existingFlags)
-		out.RequirementKey, out.Description, out.CaptureSource, out.CapturedAt, out.DeviceContext = in.RequirementKey, strings.TrimSpace(in.Description), in.CaptureSource, &in.CapturedAt, device
+		out.RequirementKey, out.Description, out.CaptureSource, out.DeviceContext = in.RequirementKey, strings.TrimSpace(in.Description), in.CaptureSource, device
+		if capturedAtProvided {
+			out.CapturedAt = &in.CapturedAt
+			out.CapturedAtSource = "DEVICE"
+		} else if out.CapturedAtSource != "EXIF" || out.CapturedAt == nil {
+			out.CapturedAt = &in.CapturedAt
+			out.CapturedAtSource = "SERVER_FALLBACK"
+		}
 		if strings.HasPrefix(in.RequirementKey, "env:") {
 			out.Flags = mergeFlags(existingFlags, decision.Flags)
 		} else {
 			out.Flags = flags
+		}
+		var currentFlags []string
+		_ = json.Unmarshal(out.Flags, &currentFlags)
+		if captureTimeConflict(in.CaptureSource, out.CapturedAtSource, out.ReceivedAt, out.CapturedAt, currentFlags) {
+			currentFlags = appendUniqueFlag(currentFlags, "CAPTURE_TIME_CONFLICT")
+			out.Flags, _ = json.Marshal(currentFlags)
 		}
 		if reading != nil {
 			lat, lon := int32(reading.Latitude*1e6), int32(reading.Longitude*1e6)
@@ -811,16 +873,18 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 				break
 			}
 		}
-		if len(draftRequirements) == 0 && draft.TemplateVersionID != (identity.ID{}) {
+		if draft.TemplateVersionID != (identity.ID{}) {
 			var templateVersion database.TemplateVersion
 			if err := tx.Where("tenant_id=? AND id=?", tenantID, draft.TemplateVersionID).Take(&templateVersion).Error; err == nil {
-				schemaVersion = templateVersion.SchemaVersion
+				if draft.Kind == "INSPECTION" && templateVersion.SchemaVersion > schemaVersion {
+					schemaVersion = templateVersion.SchemaVersion
+				}
 			} else {
 				return err
 			}
 		}
-		if schemaVersion >= 2 && len(draftRequirements) == 0 {
-			return apperror.New(apperror.InvalidState, "requirements", "NO_ENVIRONMENTS")
+		if schemaVersion == 2 && len(draftRequirements) == 0 {
+			return apperror.New(apperror.InvalidState, "requirements", "Nenhum cômodo foi selecionado para a captura.")
 		}
 		if draft.MediaKind == "VIDEO" {
 			requirements, err := decodeRequirements(draft.Requirements)
@@ -832,18 +896,18 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			}
 			var acceptance database.ProcessingAcceptance
 			if err := tx.Where("tenant_id=? AND responsibility_id=? AND video_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).First(&acceptance).Error; err != nil {
-				return apperror.New(apperror.InvalidState, "consent", "video processing acceptance is required")
+				return apperror.New(apperror.InvalidState, "consent", "É necessário aceitar o processamento do vídeo.")
 			}
 			var media []database.MediaObject
 			if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key IN ? AND status IN ?", tenantID, responsibilityID, []string{"video:main", "video:supplement"}, []string{"RECEIVED", "VERIFIED", "SCREENED", "READY"}).Find(&media).Error; err != nil {
 				return err
 			}
 			if len(media) != 1 || media[0].VideoAttemptID == nil {
-				return apperror.New(apperror.InvalidState, "media", "one confirmed video receipt is required before submission")
+				return apperror.New(apperror.InvalidState, "media", "Confirme o recebimento do vídeo antes de enviar a captura.")
 			}
 			var attempt database.VideoAttempt
 			if err := tx.Where("tenant_id=? AND responsibility_id=? AND id=? AND status='RECEIVED'", tenantID, responsibilityID, *media[0].VideoAttemptID).First(&attempt).Error; err != nil {
-				return apperror.New(apperror.InvalidState, "media", "one confirmed video receipt is required before submission")
+				return apperror.New(apperror.InvalidState, "media", "Confirme o recebimento do vídeo antes de enviar a captura.")
 			}
 			payload, _ := json.Marshal(map[string]any{"mediaKind": "VIDEO", "mediaId": media[0].ID, "attemptId": media[0].VideoAttemptID, "preparationStatus": "PENDING_VALIDATION", "complete": true, "requiresAttention": false})
 			digest := sha256.Sum256(payload)
@@ -872,7 +936,7 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 					return err
 				}
 			} else if *job.SubmissionID != result.ID {
-				return apperror.New(apperror.Conflict, "mediaId", "video preparation is linked to another submission")
+				return apperror.New(apperror.Conflict, "mediaId", "O preparo do vídeo já está vinculado a outro envio.")
 			}
 			if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND responsibility_id=? AND revoked_at IS NULL", tenantID, responsibilityID).Update("revoked_at", now).Error; err != nil {
 				return err
@@ -891,7 +955,7 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		}
 		var acceptance int64
 		if err := tx.Model(&database.ProcessingAcceptance{}).Where("tenant_id=? AND responsibility_id=? AND photo_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).Count(&acceptance).Error; err != nil || acceptance != 1 {
-			return apperror.New(apperror.InvalidState, "consent", "processing acceptance is required")
+			return apperror.New(apperror.InvalidState, "consent", "É necessário aceitar o processamento das mídias.")
 		}
 		requirements, err := decodeRequirements(draft.Requirements)
 		if err != nil {
@@ -910,28 +974,28 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			photoLimit = maxEnvironmentInspectionPhotoLimit(draftRequirements)
 		}
 		if len(media) > photoLimit {
-			return apperror.New(apperror.InvalidState, "media", "capture media limit exceeded")
+			return apperror.New(apperror.InvalidState, "media", "O limite de mídias da captura foi atingido.")
 		}
 		ready := make(map[identity.ID]database.MediaObject, len(media))
 		perRequirementCount := make(map[string]int, len(requirements))
 		for _, item := range media {
 			if schemaVersion >= 2 && item.Status == "UPLOADING" && strings.HasPrefix(item.RequirementKey, "env:") {
-				return apperror.New(apperror.InvalidState, item.RequirementKey, "UPLOADS_IN_PROGRESS")
+				return apperror.New(apperror.InvalidState, item.RequirementKey, "Há mídias sendo enviadas. Aguarde a conclusão antes de enviar a captura.")
 			}
 			if item.Status != "READY" {
-				return apperror.New(apperror.InvalidState, item.ID.String(), "media verification and screening must complete before submission")
+				return apperror.New(apperror.InvalidState, item.ID.String(), "A verificação das mídias precisa terminar antes do envio.")
 			}
 			_, owned := byKey[item.RequirementKey]
 			extra := strings.HasPrefix(item.RequirementKey, "extra:") && draft.Kind != "RECAPTURE"
 			if !owned && !extra {
-				return apperror.New(apperror.InvalidInput, item.ID.String(), "media must belong to an applicable requirement")
+				return apperror.New(apperror.InvalidInput, item.ID.String(), "A mídia precisa pertencer a um requisito desta captura.")
 			}
 			perRequirementCount[item.RequirementKey]++
 			if owned && byKey[item.RequirementKey].MaximumMedia > 0 && perRequirementCount[item.RequirementKey] > byKey[item.RequirementKey].MaximumMedia {
-				return apperror.New(apperror.InvalidInput, item.RequirementKey, "LIMIT_MEDIA_PER_ENVIRONMENT")
+				return apperror.New(apperror.InvalidInput, item.RequirementKey, "O limite de mídias deste cômodo foi atingido.")
 			}
 			if err := ValidateDescription(item.Description, strings.HasPrefix(item.RequirementKey, "extra:")); err != nil {
-				return apperror.New(apperror.InvalidInput, item.ID.String(), "media description is invalid")
+				return apperror.New(apperror.InvalidInput, item.ID.String(), "A descrição da mídia é inválida.")
 			}
 			ready[item.ID] = item
 		}
@@ -944,19 +1008,19 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		for _, row := range rows {
 			var ids []identity.ID
 			if err := json.Unmarshal(row.MediaIDs, &ids); err != nil {
-				return apperror.New(apperror.InvalidInput, row.RequirementKey, "invalid answer media")
+				return apperror.New(apperror.InvalidInput, row.RequirementKey, "A lista de mídias da resposta é inválida.")
 			}
 			for _, id := range ids {
 				item, ok := ready[id]
 				if !ok || associated[id] || item.RequirementKey != row.RequirementKey {
-					return apperror.New(apperror.InvalidInput, row.RequirementKey, "answer contains unavailable or repeated media")
+					return apperror.New(apperror.InvalidInput, row.RequirementKey, "A resposta contém mídias indisponíveis ou repetidas.")
 				}
 				associated[id] = true
 			}
 			answers = append(answers, Answer{RequirementKey: row.RequirementKey, ReadyMedia: len(ids), Impossibility: row.ImpossibilityReason})
 		}
 		if len(associated) != len(ready) {
-			return apperror.New(apperror.InvalidState, "media", "media metadata must be saved before submission")
+			return apperror.New(apperror.InvalidState, "media", "Salve os dados das mídias antes de enviar a captura.")
 		}
 		if schemaVersion >= 2 {
 			keys := make([]string, 0, len(requirements))
@@ -965,7 +1029,7 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			}
 			var uploading database.MediaObject
 			if err := tx.Where("tenant_id=? AND responsibility_id=? AND status='UPLOADING' AND requirement_key IN ?", tenantID, responsibilityID, keys).Order("requirement_key").Take(&uploading).Error; err == nil {
-				return apperror.New(apperror.InvalidState, uploading.RequirementKey, "UPLOADS_IN_PROGRESS")
+				return apperror.New(apperror.InvalidState, uploading.RequirementKey, "Há mídias sendo enviadas. Aguarde a conclusão antes de enviar a captura.")
 			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
@@ -974,7 +1038,26 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		if err != nil {
 			return err
 		}
-		payload, _ := json.Marshal(map[string]any{"requirements": requirements, "answers": rows, "complete": complete.Complete, "requiresAttention": complete.RequiresAttention})
+		coverage := CoverageSummary{}
+		if schemaVersion >= catalog.DescriptiveSchemaVersion && draft.Kind == "INSPECTION" {
+			coverage, err = coverageInTx(tx, tenantID, responsibilityID)
+			if err != nil {
+				return err
+			}
+			gaps := coverage.NotObserved + coverage.PartiallyAssessed + coverage.Impossible
+			if gaps > 0 && !confirmIncomplete {
+				return apperror.New(apperror.InvalidState, "coverage", "Confirme o envio com componentes ainda não avaliados.")
+			}
+			if gaps > 0 {
+				complete.Complete = false
+				complete.RequiresAttention = true
+			}
+		}
+		payloadDocument := map[string]any{"requirements": requirements, "answers": rows, "complete": complete.Complete, "requiresAttention": complete.RequiresAttention}
+		if schemaVersion >= catalog.DescriptiveSchemaVersion && draft.Kind == "INSPECTION" {
+			payloadDocument["coverage"] = coverage
+		}
+		payload, _ := json.Marshal(payloadDocument)
 		digest := sha256.Sum256(payload)
 		now := s.now()
 		result = database.SubmissionVersion{ID: identity.NewID(), TenantID: tenantID, DraftID: draft.ID, ResponsibilityID: responsibilityID, VersionNumber: 1, Complete: complete.Complete, RequiresAttention: complete.RequiresAttention, Payload: payload, PayloadDigest: hex.EncodeToString(digest[:]), SubmittedAt: now}
@@ -1018,7 +1101,7 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 
 func (s Service) submitEnvironmentVideo(ctx context.Context, tx *gorm.DB, draft database.CaptureDraft, requirements []Requirement, result *database.SubmissionVersion, confirmIncomplete bool) error {
 	if len(requirements) == 0 {
-		return apperror.New(apperror.InvalidState, "requirements", "NO_ENVIRONMENTS")
+		return apperror.New(apperror.InvalidState, "requirements", "Nenhum cômodo foi selecionado para a captura.")
 	}
 	var acceptance database.ProcessingAcceptance
 	if err := tx.Where("tenant_id=? AND responsibility_id=? AND video_processing AND ai_analysis AND gps_use", draft.TenantID, draft.ResponsibilityID).First(&acceptance).Error; err != nil {
@@ -1032,7 +1115,7 @@ func (s Service) submitEnvironmentVideo(ctx context.Context, tx *gorm.DB, draft 
 	}
 	var uploading database.MediaObject
 	if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key IN ? AND status='UPLOADING'", draft.TenantID, draft.ResponsibilityID, keys).Order("requirement_key").Take(&uploading).Error; err == nil {
-		return apperror.New(apperror.InvalidState, uploading.RequirementKey, "UPLOADS_IN_PROGRESS")
+		return apperror.New(apperror.InvalidState, uploading.RequirementKey, "Há mídias sendo enviadas. Aguarde a conclusão antes de enviar a captura.")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
@@ -1075,7 +1158,7 @@ func (s Service) submitEnvironmentVideo(ctx context.Context, tx *gorm.DB, draft 
 		requirement := byKey[key]
 		items := byMediaKey[key]
 		if requirement.MaximumMedia > 0 && len(items) > requirement.MaximumMedia {
-			return apperror.New(apperror.InvalidInput, key, "LIMIT_MEDIA_PER_ENVIRONMENT")
+			return apperror.New(apperror.InvalidInput, key, "O limite de mídias deste cômodo foi atingido.")
 		}
 		for _, item := range items {
 			if item.VideoAttemptID == nil {

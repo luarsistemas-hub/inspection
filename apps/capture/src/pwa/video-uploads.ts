@@ -77,7 +77,7 @@ export async function uploadVideoDraft(source: VideoDraft, onProgress?: (complet
       }
     }
     if (!draft.metadataSaved) {
-      const saved = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: draft.requirementKey ?? (draft.kind === "RECAPTURE" ? "video:supplement" : "video:main"), description: draft.requirementKey ? "Clipe do ambiente" : "Vídeo contínuo", captureSource: draft.source, deviceContext: null, gps: null, replacesMediaId: draft.replacesMediaId ?? null, clientMutationId: `${draft.id}:metadata` } });
+      const saved = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: draft.requirementKey ?? (draft.kind === "RECAPTURE" ? "video:supplement" : "video:main"), description: draft.requirementKey ? "Clipe do ambiente" : "Vídeo contínuo", captureSource: draft.source, capturedAt: undefined, deviceContext: null, gps: null, replacesMediaId: draft.replacesMediaId ?? null, clientMutationId: `${draft.id}:metadata` } });
       throwOnUserErrors(saved.saveCaptureMetadata);
       draft = { ...draft, metadataSaved: true };
     }

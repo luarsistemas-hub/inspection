@@ -83,7 +83,7 @@ func TestEnvironmentCompletenessUT111UT112UT113UT114UT124(t *testing.T) {
 		t.Fatalf("removed environment affected completeness = %+v, %v", result, err)
 	}
 	result, err = Evaluate(nil, nil, false)
-	if !apperror.Is(err, apperror.InvalidState) || len(result.PendingKeys) != 0 || err.Error() != "capture has no applicable requirements" {
+	if !apperror.Is(err, apperror.InvalidState) || len(result.PendingKeys) != 0 || err.Error() != "A captura não tem requisitos aplicáveis." {
 		t.Fatalf("empty environment list = %+v, %v", result, err)
 	}
 	for _, ready := range []int{0, 1} {
@@ -358,7 +358,7 @@ func TestDeclareImpossibilityKeepsLegacyValidationOrderAndFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = openService.DeclareImpossibilityWithCode(context.Background(), openTenant, openResponsibility, "room", "OTHER", strings.Repeat("x", 2001), 0)
-	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidInput || appErr.Field != "description" || appErr.Safe != "description is too long" {
+	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidInput || appErr.Field != "description" || appErr.Safe != "A descrição é muito longa." {
 		t.Fatalf("legacy oversized reason = %v; want INVALID_INPUT description", err)
 	}
 }
@@ -468,7 +468,7 @@ func TestUT121SubmitReportsEnvironmentKeyForUploadingPhoto(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := service.Submit(context.Background(), tenant, responsibility, true)
-	if !apperror.Is(err, apperror.InvalidState) || !strings.Contains(err.Error(), "UPLOADS_IN_PROGRESS") {
+	if !apperror.Is(err, apperror.InvalidState) || !strings.Contains(err.Error(), "Há mídias sendo enviadas.") {
 		t.Fatalf("uploading photo submit returned %v", err)
 	}
 	var appErr *apperror.Error
@@ -617,7 +617,7 @@ func TestUT115SaveAndSubmitTwentyEnvironmentPhotosAndRejectTwentyFirst(t *testin
 			t.Fatalf("save at 21 photos returned %v", saveErr)
 		}
 		_, submitErr := service.Submit(context.Background(), tenant, responsibility, true)
-		if !apperror.Is(submitErr, apperror.InvalidInput) || !strings.Contains(submitErr.Error(), "LIMIT_MEDIA_PER_ENVIRONMENT") {
+		if !apperror.Is(submitErr, apperror.InvalidInput) || !strings.Contains(submitErr.Error(), "O limite de mídias deste cômodo foi atingido.") {
 			t.Fatalf("submit at 21 photos returned %v", submitErr)
 		}
 	})

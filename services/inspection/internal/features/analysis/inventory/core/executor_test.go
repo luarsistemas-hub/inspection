@@ -188,11 +188,15 @@ func TestSuccessKeepsTruncationDiagnosticAndClearsRetryErrors(t *testing.T) {
 	seed, processor, executor, _ := executorFixture(t)
 	truncated := seed.Job(t, "CATALOG", "env:a", identity.NewID(), nil)
 	retried := seed.Job(t, "CATALOG", "env:b", identity.NewID(), nil)
+	truncatedImages := seed.Job(t, "CATALOG", "env:c", identity.NewID(), nil)
 	seed.DB.Model(&database.InventoryJob{}).Where("id=?", retried.ID).Update("error_code", "INVENTORY_ANALYSIS_FAILED")
 	processor.write = func(tx *gorm.DB) error {
-		return tx.Model(&database.InventoryJob{}).Where("id=?", truncated.ID).Update("error_code", "TRUNCATED_ITEMS").Error
+		if err := tx.Model(&database.InventoryJob{}).Where("id=?", truncated.ID).Update("error_code", "TRUNCATED_ITEMS").Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.InventoryJob{}).Where("id=?", truncatedImages.ID).Update("error_code", "TRUNCATED_IMAGES").Error
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		if _, err := executor.RunDue(context.Background()); err != nil {
 			t.Fatal(err)
 		}
@@ -200,10 +204,13 @@ func TestSuccessKeepsTruncationDiagnosticAndClearsRetryErrors(t *testing.T) {
 	if got := reload(t, seed.DB, truncated.ID); got.Status != "SUCCEEDED" || got.ErrorCode == nil || *got.ErrorCode != "TRUNCATED_ITEMS" {
 		t.Fatalf("truncated job = %+v", got)
 	}
+	if got := reload(t, seed.DB, truncatedImages.ID); got.Status != "SUCCEEDED" || got.ErrorCode == nil || *got.ErrorCode != "TRUNCATED_IMAGES" {
+		t.Fatalf("image-truncated job = %+v", got)
+	}
 	if got := reload(t, seed.DB, retried.ID); got.Status != "SUCCEEDED" || got.ErrorCode != nil {
 		t.Fatalf("retried job = %+v, want cleared error code", got)
 	}
-	if processor.succeeded != 2 {
+	if processor.succeeded != 3 {
 		t.Fatalf("Succeeded hooks = %d", processor.succeeded)
 	}
 }

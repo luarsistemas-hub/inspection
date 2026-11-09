@@ -1,0 +1,31 @@
+{
+  "coverage": {
+    "expected": 1,
+    "fullyAssessed": 1,
+    "partiallyAssessed": 0,
+    "notObserved": 0,
+    "notApplicable": 0,
+    "impossible": 0,
+    "unknownScope": false
+  },
+  "rooms": [
+    {
+      "name": "Cozinha",
+      "components": [
+        {
+          "label": "Armários",
+          "status": "Observado",
+          "description": "Armários íntegros nas vistas disponíveis.",
+          "condition": "Bom",
+          "reviewLabel": "Não revisado",
+          "evidenceIds": [
+            "E001"
+          ],
+          "limitations": [
+            "A parte superior não foi observada."
+          ]
+        }
+      ]
+    }
+  ]
+}

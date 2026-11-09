@@ -318,7 +318,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
       <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); setReferenceVersionId(""); }} options={options} required />
       <EntityRelationshipField kind="participant" label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={options} required disabled={!assetId} />
       <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={(value) => { setTemplateId(value); setReferenceVersionId(""); }} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
-      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => { setComparisonMode(event.target.value); setReferenceVersionId(""); setFollowsActiveOrigin(true); }}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com a origem do imóvel</option></select></label>
+      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => { setComparisonMode(event.target.value); setReferenceVersionId(""); setFollowsActiveOrigin(true); }}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">{mediaKind === "VIDEO" ? "Comparar com vídeo de referência" : "Vistoria de saída · comparar com inventário aprovado"}</option></select></label>
       {comparisonMode === "FIXED_ORIGIN" && <fieldset><legend>Origem da comparação</legend>
         <label><input type="radio" name="schedule-origin-mode" checked={followsActiveOrigin} onChange={() => { setFollowsActiveOrigin(true); setReferenceVersionId(""); }} /> Acompanhar origem ativa</label>
         <label><input type="radio" name="schedule-origin-mode" checked={!followsActiveOrigin} onChange={() => setFollowsActiveOrigin(false)} /> Fixar esta versão</label>
@@ -428,7 +428,7 @@ export function formatScheduleDateTime(value: string): string {
 }
 
 export function scheduleBlockedMessage(reason: string, blockedAt?: string | null) {
-  if (reason === "ORIGIN_UNAVAILABLE") return `Sem origem válida${blockedAt ? ` desde ${formatScheduleDateTime(blockedAt)}` : ""}. A agenda tentará novamente automaticamente.`;
+  if (reason === "ORIGIN_UNAVAILABLE") return `A origem de referência não está disponível${blockedAt ? ` desde ${formatScheduleDateTime(blockedAt)}` : ""}. Para vistorias fotográficas, catalogue e aprove um inventário para liberar as próximas ocorrências. A agenda tentará novamente automaticamente.`;
   return `A agenda está pendente e tentará novamente automaticamente.${blockedAt ? ` Desde ${formatScheduleDateTime(blockedAt)}.` : ""}`;
 }
 

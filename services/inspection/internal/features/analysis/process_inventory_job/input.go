@@ -9,9 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"strings"
 
 	"inspection/libs/identity"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
 	"inspection/services/inspection/internal/platform/messaging"
@@ -44,19 +47,60 @@ type evidenceInput struct {
 
 // jobInput is everything a job needs, read in one short tenant transaction.
 type jobInput struct {
-	inspection  database.Inspection
-	snapshot    database.AnalysisPromptSnapshot
-	environment database.InventoryEnvironment
-	items       []database.InventoryItem
-	originRows  []database.InventoryItemEvidence
-	origin      []evidenceInput
-	current     []evidenceInput
-	impossible  bool
+	inspection     database.Inspection
+	snapshot       database.AnalysisPromptSnapshot
+	environment    database.InventoryEnvironment
+	items          []database.InventoryItem
+	originRows     []database.InventoryItemEvidence
+	origin         []evidenceInput
+	current        []evidenceInput
+	imageTruncated int
+	impossible     bool
 	// legacy marks a CATALOG job over a legacy origin version: the model
 	// proposes the environments itself.
 	legacy bool
 	// voice is the fixed voice-note input of a CATALOG job; nil for visual-only jobs.
-	voice *voiceInput
+	voice               *voiceInput
+	profile             string
+	components          []catalogComponent
+	scopeRoomUnresolved bool
+	// strict marks a COMPARE job of a photo inspection with a pinned
+	// descriptive scope (report v3): conclusions need paired evidence, a
+	// baseline view and, for movable absence, whole-room coverage.
+	strict bool
+	// roomCovered reports that every applicable expected component of the
+	// job's room, with its expected views, was observed in a submitted capture.
+	roomCovered bool
+	// staffPairs are the pairings decided by authorized staff for this job.
+	staffPairs []database.InventoryEvidencePair
+	// revised lists the items whose staff decision was recorded for this
+	// very job by a pairing revision; only they are judged again when the
+	// previous generation of the room is carried over.
+	revised map[identity.ID]bool
+	// carryOver is the previous successful generation of a revised room.
+	carryOver *carryOver
+	// unmatched marks a strict COMPARE job whose baseline environment was not
+	// matched to any room of the pinned scope: no capture requirement reads
+	// it, so its items are "not matched", never "not captured".
+	unmatched bool
+	// answerRef identifies the submitted answer the job read (see
+	// captureAnswerRef); it is recorded with the job's results.
+	answerRef string
+}
+
+// compareScopeRoom is the part of a pinned scope room that decides whether
+// the room was covered as a whole.
+type compareScopeRoom = catalog.ExpectedRoom
+
+type catalogScopeRoom struct {
+	Key        string `json:"key"`
+	Name       string `json:"name"`
+	TypeCode   string `json:"typeCode"`
+	Components []struct {
+		Key      string `json:"key"`
+		Label    string `json:"label"`
+		TypeCode string `json:"typeCode"`
+	} `json:"components"`
 }
 
 func (p *Processor) within(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {
@@ -68,6 +112,7 @@ func (p *Processor) within(ctx context.Context, tenantID identity.ID, fn func(*g
 
 func (p *Processor) load(ctx context.Context, job database.InventoryJob) (jobInput, error) {
 	var in jobInput
+	var scopeRooms []catalogScopeRoom
 	err := p.within(ctx, job.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id=? AND id=?", job.TenantID, job.InspectionID).Take(&in.inspection).Error; err != nil {
 			return permanentIfMissing(err)
@@ -82,15 +127,68 @@ func (p *Processor) load(ctx context.Context, job database.InventoryJob) (jobInp
 		if err := tx.Where("id=? AND task=?", *job.PromptSnapshotID, task).Take(&in.snapshot).Error; err != nil {
 			return permanentIfMissing(err)
 		}
+		if job.SchemaVersion > 0 && job.SchemaVersion != in.snapshot.SchemaVersion {
+			return fmt.Errorf("%w: pinned analysis schema version mismatch", messaging.ErrPermanent)
+		}
+		if job.SchemaDigest != nil && *job.SchemaDigest != in.snapshot.CanonicalDigest {
+			return fmt.Errorf("%w: pinned analysis schema digest mismatch", messaging.ErrPermanent)
+		}
+		if job.Kind == "CATALOG" {
+			var scope database.InspectionScopeSnapshot
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", job.TenantID, job.InspectionID).Take(&scope).Error; err == nil {
+				in.profile = scope.Profile
+				var document struct {
+					Rooms []catalogScopeRoom `json:"rooms"`
+				}
+				if json.Unmarshal(scope.Document, &document) != nil {
+					return fmt.Errorf("%w: invalid pinned inspection scope", messaging.ErrPermanent)
+				}
+				scopeRooms = document.Rooms
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
 		if job.Kind == "CATALOG" && job.EnvironmentIdentityID == nil {
 			in.legacy = true
 			current, err := loadLegacyOriginEvidence(tx, job)
 			in.current = current
 			return err
 		}
-		requirement, answer, err := loadCapture(tx, job)
+		strictCandidate := false
+		if job.Kind == "COMPARE" && in.inspection.MediaKind == "PHOTO" {
+			var scopes int64
+			if err := tx.WithContext(ctx).Model(&database.InspectionScopeSnapshot{}).Where("tenant_id=? AND inspection_id=?", job.TenantID, job.InspectionID).Count(&scopes).Error; err != nil {
+				return err
+			}
+			strictCandidate = scopes > 0
+		}
+		load := func() (*capturecore.Requirement, *database.RequirementAnswer, error) { return loadCapture(tx, job) }
+		if strictCandidate {
+			load = func() (*capturecore.Requirement, *database.RequirementAnswer, error) {
+				return loadSubmittedCapture(ctx, tx, job)
+			}
+		}
+		requirement, answer, err := load()
 		if err != nil {
 			return err
+		}
+		if strictCandidate {
+			in.answerRef = captureAnswerRef(answer)
+		}
+		if job.Kind == "CATALOG" {
+			room, ok := resolveCatalogScopeRoom(scopeRooms, job.RequirementKey, requirement)
+			if ok {
+				for _, component := range room.Components {
+					in.components = append(in.components, catalogComponent{Key: room.Key + "." + component.Key, Label: component.Label, TypeCode: component.TypeCode})
+				}
+			} else if len(scopeRooms) > 0 {
+				in.scopeRoomUnresolved = true
+			}
+		}
+		if job.Kind == "COMPARE" && in.inspection.MediaKind == "PHOTO" {
+			if err := loadStrictCompare(ctx, tx, job, requirement, answer != nil && answer.ImpossibilityReason != "", &in); err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("tenant_id=? AND origin_version_id=? AND identity_id=?", job.TenantID, job.OriginVersionID, job.EnvironmentIdentityID).Take(&in.environment).Error; err != nil {
 			if !errors.Is(err, gorm.ErrRecordNotFound) || job.Kind != "COMPARE" || requirement == nil {
@@ -166,12 +264,42 @@ func (p *Processor) load(ctx context.Context, job database.InventoryJob) (jobInp
 				if err != nil {
 					return err
 				}
-				in.current = selectCatalogImages(append(in.current, extra...), in.voice.Notes, maxRequestImages)
+				var truncated int
+				in.current, truncated = selectCatalogImages(append(in.current, extra...), in.voice.Notes, maxRequestImages)
+				in.imageTruncated += truncated
 			}
 		}
 		return nil
 	})
+	if err == nil && in.scopeRoomUnresolved {
+		slog.Warn("inventory catalog scope room could not be resolved; using empty component scope", "inspection_id", job.InspectionID, "requirement_key", job.RequirementKey)
+	}
 	return in, err
+}
+
+func resolveCatalogScopeRoom(rooms []catalogScopeRoom, requirementKey string, requirement *capturecore.Requirement) (catalogScopeRoom, bool) {
+	for _, room := range rooms {
+		if requirementKey == "env:"+room.Key {
+			return room, true
+		}
+	}
+	if requirement == nil {
+		return catalogScopeRoom{}, false
+	}
+	var match *catalogScopeRoom
+	for i := range rooms {
+		room := &rooms[i]
+		if strings.EqualFold(strings.TrimSpace(room.Name), strings.TrimSpace(requirement.EnvironmentName)) && (room.TypeCode == "" || requirement.EnvironmentTypeCode == "" || room.TypeCode == requirement.EnvironmentTypeCode) {
+			if match != nil {
+				return catalogScopeRoom{}, false
+			}
+			match = room
+		}
+	}
+	if match == nil {
+		return catalogScopeRoom{}, false
+	}
+	return *match, true
 }
 
 func catalogPlanID(tx *gorm.DB, tenant identity.ID, inspection database.Inspection, draftID identity.ID) *identity.ID {
@@ -231,17 +359,9 @@ func loadCapture(tx *gorm.DB, job database.InventoryJob) (*capturecore.Requireme
 		}
 		return nil, nil, err
 	}
-	var requirements []capturecore.Requirement
-	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
-		return nil, nil, fmt.Errorf("%w: invalid capture requirements", messaging.ErrPermanent)
-	}
-	requirements = capturecore.ActiveRequirements(requirements)
-	var requirement *capturecore.Requirement
-	for i := range requirements {
-		if requirements[i].Key == job.RequirementKey {
-			requirement = &requirements[i]
-			break
-		}
+	requirement, err := draftRequirement(draft, job.RequirementKey)
+	if err != nil {
+		return nil, nil, err
 	}
 	var answer database.RequirementAnswer
 	if err := tx.Where("tenant_id=? AND draft_id=? AND requirement_key=?", job.TenantID, draft.ID, job.RequirementKey).Take(&answer).Error; err != nil {
@@ -251,6 +371,60 @@ func loadCapture(tx *gorm.DB, job database.InventoryJob) (*capturecore.Requireme
 		return nil, nil, err
 	}
 	return requirement, &answer, nil
+}
+
+// loadSubmittedCapture is the capture input of a strict (report v3) COMPARE
+// job: the newest answer to the job's room among SUBMITTED drafts only, by the
+// same rule as the report and the pairing revision
+// (capturecore.LatestSubmittedAnswer). An open recapture never replaces it.
+func loadSubmittedCapture(ctx context.Context, tx *gorm.DB, job database.InventoryJob) (*capturecore.Requirement, *database.RequirementAnswer, error) {
+	var answer database.RequirementAnswer
+	var draft database.CaptureDraft
+	err := capturecore.LatestSubmittedAnswer(ctx, tx, job.TenantID, job.InspectionID, job.RequirementKey, &answer)
+	switch {
+	case err == nil:
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", job.TenantID, answer.DraftID).Take(&draft).Error; err != nil {
+			return nil, nil, err
+		}
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND kind='INSPECTION' AND status='SUBMITTED' AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?)", job.TenantID, job.TenantID, job.InspectionID).Order("created_at DESC").Take(&draft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil, nil
+			}
+			return nil, nil, err
+		}
+	default:
+		return nil, nil, err
+	}
+	requirement, err := draftRequirement(draft, job.RequirementKey)
+	if err != nil || answer.ID == (identity.ID{}) {
+		return requirement, nil, err
+	}
+	return requirement, &answer, nil
+}
+
+// captureAnswerRef identifies the submitted answer a strict COMPARE job read:
+// "<answer id>:<version>", or "none" when the room has no submitted answer.
+func captureAnswerRef(answer *database.RequirementAnswer) string {
+	if answer == nil {
+		return "none"
+	}
+	return fmt.Sprintf("%s:%d", answer.ID, answer.Version)
+}
+
+// draftRequirement returns the active requirement of a capture draft.
+func draftRequirement(draft database.CaptureDraft, key string) (*capturecore.Requirement, error) {
+	var requirements []capturecore.Requirement
+	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+		return nil, fmt.Errorf("%w: invalid capture requirements", messaging.ErrPermanent)
+	}
+	requirements = capturecore.ActiveRequirements(requirements)
+	for i := range requirements {
+		if requirements[i].Key == key {
+			return &requirements[i], nil
+		}
+	}
+	return nil, nil
 }
 
 // loadMediaInputs resolves the current evidence of one environment. Media that

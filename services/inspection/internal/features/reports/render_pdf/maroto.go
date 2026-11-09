@@ -6,16 +6,21 @@ import (
 	"embed"
 	"fmt"
 	stdimage "image"
+	"image/color"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"inspection/services/inspection/internal/features/reports/core"
+	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
 	"inspection/services/inspection/internal/platform/pdf"
 
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/qr"
 	"github.com/johnfercher/maroto/v2"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
 	marotoimage "github.com/johnfercher/maroto/v2/pkg/components/image"
@@ -60,13 +65,21 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(document.SnapshotID) == "" || document.Version <= 0 || core.Validate(document.Snapshot) != nil {
+	validSnapshot := core.Validate(document.Snapshot)
+	if !document.Internal {
+		validSnapshot = core.ValidateCustomerSnapshot(document.Snapshot)
+	}
+	if strings.TrimSpace(document.SnapshotID) == "" || document.Version <= 0 || validSnapshot != nil {
 		return nil, fmt.Errorf("report PDF: invalid document")
 	}
 	if !document.Internal && len(document.Snapshot.Findings) > 0 {
 		return nil, fmt.Errorf("report PDF: customer document contains internal findings")
 	}
 	document.Snapshot = core.LocalizeVideoPresentation(document.Snapshot)
+	// v1/v2 documents keep their historical presentation exactly; report v3
+	// adds evidence references, the evidence index and the shared vocabulary.
+	presentation := presentationFor(document.Snapshot)
+	label := presentation.label
 	maxEvidence, maxPages := r.MaxEvidence, r.MaxPages
 	maxImageBytes, maxPDFBytesLimit := r.MaxImageBytes, r.MaxPDFBytes
 	if maxEvidence <= 0 {
@@ -122,12 +135,16 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	if err := documentMaker.RegisterHeader(
 		text.NewAutoRow(title, props.Text{Size: 10, Family: "Roboto", Bottom: 2}),
 		text.NewAutoRow(ellipsis(strings.TrimSpace(asset.Name+" · "+asset.Address), maxHeaderRunes), props.Text{Size: 9, Family: "Roboto"}),
-		text.NewAutoRow("Classificação: "+classificationLabel(document.Snapshot.Classification), props.Text{Size: 9, Family: "Roboto", Bottom: 2}),
+		text.NewAutoRow("Classificação: "+core.ClassificationLabelForSnapshot(document.Snapshot), props.Text{Size: 9, Family: "Roboto", Bottom: 2}),
 		row.New(3),
 	); err != nil {
 		return nil, fmt.Errorf("report PDF: register header: %w", err)
 	}
-	if err := documentMaker.RegisterFooter(text.NewAutoRow(ellipsis(fmt.Sprintf("Laudo %s · versão %d", document.SnapshotID, document.Version), maxHeaderRunes), props.Text{Size: 8, Family: "Roboto"})); err != nil {
+	reportNumber := document.SnapshotID
+	if presentation.v3 && document.Snapshot.ReportID != "" {
+		reportNumber = document.Snapshot.ReportID
+	}
+	if err := documentMaker.RegisterFooter(text.NewAutoRow(ellipsis(fmt.Sprintf("Laudo %s · versão %d", reportNumber, document.Version), maxHeaderRunes), props.Text{Size: 8, Family: "Roboto"})); err != nil {
 		return nil, fmt.Errorf("report PDF: register footer: %w", err)
 	}
 
@@ -135,10 +152,91 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		prop.Family = "Roboto"
 		documentMaker.AddRows(textRows(value, prop, fullWidthChunk)...)
 	}
-	addText("Classificação: "+classificationLabel(document.Snapshot.Classification)+" · "+label(document.Snapshot.Mode), props.Text{Size: 13, Top: 4, Bottom: 2})
+	addText("Classificação: "+core.ClassificationLabelForSnapshot(document.Snapshot)+" · "+label(document.Snapshot.Mode), props.Text{Size: 13, Top: 4, Bottom: 2})
 	addText("Imóvel: "+asset.Name+" · "+asset.Address, props.Text{Size: 9, Bottom: 2})
 	addText(fmt.Sprintf("Responsável: %s · Modelo: %s v%d", document.Snapshot.Context.Participant.Name, document.Snapshot.Context.Template.Name, document.Snapshot.Context.Template.Version), props.Text{Size: 9, Bottom: 2})
 	addText(document.Snapshot.Advisory, props.Text{Size: 9, Bottom: 4})
+	if document.Snapshot.VerificationCode != "" && r.DashboardOrigin != "" {
+		code, err := qr.Encode(reportVerificationURL(r.DashboardOrigin, document.Snapshot.VerificationCode, document.Version), qr.M, qr.Auto)
+		if err != nil {
+			return nil, fmt.Errorf("report PDF: encode verification code: %w", err)
+		}
+		code, err = barcode.Scale(code, 96, 96)
+		if err != nil {
+			return nil, fmt.Errorf("report PDF: scale verification code: %w", err)
+		}
+		var pngBytes bytes.Buffer
+		if err := png.Encode(&pngBytes, code); err != nil {
+			return nil, fmt.Errorf("report PDF: render verification code: %w", err)
+		}
+		addText("Verifique a autenticidade deste laudo", props.Text{Size: 8, Top: 2, Bottom: 1})
+		documentMaker.AddRows(marotoimage.NewFromBytesRow(18, pngBytes.Bytes(), extension.Png))
+	}
+	if document.Snapshot.Processing != nil {
+		addText("Estado da análise: "+label(document.Snapshot.Processing.Status), props.Text{Size: 9, Bottom: 2})
+		if document.Snapshot.Processing.Message != "" {
+			addText(document.Snapshot.Processing.Message, props.Text{Size: 9, Bottom: 2})
+		}
+	}
+	if notice := core.EvidenceNotice(document.Snapshot); notice != "" {
+		addText(notice, props.Text{Size: 9, Bottom: 2})
+	}
+	if checklist := document.Snapshot.Checklist; checklist != nil {
+		addText("Checklist descritivo", props.Text{Size: 11, Top: 4})
+		if checklist.Coverage.UnknownScope {
+			addText("Escopo não definido; não há percentual de cobertura.", props.Text{Size: 9})
+		} else {
+			addText(fmt.Sprintf("Cobertura: %d componentes esperados; %d avaliados; %d parcialmente avaliados; %d não observados; %d não aplicáveis; %d impossíveis de capturar.", checklist.Coverage.Expected, checklist.Coverage.FullyAssessed, checklist.Coverage.PartiallyAssessed, checklist.Coverage.NotObserved, checklist.Coverage.NotApplicable, checklist.Coverage.Impossible), props.Text{Size: 9})
+		}
+		for _, room := range checklist.Rooms {
+			addText(room.Name, props.Text{Size: 10, Top: 4})
+			if len(room.Components) == 0 {
+				addText("Nenhum componente observado.", props.Text{Size: 9})
+				continue
+			}
+			for _, component := range room.Components {
+				line := component.Label + " · " + core.PresentationLabel(component.Status)
+				if component.Description != "" {
+					line += " · " + component.Description
+				}
+				if component.Condition != "" {
+					line += " · " + core.PresentationLabel(component.Condition)
+				}
+				if component.ReviewStatus != "" {
+					line += " · " + core.PresentationLabel(component.ReviewStatus)
+				}
+				addText(line, props.Text{Size: 9})
+				if component.AssessedScope != "" {
+					addText("Extensão avaliada: "+component.AssessedScope, props.Text{Size: 8})
+				}
+				if len(component.NotAssessed) > 0 {
+					addText("Partes não avaliadas: "+strings.Join(component.NotAssessed, ", "), props.Text{Size: 8})
+				}
+				if component.OutsideScope && document.Internal {
+					addText("Observado fora do escopo; não compõe a cobertura nem o inventário de referência.", props.Text{Size: 8})
+				}
+				if len(component.EvidenceIDs) > 0 {
+					refs := core.EvidenceReferences(document.Snapshot, component.EvidenceIDs)
+					addText("Evidência: "+strings.Join(refs, ", "), props.Text{Size: 8})
+				}
+				for _, source := range component.AttributeSources {
+					addText(core.FormatAttributeSourceForSnapshot(document.Snapshot, source), props.Text{Size: 8})
+				}
+				for _, limitation := range component.Limitations {
+					addText("Limitação: "+limitation, props.Text{Size: 8})
+				}
+			}
+		}
+		if len(checklist.Rooms) == 0 && len(document.Snapshot.Evidence) == 0 {
+			addText("Nenhuma evidência registrada; isso não significa ausência de problemas.", props.Text{Size: 9})
+		}
+	}
+	if handover := document.Snapshot.Handover; handover != nil && len(handover.Entries) > 0 {
+		addText("Chaves, controles e medidores", props.Text{Size: 11, Top: 5})
+		for _, entry := range handover.Entries {
+			addText(core.FormatHandoverForSnapshot(document.Snapshot, entry, document.Internal), props.Text{Size: 9})
+		}
+	}
 	if len(document.Snapshot.ScopeStatements) > 0 {
 		addText("Escopo da análise", props.Text{Size: 11, Top: 2})
 		for _, statement := range scopeStatementLines(document.Snapshot.ScopeStatements) {
@@ -160,8 +258,64 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		}
 	}
 
-	if inventory := document.Snapshot.Inventory; inventory != nil {
-		for i, line := range inventorySummaryLines(inventory) {
+	evidenceIndex := make(map[string]string, len(document.Snapshot.Evidence))
+	if presentation.v3 {
+		for index, evidence := range document.Snapshot.Evidence {
+			evidenceIndex[evidence.ID] = fmt.Sprintf("E%03d", index+1)
+		}
+	}
+	if presentation.v3 && len(document.Snapshot.Evidence) > 10 {
+		addText("Anexo de evidências · índice", props.Text{Size: 11, Top: 6})
+		for index, evidence := range document.Snapshot.Evidence {
+			reference := fmt.Sprintf("E%03d", index+1)
+			// A capture requirement key is internal: an evidence without
+			// description is named by its role and room.
+			addText(reference+" · "+ellipsis(core.EvidenceIndexLabel(document.Snapshot, evidence), 80), props.Text{Size: 8})
+		}
+	}
+	if comparison := document.Snapshot.Comparison; comparison != nil {
+		// Report v3 presents the complete comparison instead of the
+		// exception-first inventory section; both derive from the same issue.
+		addText("Comparação com a referência", props.Text{Size: 11, Top: 6})
+		addText(core.ComparisonBaselineLine(comparison.Baseline), props.Text{Size: 9})
+		addText("Estado: "+core.ComparisonStatusLabel(comparison.Status), props.Text{Size: 9})
+		addText(core.ComparisonCountsLine(comparison.Counts), props.Text{Size: 9, Bottom: 2})
+		for _, group := range core.GroupComparison(*comparison) {
+			if group.Count == 0 {
+				continue
+			}
+			addText(fmt.Sprintf("%s · %d de %d itens", group.Label, group.Count, group.Total), props.Text{Size: 10, Top: 4})
+			for _, item := range group.Items {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				addText(core.ComparisonItemLine(item), props.Text{Size: 9, Top: 1})
+				if document.Internal && item.Description != "" {
+					addText(item.Description, props.Text{Size: 8})
+				}
+				for _, pair := range item.Pairs {
+					line := core.ComparisonPairLine(document.Snapshot, pair)
+					// The customer copy labels a paired image it cannot show
+					// with the same rule as the customer GraphQL view.
+					if note := customerreport.PairAvailabilityNote(document.Snapshot, pair); !document.Internal && note != "" {
+						line += " · " + note
+					}
+					addText(line, props.Text{Size: 8})
+				}
+				for _, limitation := range item.Limitations {
+					addText("Limitação: "+limitation, props.Text{Size: 8})
+				}
+			}
+		}
+		if len(comparison.OutsideBaseline) > 0 {
+			addText("Observado fora da referência (informativo)", props.Text{Size: 10, Top: 4})
+			for _, observation := range comparison.OutsideBaseline {
+				addText(observation.Room+" · "+observation.Name, props.Text{Size: 9})
+			}
+		}
+		addText(core.ComparisonDisclaimer, props.Text{Size: 8, Top: 2})
+	} else if inventory := document.Snapshot.Inventory; inventory != nil {
+		for i, line := range presentation.inventorySummaryLines(inventory) {
 			prop := props.Text{Size: 9}
 			if i == 0 {
 				prop.Top = 6
@@ -176,7 +330,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 				return nil, err
 			}
 			lead := &keptHeading{}
-			lead.add(inventoryProblemHeading(item), props.Text{Size: 10, Top: 4})
+			lead.add(presentation.inventoryProblemHeading(item), props.Text{Size: 10, Top: 4})
 			if item.ConditionBefore != "" || item.ConditionAfter != "" {
 				lead.add(label(item.ConditionBefore)+" → "+label(item.ConditionAfter), props.Text{Size: 8})
 			}
@@ -203,7 +357,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 					lead.flush(documentMaker, 0)
 					continue
 				}
-				if err := addEvidenceRows(ctx, documentMaker, lead, paired, assets, item.Name, document.SnapshotID, r.DashboardOrigin); err != nil {
+				if err := presentation.addEvidenceRows(ctx, documentMaker, lead, paired, assets, evidenceIndex, item.Name, document.SnapshotID, r.DashboardOrigin); err != nil {
 					return nil, err
 				}
 				lead = &keptHeading{}
@@ -227,14 +381,14 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		seenRequirements[requirement.Key] = true
 		lead.add(requirement.Section+" · "+requirement.Label, props.Text{Size: 10, Top: 4})
 		lead.add(requirement.Instructions, props.Text{Size: 8})
-		lead.add(analysisSummary(requirement), props.Text{Size: 8, Bottom: 3})
+		lead.add(presentation.analysisSummary(requirement), props.Text{Size: 8, Bottom: 3})
 		items := evidenceByRequirement[requirement.Key]
 		if len(items) == 0 {
 			lead.add("Nenhuma evidência registrada para este requisito.", props.Text{Size: 8})
 			lead.flush(documentMaker, 0)
 			continue
 		}
-		if err := addEvidenceRows(ctx, documentMaker, lead, items, assets, requirement.Label, document.SnapshotID, r.DashboardOrigin); err != nil {
+		if err := presentation.addEvidenceRows(ctx, documentMaker, lead, items, assets, evidenceIndex, requirement.Label, document.SnapshotID, r.DashboardOrigin); err != nil {
 			return nil, err
 		}
 		lead = &keptHeading{}
@@ -248,7 +402,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	sort.Strings(extraKeys)
 	for _, key := range extraKeys {
 		lead.add("Evidências adicionais", props.Text{Size: 10, Top: 4})
-		if err := addEvidenceRows(ctx, documentMaker, lead, evidenceByRequirement[key], assets, "", document.SnapshotID, r.DashboardOrigin); err != nil {
+		if err := presentation.addEvidenceRows(ctx, documentMaker, lead, evidenceByRequirement[key], assets, evidenceIndex, "", document.SnapshotID, r.DashboardOrigin); err != nil {
 			return nil, err
 		}
 		lead = &keptHeading{}
@@ -283,12 +437,16 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	return data, nil
 }
 
+func reportVerificationURL(origin, code string, version int) string {
+	return strings.TrimRight(origin, "/") + "/verify-report?code=" + url.QueryEscape(code) + "&version=" + fmt.Sprint(version)
+}
+
 // UniqueImageCount counts distinct images that must be embedded; evidence
 // marked missing never carries an image.
 func UniqueImageCount(items []core.Evidence) int {
 	seen := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		if item.Availability != "MISSING" {
+		if core.EvidenceAvailable(item.Availability) {
 			seen[item.ID] = struct{}{}
 		}
 	}
@@ -301,7 +459,9 @@ func PageCount(data []byte) int { return len(pdfPageMarker.FindAll(data, -1)) }
 const (
 	maxHeaderRunes = 160
 	fullWidthChunk = 1200
-	captionChunk   = 500
+	// captionChunk is the v3 caption split; v1/v2 keep legacyCaptionChunk.
+	captionChunk       = 45
+	legacyCaptionChunk = 500
 )
 
 func ellipsis(value string, limit int) string {
@@ -370,7 +530,38 @@ func scopeStatementLines(statements []string) []string {
 	return lines
 }
 
+// pdfPresentation selects the presentation rules of one document: report v3
+// uses the shared core vocabulary, E### references, the evidence index, the
+// image placeholder and the 45-rune caption split; v1/v2 render as before.
+type pdfPresentation struct{ v3 bool }
+
+func presentationFor(snapshot core.Snapshot) pdfPresentation {
+	return pdfPresentation{v3: snapshot.SchemaVersion >= 3}
+}
+
+// legacyPDF is the historical presentation used by v1/v2 documents.
+var legacyPDF = pdfPresentation{}
+
+func (p pdfPresentation) label(value string) string {
+	if p.v3 {
+		return core.CodeLabel(value)
+	}
+	return label(value)
+}
+
+func (p pdfPresentation) captionChunk() int {
+	if p.v3 {
+		return captionChunk
+	}
+	return legacyCaptionChunk
+}
+
 func analysisSummary(requirement core.Requirement) string {
+	return legacyPDF.analysisSummary(requirement)
+}
+
+func (p pdfPresentation) analysisSummary(requirement core.Requirement) string {
+	label := p.label
 	summary := label(requirement.AnalysisMode) + " · " + label(requirement.AnalysisStatus)
 	if requirement.AnalysisMode == "COMPARE_ORIGIN_CURRENT" && requirement.NoRelevantChange != nil {
 		if *requirement.NoRelevantChange {
@@ -455,7 +646,8 @@ func estimateTextMM(value string, prop props.Text) float64 {
 // optional lead heading is emitted on the same page as the first image row, and
 // in the multi-chunk caption layout every image stays with the start of its
 // caption.
-func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, lead *keptHeading, items []core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) error {
+func (p pdfPresentation) addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, lead *keptHeading, items []core.Evidence, assets pdf.AssetBundle, evidenceIndex map[string]string, componentLabel, snapshotID, dashboardOrigin string) error {
+	captionChunk := p.captionChunk()
 	if lead == nil {
 		lead = &keptHeading{}
 	}
@@ -492,13 +684,19 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, lead 
 		rightImage, rightCaption, rightLink := col.New(6), "", ""
 		var err error
 		if index < len(left) {
-			if leftImage, leftCaption, leftLink, err = evidenceComponents(left[index], assets, componentLabel, snapshotID, dashboardOrigin); err != nil {
+			if leftImage, leftCaption, leftLink, err = p.evidenceComponents(left[index], assets, componentLabel, snapshotID, dashboardOrigin); err != nil {
 				return err
+			}
+			if reference := evidenceIndex[left[index].ID]; reference != "" {
+				leftCaption = reference + " · " + leftCaption
 			}
 		}
 		if index < len(right) {
-			if rightImage, rightCaption, rightLink, err = evidenceComponents(right[index], assets, componentLabel, snapshotID, dashboardOrigin); err != nil {
+			if rightImage, rightCaption, rightLink, err = p.evidenceComponents(right[index], assets, componentLabel, snapshotID, dashboardOrigin); err != nil {
 				return err
+			}
+			if reference := evidenceIndex[right[index].ID]; reference != "" {
+				rightCaption = reference + " · " + rightCaption
 			}
 		}
 		if len([]rune(leftCaption)) <= captionChunk && len([]rune(rightCaption)) <= captionChunk {
@@ -521,7 +719,7 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, lead 
 			documentMaker.AddRows(row.New(rowMM).Add(leftImage, rightImage))
 		} else {
 			// The image keeps company with the first caption chunk.
-			firstChunkMM := float64(max(captionLines(firstChunk(leftCaption)), captionLines(firstChunk(rightCaption)))) * captionLineMM
+			firstChunkMM := float64(max(captionLines(firstChunk(leftCaption, captionChunk)), captionLines(firstChunk(rightCaption, captionChunk)))) * captionLineMM
 			if len(lead.rows) > 0 {
 				lead.flush(documentMaker, imageHeightMM+1+firstChunkMM)
 			} else {
@@ -563,8 +761,8 @@ const (
 )
 
 // firstChunk returns the first piece of a caption split by chunkText.
-func firstChunk(caption string) string {
-	if chunks := chunkText(caption, captionChunk); len(chunks) > 0 {
+func firstChunk(caption string, limit int) string {
+	if chunks := chunkText(caption, limit); len(chunks) > 0 {
 		return chunks[0]
 	}
 	return ""
@@ -624,11 +822,30 @@ func linkTextLines(link string) []string {
 	return result
 }
 
+// evidenceComponents builds the image column and caption of one evidence with
+// the historical (v1/v2) presentation.
 func evidenceComponents(item core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) (marotocore.Col, string, string, error) {
+	return legacyPDF.evidenceComponents(item, assets, componentLabel, snapshotID, dashboardOrigin)
+}
+
+func (p pdfPresentation) evidenceComponents(item core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) (marotocore.Col, string, string, error) {
+	label := p.label
 	imageColumn := col.New(6)
 	data := assets["evidence-"+item.ID+".jpg"]
-	if len(data) == 0 || item.Availability == "MISSING" {
+	if !p.v3 && (len(data) == 0 || !core.EvidenceAvailable(item.Availability)) {
 		imageColumn.Add(text.New("Imagem indisponível", props.Text{Size: 8, Family: "Roboto", Top: 2}))
+	} else if len(data) == 0 || !core.EvidenceAvailable(item.Availability) {
+		notice := "Imagem indisponível"
+		if item.Availability == core.EvidenceWithheld {
+			notice = "Imagem não exibida nesta versão"
+		}
+		// A neutral frame takes the place of the photo so the caption below is
+		// still attached to a visual block, and the notice is drawn inside it.
+		const placeholderWidthMM, columnWidthMM = imageHeightMM * 4 / 3, 90.0
+		imageColumn.Add(
+			marotoimage.NewFromBytes(unavailableImagePlaceholder(), extension.Png, props.Rect{Percent: placeholderWidthMM / columnWidthMM * 100, JustReferenceWidth: true}),
+			text.New(notice, props.Text{Size: 8, Family: "Roboto", Top: imageHeightMM/2 - 2, Left: 4}),
+		)
 	} else {
 		dimensions, format, err := stdimage.DecodeConfig(bytes.NewReader(data))
 		if err != nil || dimensions.Width <= 0 || dimensions.Height <= 0 {
@@ -660,7 +877,7 @@ func evidenceComponents(item core.Evidence, assets pdf.AssetBundle, componentLab
 	}
 	link := ""
 	if item.EvidenceKind == "VIDEO_FRAME" {
-		caption = videoFrameCaption(item, componentLabel, caption)
+		caption = p.videoFrameCaption(item, componentLabel, caption)
 		if dashboardOrigin != "" && snapshotID != "" {
 			link = dashboardOrigin + "/media/video-evidence/" + url.PathEscape(item.FrameID) + "?snapshotId=" + url.QueryEscape(snapshotID)
 		}
@@ -671,7 +888,39 @@ func evidenceComponents(item core.Evidence, assets pdf.AssetBundle, componentLab
 	return imageColumn, caption, link, nil
 }
 
-func videoFrameCaption(item core.Evidence, componentLabel, caption string) string {
+var (
+	placeholderOnce  sync.Once
+	placeholderBytes []byte
+)
+
+// unavailableImagePlaceholder returns a neutral 4:3 PNG frame that carries no
+// evidence data; it stands in for any photo whose pixels cannot be shown.
+func unavailableImagePlaceholder() []byte {
+	placeholderOnce.Do(func() {
+		const width, height, border = 320, 240, 3
+		canvas := stdimage.NewRGBA(stdimage.Rect(0, 0, width, height))
+		fill, edge := color.RGBA{R: 0xF1, G: 0xF1, B: 0xF1, A: 0xFF}, color.RGBA{R: 0xB5, G: 0xB5, B: 0xB5, A: 0xFF}
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				if x < border || y < border || x >= width-border || y >= height-border {
+					canvas.Set(x, y, edge)
+				} else {
+					canvas.Set(x, y, fill)
+				}
+			}
+		}
+		var encoded bytes.Buffer
+		if err := png.Encode(&encoded, canvas); err == nil {
+			placeholderBytes = encoded.Bytes()
+		}
+	})
+	return placeholderBytes
+}
+
+func (p pdfPresentation) videoFrameCaption(item core.Evidence, componentLabel, caption string) string {
+	if p.v3 {
+		caption = "Frame " + item.FrameID + " · " + caption
+	}
 	if strings.TrimSpace(componentLabel) != "" {
 		caption = strings.TrimSpace(componentLabel) + " · " + caption
 	}
@@ -679,7 +928,10 @@ func videoFrameCaption(item core.Evidence, componentLabel, caption string) strin
 		seconds := *item.TimestampMS / 1000
 		caption += fmt.Sprintf(" · %02d:%02d", seconds/60, seconds%60)
 	}
-	caption += " · Frame " + item.FrameID + " · Fonte " + item.SourceMediaID
+	if !p.v3 {
+		caption += " · Frame " + item.FrameID
+	}
+	caption += " · Fonte " + item.SourceMediaID
 	return caption
 }
 
@@ -694,15 +946,16 @@ func classificationLabel(value string) string {
 	return map[string]string{"NORMAL": "Sem alertas identificados", "ATTENTION": "Requer atenção", "CRITICAL": "Crítica"}[value]
 }
 
-// label presents enum values of the PDF. Classification reason codes are not
-// here: core.ReasonLabel is their single vocabulary, shared with the HTML
-// report (INCONCLUSIVE below is the analysis status, not a reason).
+// label presents enum values of v1/v2 PDFs exactly as they were issued;
+// report v3 uses core.CodeLabel. Classification reason codes are not here:
+// core.ReasonLabel is their single vocabulary, shared with the HTML report
+// (INCONCLUSIVE below is the analysis status, not a reason).
 func label(value string) string {
 	labels := map[string]string{
 		"INCONCLUSIVE": "Inconclusiva", "REFERENCE": "Referência", "CURRENT": "Vistoria atual", "CONSERVATION": "Conservação", "INVENTORY": "Inventário", "CLEANLINESS": "Limpeza", "OBSTRUCTION": "Obstrução", "EVIDENCE_QUALITY": "Qualidade da evidência",
 		"CURRENT_ONLY": "Análise atual", "COMPARE_ORIGIN_CURRENT": "Comparação com referência", "PENDING": "Pendente", "COMPLETED": "Concluída", "FAILED": "Falha técnica", "GPS_MISSING": "Localização ausente", "LOW_QUALITY": "Qualidade insuficiente", "SENSITIVE_DETECTION": "Detecção sensível", "CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico",
 		"NONE": "Insuficiente", "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta", "CRITICAL": "Crítica", "REVIEW": "Revisar evidência", "RECOVER": "Solicitar complemento", "NO_ACTION": "Nenhuma ação adicional",
-		"MISSING": "Item ausente", "CONDITION_CHANGED": "Condição alterada", "PRESENT_UNCHANGED": "Presente sem alteração relevante", "NOT_OBSERVED": "Não observado", "OUTSIDE_INVENTORY": "Fora do inventário", "IMPROVED": "Condição melhorada", "ENVIRONMENT_NOT_CAPTURED": "Ambiente não capturado",
+		"MISSING": "Item ausente", "CONDITION_CHANGED": "Condição alterada", "PRESENT_UNCHANGED": "Presente sem alteração relevante", "NOT_OBSERVED": "Não observado", "OUTSIDE_INVENTORY": "Fora do inventário", "IMPROVED": "Condição melhorada", "ENVIRONMENT_NOT_CAPTURED": "Ambiente não capturado", "NO_BASIS": "Sem base para comparar",
 		"NEW": "Novo", "GOOD": "Bom", "FAIR": "Regular", "POOR": "Ruim", "NOT_ASSESSABLE": "Não avaliável",
 		"MOVE_IN": "Entrada no imóvel", "CONSTRUCTION_HANDOVER": "Entrega da obra", "POST_RENOVATION": "Pós-reforma", "INVENTORY_UPDATE": "Atualização do inventário", "CONTESTATION_ADJUSTMENT": "Ajuste de contestação",
 	}
@@ -715,9 +968,13 @@ func label(value string) string {
 // inventorySummaryLines opens the inventory section: the reference, the
 // coverage of a comparative report and, without problems, the all-clear line.
 func inventorySummaryLines(inventory *core.InventorySection) []string {
+	return legacyPDF.inventorySummaryLines(inventory)
+}
+
+func (p pdfPresentation) inventorySummaryLines(inventory *core.InventorySection) []string {
 	lines := []string{"Inventário catalogado nesta vistoria"}
 	if inventory.Reference.Purpose != "" {
-		lines[0] = "Referência: " + label(inventory.Reference.Purpose)
+		lines[0] = "Referência: " + p.label(inventory.Reference.Purpose)
 	}
 	if inventory.Coverage != nil {
 		lines = append(lines, fmt.Sprintf("%d de %d itens avaliados · %d não observados", inventory.Coverage.AssessedItems, inventory.Coverage.ExpectedItems, inventory.Coverage.NotObserved))
@@ -731,7 +988,15 @@ func inventorySummaryLines(inventory *core.InventorySection) []string {
 // inventoryProblemHeading names the section of one problem; missing items are
 // grouped under "Itens ausentes".
 func inventoryProblemHeading(item core.InventoryEntry) string {
-	section := label(item.Status)
+	return legacyPDF.inventoryProblemHeading(item)
+}
+
+func (p pdfPresentation) inventoryProblemHeading(item core.InventoryEntry) string {
+	if p.v3 {
+		// Report v3 names every item outcome with the comparison vocabulary.
+		return core.InventoryStatusLabel(item.Status) + " · " + item.Environment + " · " + item.Name
+	}
+	section := p.label(item.Status)
 	if item.Status == "MISSING" {
 		section = "Itens ausentes"
 	}

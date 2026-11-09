@@ -35,7 +35,29 @@ func totalSources(t *testing.T, seed *inventorytest.Seed) int64 {
 	return count
 }
 
+// TestCatalogWritesPerAttributeProvenance also covers UT-111's declaration
+// source requirement: a claimed attribute remains tied to its exact revision.
 func TestCatalogWritesPerAttributeProvenance(t *testing.T) {
+	t.Run("UT-111 declared material carries its exact voice source", func(t *testing.T) {
+		f := newVoiceFlow(t)
+		note, revision := f.note(t, "A mesa é de porcelana")
+		f.seal(t)
+		photo := f.env.photos[0].String()
+		f.run(t, func(llm.StructuredRequest) (string, error) {
+			return voiceCatalogJSON(t, voiceItem{name: "Mesa", evidence: []string{photo}, citations: []map[string]any{cite(note, revision, "name", "material")}}), nil
+		})
+		item := itemsOf(t, f.h.seed, f.env.env.ID)[0]
+		if item.Material == nil || *item.Material != "porcelana" {
+			t.Fatalf("declared material was lost: %+v", item)
+		}
+		var source database.InventoryItemAttributeSource
+		if err := f.h.seed.DB.Where("item_id=? AND source_kind='VOICE' AND attribute_name='material'", item.ID).Take(&source).Error; err != nil {
+			t.Fatal(err)
+		}
+		if source.NoteID == nil || *source.NoteID != note || source.RevisionID == nil || *source.RevisionID != revision {
+			t.Fatalf("declared material source=%+v, want note/revision %s/%s", source, note, revision)
+		}
+	})
 	t.Run("IT-167 partly visible item has visual identity and a spoken quantity", func(t *testing.T) {
 		f := newVoiceFlow(t)
 		note, revision := f.note(t, "cinco pratos")

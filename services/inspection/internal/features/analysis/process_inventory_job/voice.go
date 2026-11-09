@@ -127,7 +127,15 @@ func (p *Processor) loadVoice(ctx context.Context, tx *gorm.DB, job database.Inv
 		voice.Notes = append(voice.Notes, note)
 	}
 	if len(voice.Notes) > 0 {
-		voice.Input = CatalogInput{ProfileDigest: prompt.FurnishedProfileDigest(in.snapshot.CanonicalDigest), MediaGenerationID: mediaGeneration(job.RequirementKey, in.current), EnvironmentID: in.environment.ID, Notes: voice.Notes}
+		version := in.snapshot.SchemaVersion
+		if version == 0 {
+			version = 1
+		}
+		profileDigest := prompt.CatalogVoiceDigestForVersion(in.snapshot.CanonicalDigest, version)
+		if in.profile == "FURNISHED_PROPERTY" || in.profile == "" {
+			profileDigest = prompt.FurnishedProfileDigestForVersion(in.snapshot.CanonicalDigest, version)
+		}
+		voice.Input = CatalogInput{ProfileDigest: profileDigest, MediaGenerationID: mediaGeneration(job.RequirementKey, in.current), EnvironmentID: in.environment.ID, Notes: voice.Notes}
 		digest, err := voice.Input.Digest()
 		if err != nil {
 			// The fixed input is deterministic: retrying cannot repair it.
@@ -300,9 +308,10 @@ const intervalToleranceMS = 500
 // per-call budget. Frames inside a note's interval (and the photo a note is
 // attached to) come first, spread across the notes; a quarter of the budget is
 // kept for the room overview. Without notes it is the existing selection.
-func selectCatalogImages(candidates []evidenceInput, notes []CatalogNote, max int) []evidenceInput {
+func selectCatalogImages(candidates []evidenceInput, notes []CatalogNote, max int) ([]evidenceInput, int) {
 	if len(notes) == 0 {
-		return representativeImages(candidates, max)
+		selected := representativeImages(candidates, max)
+		return selected, positiveDifference(len(candidates), len(selected))
 	}
 	unique := make([]evidenceInput, 0, len(candidates))
 	known := map[string]bool{}
@@ -369,7 +378,15 @@ func selectCatalogImages(candidates []evidenceInput, notes []CatalogNote, max in
 		}
 		capped = append(capped, candidate)
 	}
-	return append(capped, priority...)
+	selected := append(capped, priority...)
+	return selected, positiveDifference(len(unique), len(selected))
+}
+
+func positiveDifference(total, selected int) int {
+	if total <= selected {
+		return 0
+	}
+	return total - selected
 }
 
 // overviewReserve is the share of one clip's frame cap kept for the room

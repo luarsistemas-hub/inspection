@@ -49,7 +49,7 @@ export function editItemPatch(item: ReviewItem, values: { name: string; typeCode
     name: values.name.trim(), typeCode: values.typeCode, condition: values.condition,
     material: values.material.trim(), color: values.color.trim(),
     quantity: quantity ? Number(quantity) : null, clearQuantity: quantity ? null : true,
-    observation: item.observation, limitation: item.limitation, environmentId: item.environmentId,
+    description: item.description, assessedScope: item.assessedScope, observation: item.observation, limitation: item.limitation, environmentId: item.environmentId,
   };
 }
 

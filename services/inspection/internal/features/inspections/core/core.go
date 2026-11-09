@@ -6,16 +6,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"inspection/libs/identity"
+	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	resolveprompt "inspection/services/inspection/internal/features/analysis/resolve_prompt"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	inspectionscope "inspection/services/inspection/internal/features/inspections/scope"
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
@@ -32,6 +35,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -68,10 +72,12 @@ type CreateInput struct {
 	Source, SourceKey, Reason        string
 	DueAt, DeadlineAt                time.Time
 	ReminderInstants                 []time.Time
+	ScopeOverride                    *inspectionscope.Override
 }
 
 type View struct {
 	Inspection             database.Inspection
+	Scope                  database.InspectionScopeSnapshot
 	Responsibility         database.Responsibility
 	Policy                 database.PolicySnapshot
 	Reference              database.ReferenceSnapshot
@@ -172,6 +178,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if err := validateComparisonMode(document, comparisonMode); err != nil {
 		return View{}, err
 	}
+	if comparisonMode == catalog.FixedOrigin && document.MediaKind() == "PHOTO" && document.SchemaVersion >= catalog.DescriptiveSchemaVersion && document.AssetProfile == "" {
+		return View{}, apperror.New(apperror.InvalidInput, "templateVersionId", "O modelo precisa definir um perfil de escopo válido.")
+	}
 	if !strings.EqualFold(document.AnalysisType, "REAL_ESTATE") {
 		return View{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
 	}
@@ -199,14 +208,35 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		}
 	}
 	var originReference *originresolve.Result
+	explicitReference := in.ReferenceVersionID != nil
 	if comparisonMode == catalog.FixedOrigin {
 		referenceRaw, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID, MediaKind: document.MediaKind()})
 		if err != nil {
+			if document.MediaKind() == "PHOTO" {
+				var appErr *apperror.Error
+				if errors.As(err, &appErr) && appErr.Field == "referenceVersionId" {
+					if appErr.Code == apperror.Conflict {
+						return View{}, apperror.New(apperror.Conflict, "referenceVersionId", "A versão da origem foi alterada. Selecione novamente uma versão aprovada.")
+					}
+					return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "A origem precisa ser catalogada e aprovada antes de iniciar uma vistoria de saída.")
+				}
+			}
 			return View{}, err
 		}
 		resolved := referenceRaw.(originresolve.Result)
+		if document.MediaKind() == "PHOTO" {
+			if !resolved.Version.HasInventory {
+				return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "A origem precisa ser catalogada e aprovada antes de iniciar uma vistoria de saída.")
+			}
+			if resolved.Version.MediaKind == "VIDEO" {
+				return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "A vistoria de saída exige uma referência fotográfica aprovada.")
+			}
+			if resolved.Version.Status != "ACTIVE" && !(explicitReference && resolved.Version.Status == "SUPERSEDED") {
+				return View{}, apperror.New(apperror.Conflict, "referenceVersionId", "A versão da origem foi alterada. Selecione novamente a versão aprovada.")
+			}
+		}
 		if document.SchemaVersion < catalog.EnvironmentSchemaVersion && resolved.Version.HasInventory {
-			return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "CATALOG_ORIGIN_FIRST")
+			return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "Cadastre e aprove o inventário da origem antes de iniciar uma vistoria de saída.")
 		}
 		originReference = &resolved
 		referenceID := resolved.Version.ID
@@ -215,6 +245,14 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "effective reference is required")
 	}
 	policyPayload, policyDigest, err := snapshotPolicy(document, asset, comparisonMode, in.ReferenceVersionID)
+	if err != nil {
+		return View{}, err
+	}
+	effectiveScope, err := inspectionscope.Resolve(document, template.Version.ID.String(), in.ScopeOverride)
+	if err != nil {
+		return View{}, apperror.New(apperror.InvalidInput, "scope", err.Error())
+	}
+	scopeDocument, err := json.Marshal(effectiveScope)
 	if err != nil {
 		return View{}, err
 	}
@@ -231,6 +269,25 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		if err := projectcore.ValidateAssociation(tx, in.TenantID, in.AssetID, in.ProjectID, in.StageID); err != nil {
 			return err
 		}
+		if originReference != nil && document.MediaKind() == "PHOTO" {
+			var origin database.Origin
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND asset_id=?", in.TenantID, originReference.Version.OriginID, in.AssetID).Take(&origin).Error; err != nil {
+				return apperror.New(apperror.InvalidInput, "referenceVersionId", "A versão aprovada precisa pertencer ao mesmo imóvel.")
+			}
+			var pinned database.OriginVersion
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", in.TenantID, originReference.Version.ID).Take(&pinned).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return apperror.New(apperror.Conflict, "referenceVersionId", "A versão da origem não está mais aprovada. Selecione novamente uma versão aprovada.")
+				}
+				return err
+			}
+			if !pinned.HasInventory || pinned.Status == "DRAFT" || pinned.Status == "REJECTED" || pinned.Status == "DISCARDED" {
+				return apperror.New(apperror.InvalidState, "referenceVersionId", "A origem precisa ser catalogada e aprovada antes de iniciar uma vistoria de saída.")
+			}
+			if pinned.MediaKind == "VIDEO" || (pinned.Status != "ACTIVE" && !(explicitReference && pinned.Status == "SUPERSEDED")) {
+				return apperror.New(apperror.Conflict, "referenceVersionId", "A versão da origem foi alterada. Selecione novamente uma versão aprovada.")
+			}
+		}
 		var count int64
 		if err := tx.Model(&database.Inspection{}).Where("tenant_id=?", in.TenantID).Count(&count).Error; err != nil {
 			return err
@@ -239,6 +296,14 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			return apperror.New(apperror.InvalidState, "inspections", "inspection capacity reached")
 		}
 		resolvedPrompt, err := resolveprompt.Resolve(ctx, tx, document.AnalysisType, now)
+		if err != nil {
+			return err
+		}
+		currentFindings, err := resolveprompt.ResolveTask(ctx, tx, document.AnalysisType, string(analysisprompt.FindingsCurrent), now)
+		if err != nil {
+			return err
+		}
+		compareFindings, err := resolveprompt.ResolveTask(ctx, tx, document.AnalysisType, string(analysisprompt.FindingsCompare), now)
 		if err != nil {
 			return err
 		}
@@ -259,7 +324,8 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			"templateId": *templateID, "templateVersionId": template.Version.ID,
 			"analysisType": document.AnalysisType, "analysisPromptSnapshotId": resolvedPrompt.Snapshot.ID, "source": in.Source,
 		})
-		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, InventoryPromptSnapshotID: inventoryPromptID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", MediaKind: document.MediaKind(), DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
+		currentSnapshotID, compareSnapshotID := currentFindings.Snapshot.ID, compareFindings.Snapshot.ID
+		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, FindingsCurrentSnapshotID: &currentSnapshotID, FindingsCompareSnapshotID: &compareSnapshotID, InventoryPromptSnapshotID: inventoryPromptID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", MediaKind: document.MediaKind(), DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibility := database.Responsibility{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ParticipantID: in.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		policy := database.PolicySnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, SchemaVersion: 1, Payload: policyPayload, CanonicalDigest: policyDigest, CreatedAt: now}
 		referenceDocument := map[string]any{"referenceVersionId": in.ReferenceVersionID, "comparisonMode": comparisonMode}
@@ -275,10 +341,22 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		}
 		referencePayload, _ := json.Marshal(referenceDocument)
 		reference := database.ReferenceSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ReferenceVersionID: in.ReferenceVersionID, ComparisonMode: string(comparisonMode), Payload: referencePayload, CreatedAt: now}
+		scopeSnapshot := database.InspectionScopeSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, TemplateVersionID: template.Version.ID, Profile: effectiveScope.Profile, Document: scopeDocument, Digest: effectiveScope.Digest, Version: effectiveScope.Version, CreatedAt: now, UpdatedAt: now}
 		requirements := CaptureRequirementsForCreation(document, comparisonMode, originReference)
+		if document.SchemaVersion >= catalog.DescriptiveSchemaVersion {
+			limits := document.EnvironmentCapture
+			if limits == nil {
+				limits = catalog.DefaultEnvironmentCapture()
+			}
+			var baselineKeys map[string]string
+			if originReference != nil {
+				baselineKeys = originReference.EnvironmentRequirementKeys
+			}
+			requirements = descriptiveEnvironmentRequirements(requirements, effectiveScope.Rooms, limits, comparisonMode, originReference != nil, baselineKeys)
+		}
 		requirementPayload, _ := json.Marshal(requirements)
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, Kind: "INSPECTION", MediaKind: document.MediaKind(), TemplateVersionID: template.Version.ID, ReferencePayload: referencePayload, PolicyPayload: policyPayload, Requirements: requirementPayload, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
-		for _, row := range []any{&inspection, &responsibility, &policy, &reference, &draft} {
+		for _, row := range []any{&inspection, &responsibility, &policy, &reference, &scopeSnapshot, &draft} {
 			if err := tx.Create(row).Error; err != nil {
 				return err
 			}
@@ -291,13 +369,301 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		if err := createOutbox(tx, eventID, in.TenantID, inspection.ID, "inspection.created.v1", payload, ctx, now); err != nil {
 			return err
 		}
-		out = View{Inspection: inspection, Responsibility: responsibility, Policy: policy, Reference: reference, EventID: eventID}
+		out = View{Inspection: inspection, Responsibility: responsibility, Policy: policy, Reference: reference, Scope: scopeSnapshot, EventID: eventID}
 		return nil
 	})
 	if err != nil {
 		return View{}, err
 	}
 	return out, nil
+}
+
+// descriptiveEnvironmentRequirements maps the pinned scope rooms of a
+// descriptive (v3) inspection to capture requirements. A room is linked to a
+// baseline environment first by the key the environment was captured with
+// ("env:<room key>") or by its identity, then by name and type only when that
+// match is unique in both directions. Each baseline environment backs at most
+// one room: an ambiguous or missing match leaves the room without baseline
+// link and the baseline environment unmatched, never two rooms reading one
+// baseline environment.
+func descriptiveEnvironmentRequirements(requirements []capturecore.Requirement, rooms []catalog.ExpectedRoom, limits *catalog.EnvironmentCapture, comparisonMode catalog.ComparisonMode, matchBaseline bool, baselineKeys map[string]string) []capturecore.Requirement {
+	matched := matchBaselineRooms(requirements, rooms, matchBaseline, baselineKeys)
+	mapped := make([]capturecore.Requirement, 0, len(rooms))
+	for index, room := range rooms {
+		if baseline := matched[index]; baseline >= 0 {
+			current := requirements[baseline]
+			current.Key = "env:" + room.Key
+			current.EnvironmentTypeCode, current.EnvironmentName = room.TypeCode, room.Name
+			current.AllowConfirmedGap = true
+			mapped = append(mapped, current)
+			continue
+		}
+		mapped = append(mapped, capturecore.Requirement{Key: "env:" + room.Key, Section: room.TypeCode, Label: room.Name, EvidenceKind: "PHOTO", Required: true, Expected: true, AllowConfirmedGap: true, ImpossibilityAllowed: true, MinimumMedia: limits.Photo.Minimum, MaximumMedia: limits.Photo.Maximum, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: string(comparisonMode), EnvironmentIdentityID: room.Key, EnvironmentTypeCode: room.TypeCode, EnvironmentName: room.Name})
+	}
+	return mapped
+}
+
+// matchBaselineRooms returns, per scope room, the index of the baseline
+// requirement it is linked to, or -1. Every baseline requirement is used at
+// most once.
+func matchBaselineRooms(requirements []capturecore.Requirement, rooms []catalog.ExpectedRoom, matchBaseline bool, baselineKeys map[string]string) []int {
+	matched := make([]int, len(rooms))
+	for index := range matched {
+		matched[index] = -1
+	}
+	if !matchBaseline {
+		return matched
+	}
+	used := make([]bool, len(requirements))
+	for index, room := range rooms {
+		for candidate := range requirements {
+			req := requirements[candidate]
+			if used[candidate] || !strings.HasPrefix(req.Key, "env:") {
+				continue
+			}
+			captured := baselineKeys[req.EnvironmentIdentityID]
+			if captured == "env:"+room.Key || req.EnvironmentIdentityID == room.Key || strings.TrimPrefix(req.Key, "env:") == room.Key {
+				matched[index], used[candidate] = candidate, true
+				break
+			}
+		}
+	}
+	sameRoom := func(req capturecore.Requirement, room catalog.ExpectedRoom) bool {
+		return strings.EqualFold(strings.TrimSpace(req.EnvironmentTypeCode), strings.TrimSpace(room.TypeCode)) && strings.EqualFold(strings.TrimSpace(req.EnvironmentName), strings.TrimSpace(room.Name))
+	}
+	for index, room := range rooms {
+		if matched[index] >= 0 {
+			continue
+		}
+		found := -1
+		for candidate, req := range requirements {
+			if used[candidate] || !strings.HasPrefix(req.Key, "env:") || !sameRoom(req, room) {
+				continue
+			}
+			if found >= 0 {
+				found = -2
+				break
+			}
+			found = candidate
+		}
+		if found < 0 {
+			continue
+		}
+		rivals := 0
+		for other, otherRoom := range rooms {
+			if matched[other] < 0 && sameRoom(requirements[found], otherRoom) {
+				rivals++
+			}
+		}
+		if rivals == 1 {
+			matched[index], used[found] = found, true
+		}
+	}
+	return matched
+}
+
+// ConfirmScope updates the inspection's effective scope with optimistic concurrency.
+func (s Service) ConfirmScope(ctx context.Context, tenantID, inspectionID identity.ID, override inspectionscope.Override, expectedVersion int) (database.InspectionScopeSnapshot, error) {
+	if tenantID == (identity.ID{}) || inspectionID == (identity.ID{}) || expectedVersion < 1 {
+		return database.InspectionScopeSnapshot{}, apperror.New(apperror.InvalidInput, "expectedVersion", "A versão esperada do escopo é obrigatória.")
+	}
+	var out database.InspectionScopeSnapshot
+	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		var inspection database.Inspection
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, inspectionID).Take(&inspection).Error; err != nil {
+			return apperror.New(apperror.NotFound, "inspectionId", "vistoria não encontrada")
+		}
+		roles := []string{auth.TenantAdmin, auth.Manager, auth.Employee}
+		if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Product: auth.DashboardProduct, Roles: roles, Mutate: true}); err != nil {
+			return err
+		}
+		if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: tenantID, Roles: roles, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
+			return err
+		}
+		var responsibility database.Responsibility
+		if err := tx.Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).Take(&responsibility).Error; err != nil {
+			return err
+		}
+		if inspection.EvidenceCount > 0 || (inspection.Status != StatusPlanned && inspection.Status != StatusInvited) || responsibility.Status != "PENDING" {
+			return apperror.New(apperror.InvalidState, "scope", "O escopo não pode ser alterado depois do início da captura.")
+		}
+		// Capture flows may persist activity without updating inspection status or
+		// evidence counters, so inspect the durable records under the row lock.
+		for _, check := range []struct {
+			model any
+			query string
+			args  []any
+		}{
+			{&database.ProcessingAcceptance{}, "tenant_id=? AND responsibility_id=?", []any{tenantID, responsibility.ID}},
+			{&database.MediaObject{}, "tenant_id=? AND responsibility_id=?", []any{tenantID, responsibility.ID}},
+			{&database.RequirementAnswer{}, "tenant_id=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id=?)", []any{tenantID, tenantID, responsibility.ID}},
+			{&database.ComponentAnswer{}, "tenant_id=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id=?)", []any{tenantID, tenantID, responsibility.ID}},
+			{&database.HandoverRecord{}, "tenant_id=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id=?)", []any{tenantID, tenantID, responsibility.ID}},
+			{&database.SubmissionVersion{}, "tenant_id=? AND responsibility_id=?", []any{tenantID, responsibility.ID}},
+		} {
+			var count int64
+			if err := tx.Model(check.model).Where(check.query, check.args...).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return apperror.New(apperror.InvalidState, "scope", "O escopo não pode ser alterado depois do início da captura.")
+			}
+		}
+		var template database.TemplateVersion
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, inspection.TemplateVersionID).Take(&template).Error; err != nil {
+			return err
+		}
+		var document catalog.TemplateDocument
+		if err := json.Unmarshal(template.DefinitionJSON, &document); err != nil {
+			return fmt.Errorf("decode template scope: %w", err)
+		}
+		resolved, err := inspectionscope.Resolve(document, template.ID.String(), &override)
+		if err != nil {
+			return apperror.New(apperror.InvalidInput, "scopeOverride", err.Error())
+		}
+		if err := tx.Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).Take(&out).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.InvalidState, "scope", "O escopo desta vistoria não está disponível para revisão.")
+			}
+			return err
+		}
+		if out.Version != expectedVersion {
+			if out.Digest == resolved.Digest {
+				return nil
+			}
+			return apperror.New(apperror.Conflict, "expectedVersion", "O escopo foi alterado por outra pessoa. Atualize a vistoria e tente novamente.")
+		}
+		resolved.Version = expectedVersion + 1
+		payload, err := json.Marshal(resolved)
+		if err != nil {
+			return err
+		}
+		if document.SchemaVersion >= catalog.DescriptiveSchemaVersion {
+			if err := refreshDescriptiveCaptureRequirements(ctx, tx, tenantID, inspectionID, responsibility.ID, resolved.Rooms, document, s.now()); err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&database.InspectionScopeSnapshot{}).
+			Where("tenant_id=? AND inspection_id=? AND version=?", tenantID, inspectionID, expectedVersion).
+			Updates(map[string]any{"profile": resolved.Profile, "document": payload, "digest": resolved.Digest, "version": resolved.Version, "confirmed_by": requestIdentity(ctx), "updated_at": s.now()})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return apperror.New(apperror.Conflict, "expectedVersion", "O escopo foi alterado por outra pessoa. Atualize a vistoria e tente novamente.")
+		}
+		out.Profile, out.Document, out.Digest, out.Version = resolved.Profile, payload, resolved.Digest, resolved.Version
+		return nil
+	})
+	return out, err
+}
+
+// refreshDescriptiveCaptureRequirements keeps the participant checklist in
+// sync with a scope confirmed before capture begins. Non-environment
+// requirements are retained while environment requirements are rebuilt from
+// the newly confirmed rooms.
+func refreshDescriptiveCaptureRequirements(ctx context.Context, tx *gorm.DB, tenantID, inspectionID, responsibilityID identity.ID, rooms []catalog.ExpectedRoom, document catalog.TemplateDocument, now time.Time) error {
+	var draft database.CaptureDraft
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).Take(&draft).Error; err != nil {
+		return err
+	}
+	var requirements []capturecore.Requirement
+	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+		return fmt.Errorf("decode capture requirements: %w", err)
+	}
+	environments := make([]capturecore.Requirement, 0, len(requirements))
+	retained := make([]capturecore.Requirement, 0, len(requirements))
+	for _, requirement := range requirements {
+		if strings.HasPrefix(requirement.Key, "env:") {
+			environments = append(environments, requirement)
+		} else {
+			retained = append(retained, requirement)
+		}
+	}
+	var reference database.ReferenceSnapshot
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).Take(&reference).Error; err != nil {
+		return err
+	}
+	var referencePayload struct {
+		OriginVersionID string `json:"originVersionId"`
+		MediaKind       string `json:"mediaKind"`
+	}
+	if err := json.Unmarshal(reference.Payload, &referencePayload); err != nil {
+		return fmt.Errorf("decode reference snapshot: %w", err)
+	}
+	environmentsRequirements := environments
+	baselineKeys := map[string]string{}
+	if referencePayload.OriginVersionID != "" {
+		originVersionID, err := identity.ParseID(referencePayload.OriginVersionID)
+		if err != nil {
+			return fmt.Errorf("decode pinned origin version: %w", err)
+		}
+		var originEnvironments []database.InventoryEnvironment
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND origin_version_id=? AND decision<>'REJECTED'", tenantID, originVersionID).Order("position,id").Find(&originEnvironments).Error; err != nil {
+			return err
+		}
+		mediaKind := "PHOTO"
+		maximumMedia := 20
+		if referencePayload.MediaKind == "VIDEO" {
+			mediaKind, maximumMedia = "VIDEO", 3
+		}
+		environmentsRequirements = make([]capturecore.Requirement, 0, len(originEnvironments))
+		for _, environment := range originEnvironments {
+			if environment.RequirementKey != nil && *environment.RequirementKey != "" {
+				baselineKeys[environment.IdentityID.String()] = *environment.RequirementKey
+			}
+			requirement := capturecore.Requirement{
+				Key: "env:" + environment.IdentityID.String(), Section: environment.TypeCode, Label: environment.Name,
+				EnvironmentIdentityID: environment.IdentityID.String(), EnvironmentTypeCode: environment.TypeCode, EnvironmentName: environment.Name,
+				Expected: true, EvidenceKind: mediaKind, Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: maximumMedia,
+				CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: string(catalog.FixedOrigin),
+			}
+			environmentsRequirements = append(environmentsRequirements, requirement)
+		}
+	}
+	limits := document.EnvironmentCapture
+	if limits == nil {
+		limits = catalog.DefaultEnvironmentCapture()
+	}
+	comparisonMode := catalog.ComparisonMode(reference.ComparisonMode)
+	var originReference *originresolve.Result
+	if comparisonMode == catalog.FixedOrigin {
+		if referencePayload.OriginVersionID == "" {
+			return apperror.New(apperror.InvalidState, "referenceVersionId", "A versão da origem fixada não está disponível. Atualize a vistoria e tente novamente.")
+		}
+		originVersionID, err := identity.ParseID(referencePayload.OriginVersionID)
+		if err != nil {
+			return apperror.New(apperror.InvalidState, "referenceVersionId", "A versão da origem fixada não está disponível. Atualize a vistoria e tente novamente.")
+		}
+		var version database.OriginVersion
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, originVersionID).Take(&version).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.InvalidState, "referenceVersionId", "A versão da origem fixada não está disponível. Atualize a vistoria e tente novamente.")
+			}
+			return err
+		}
+		if !version.HasInventory || len(environmentsRequirements) == 0 {
+			return apperror.New(apperror.InvalidState, "referenceVersionId", "A versão da origem fixada não está disponível. Atualize a vistoria e tente novamente.")
+		}
+		originReference = &originresolve.Result{Version: version, Requirements: environmentsRequirements, EnvironmentRequirementKeys: baselineKeys}
+	}
+	environmentsRequirements = CaptureRequirementsForCreation(document, comparisonMode, originReference)
+	environmentsRequirements = descriptiveEnvironmentRequirements(environmentsRequirements, rooms, limits, comparisonMode, comparisonMode == catalog.FixedOrigin, baselineKeys)
+	requirements = append(retained, environmentsRequirements...)
+	payload, err := json.Marshal(requirements)
+	if err != nil {
+		return err
+	}
+	return tx.WithContext(ctx).Model(&database.CaptureDraft{}).Where("tenant_id=? AND id=?", tenantID, draft.ID).Updates(map[string]any{"requirements": payload, "updated_at": now.UTC()}).Error
+}
+
+func requestIdentity(ctx context.Context) *identity.ID {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok || meta.Principal.IdentityID == (identity.ID{}) {
+		return nil
+	}
+	id := meta.Principal.IdentityID
+	return &id
 }
 
 func inventoryPromptTask(reference *originresolve.Result) string {
@@ -681,6 +1047,9 @@ func (s Service) load(tx *gorm.DB, out *View) error {
 		return err
 	}
 	if err := tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&out.Policy).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&out.Scope).Error; err != nil && err != gorm.ErrRecordNotFound {
 		return err
 	}
 	err := tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&out.Reference).Error

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestUT058SourceExpiryOverlaysAvailabilityWithoutChangingSnapshot(t *testing.T) {
+func TestTask06SourceExpiryOverlaysAvailabilityWithoutChangingSnapshot(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +74,21 @@ func TestUT058SourceExpiryOverlaysAvailabilityWithoutChangingSnapshot(t *testing
 	}
 }
 
+func TestReportHistoryLabelsFromLightweightJSON(t *testing.T) {
+	labels := reportHistoryLabelsFromJSON([]byte(`{"coverage":{"expected":1,"unknownScope":false},"reviewStatuses":["NOT_REVIEWED"],"processing":{"status":"COMPLETED"}}`))
+	if labels != [2]string{"1 componente no escopo", "Não revisado"} {
+		t.Fatalf("history labels = %#v", labels)
+	}
+}
+
+func TestInternalHandoverIncludesBackendFormattedPresentation(t *testing.T) {
+	snapshot := reportcore.Snapshot{SchemaVersion: 3, Handover: &reportcore.HandoverSection{Entries: []reportcore.HandoverEntry{{Kind: "METER", Status: "DECLARED", Payload: json.RawMessage(`{"meterType":"WATER","reading":"42","unit":"m³"}`)}}}}
+	projected := mapInternalHandover(snapshot)
+	if got := projected.Entries[0].Payload["presentation"]; got != "Medidor · Declarado · Água · 42 · m³" {
+		t.Fatalf("formatted handover = %#v", got)
+	}
+}
+
 func TestMapReportPresentsExistingVideoLabelsInPortuguese(t *testing.T) {
 	snapshot := reportcore.Snapshot{
 		VideoPlanID:  "plan-1",
@@ -95,6 +111,26 @@ func TestMapReportPresentsExistingVideoLabelsInPortuguese(t *testing.T) {
 	}
 	if got := view.CanonicalJSON["requirements"].([]any)[0].(map[string]any)["label"]; got != "living_room — fireplace" {
 		t.Fatalf("canonical label = %q", got)
+	}
+}
+
+func TestMapReportNeverProjectsVerificationCode(t *testing.T) {
+	const code = "01234567890123456789012345678901"
+	canonical := json.RawMessage(`{"schemaVersion":3,"verificationCode":"` + code + `","reportId":"report-1"}`)
+	html, err := json.Marshal(`<p>Verificação: ` + code + `</p>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := mapReport(database.ReportSnapshot{ID: identity.NewID(), InspectionID: identity.NewID(), CanonicalJSON: canonical, HTML: html})
+	if _, exists := view.CanonicalJSON["verificationCode"]; exists {
+		t.Fatalf("staff GraphQL projection exposed verification code: %+v", view.CanonicalJSON)
+	}
+	projected, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(projected), code) || strings.Contains(string(projected), "verificationCode") {
+		t.Fatalf("staff GraphQL JSON exposed verification code: %s", projected)
 	}
 }
 
@@ -187,3 +223,14 @@ type nilReader struct{}
 
 func (nilReader) Read([]byte) (int, error) { return 0, io.EOF }
 func (nilReader) Close() error             { return nil }
+
+func TestCustomerProcessingProjectionUsesSafePortugueseCopy(t *testing.T) {
+	value := &reportcore.ProcessingState{Status: "FAILED", Message: "A catalogação dos componentes falhou: detalhe interno do provider"}
+	got := mapCustomerReportProcessing(value)
+	if got == nil || got.Status != "FAILED" || got.Message == nil || *got.Message != "A análise não foi concluída." {
+		t.Fatalf("customer processing = %#v", got)
+	}
+	if strings.Contains(*got.Message, "provider") {
+		t.Fatalf("customer message leaked internal detail: %q", *got.Message)
+	}
+}

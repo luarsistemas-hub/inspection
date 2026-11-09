@@ -3,7 +3,9 @@ package handle_classified
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
+	"time"
 
 	"inspection/libs/identity"
 	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
@@ -14,7 +16,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, reference database.ReferenceSnapshot, evidence *[]core.Evidence) (*core.InventorySection, error) {
+// errClassificationSuperseded marks a classification older than the newest
+// COMPARE generation (a reissue opened it after the classification).
+var errClassificationSuperseded = errors.New("classification superseded by a newer inventory generation")
+
+func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, reference database.ReferenceSnapshot, classifiedAt time.Time, evidence *[]core.Evidence) (*core.InventorySection, error) {
 	if inspection.InventoryPromptSnapshotID == nil {
 		return nil, nil
 	}
@@ -57,7 +63,24 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 		return nil, err
 	}
 	jobs = inventoryexecutor.LatestGeneration(jobs)
+	// A reissue (Reanalyze) that opened the newest generation after this
+	// classification supersedes it: the classification of that generation
+	// produces the report, so this one must neither wait for nor mix with it.
+	for _, job := range jobs {
+		if job.CreatedAt.After(classifiedAt) {
+			return nil, errClassificationSuperseded
+		}
+	}
+	// A re-analysis (reissueReport) opens a new COMPARE generation. Until every
+	// job of the latest generation is terminal its results are incomplete, so
+	// the report waits instead of publishing an inventory without problems.
+	for _, job := range jobs {
+		if job.Status != "SUCCEEDED" && job.Status != "FAILED" && job.Status != "CANCELED" {
+			return nil, ErrClassifiedPrerequisitePending
+		}
+	}
 	jobIDs := make([]identity.ID, 0, len(jobs))
+	roomKeys := comparedRoomKeys(jobs)
 	envNameByJob := make(map[identity.ID]string, len(jobs))
 	for _, job := range jobs {
 		jobIDs = append(jobIDs, job.ID)
@@ -86,7 +109,7 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 		}
 	}
 	var answers []database.RequirementAnswer
-	if err := tx.WithContext(ctx).Table("capture.requirement_answers AS a").Select("a.*").Joins("JOIN capture.capture_drafts AS d ON d.tenant_id=a.tenant_id AND d.id=a.draft_id").Joins("JOIN inspections.responsibilities AS r ON r.tenant_id=d.tenant_id AND r.id=d.responsibility_id").Where("a.tenant_id=? AND r.inspection_id=? AND a.requirement_key LIKE 'env:%'", tenantID, inspection.ID).Find(&answers).Error; err != nil {
+	if err := tx.WithContext(ctx).Table("capture.requirement_answers AS a").Select("a.*").Joins("JOIN capture.capture_drafts AS d ON d.tenant_id=a.tenant_id AND d.id=a.draft_id").Joins("JOIN inspections.responsibilities AS r ON r.tenant_id=d.tenant_id AND r.id=d.responsibility_id").Where("a.tenant_id=? AND r.inspection_id=? AND d.status='SUBMITTED' AND a.requirement_key LIKE 'env:%'", tenantID, inspection.ID).Find(&answers).Error; err != nil {
 		return nil, err
 	}
 	impossibleRequirements := make(map[string]bool)
@@ -95,7 +118,13 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 			impossibleRequirements[answer.RequirementKey] = true
 		}
 	}
-	assessed, notObserved := 0, 0
+	// A scope without rooms ("escopo não definido") never establishes
+	// whole-room coverage; its coverage limitation says so.
+	var undefinedScope int64
+	if err := tx.WithContext(ctx).Model(&database.InspectionScopeSnapshot{}).Where("tenant_id=? AND inspection_id=? AND profile=?", tenantID, inspection.ID, "UNDEFINED").Count(&undefinedScope).Error; err != nil {
+		return nil, err
+	}
+	assessed, notObserved, noBasis := 0, 0, 0
 	for _, row := range rows {
 		if row.Status == "OUTSIDE_INVENTORY" {
 			entry := core.InventoryEntry{Environment: envNameByJob[row.JobID], Type: value(row.OutsideTypeCode), Name: value(row.OutsideName), Status: row.Status}
@@ -113,8 +142,20 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 		reason := value(row.Description)
 		if row.Status == "NOT_OBSERVED" && row.ReasonCode != nil {
 			reason = inventoryReasonLabel(*row.ReasonCode)
+			if undefinedScope > 0 && *row.ReasonCode == "ROOM_COVERAGE_INSUFFICIENT" {
+				reason = core.LimitationRoomCoverageUndefinedScope
+			}
 		}
 		entry := core.InventoryEntry{ItemIdentityID: item.IdentityID.String(), Environment: env.Name, Type: item.TypeCode, Name: item.Name, Status: row.Status, ConditionBefore: value(row.ConditionBefore), ConditionAfter: value(row.ConditionAfter), Reason: reason}
+		if row.Status == "NOT_OBSERVED" && noBasisReason(value(row.ReasonCode)) {
+			// "No basis to compare" (strict comparisons only) is a limit of the
+			// baseline, not an item the current capture failed to observe: it
+			// is counted and listed apart from "not observed".
+			entry.Status = core.InventoryNoBasis
+			noBasis++
+			section.Informational = append(section.Informational, entry)
+			continue
+		}
 		if row.Status == "IMPROVED" {
 			section.Informational = append(section.Informational, entry)
 			assessed++
@@ -125,12 +166,12 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 		}
 		if row.Status == "NOT_OBSERVED" {
 			notObserved++
-			if impossibleRequirements[environmentKey(env)] {
+			if impossibleRequirements[roomKeyOf(env, roomKeys)] {
 				continue
 			}
 		}
 		pairs := pairsByItem[row.JobID.String()+":"+row.ItemIdentityID.String()]
-		requirementKey := environmentKey(env)
+		requirementKey := roomKeyOf(env, roomKeys)
 		// Exception-first reports include pair evidence only for emitted problems.
 		if row.Status == "PRESENT_UNCHANGED" || row.Status == "IMPROVED" {
 			continue
@@ -173,7 +214,7 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 		}
 		name := requirementName(requirements, answer.RequirementKey)
 		for _, env := range envs {
-			if environmentKey(env) == answer.RequirementKey {
+			if roomKeyOf(env, roomKeys) == answer.RequirementKey {
 				name = env.Name
 				section.Problems = append(section.Problems, core.InventoryEntry{Environment: env.Name, Type: env.TypeCode, Name: env.Name, Status: "ENVIRONMENT_NOT_CAPTURED", Reason: "Ambiente não capturado conforme informado."})
 				break
@@ -181,7 +222,7 @@ func buildInventoryReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID
 		}
 		notCaptured = append(notCaptured, name)
 	}
-	section.Coverage = &core.InventoryCoverage{ExpectedItems: expected, AssessedItems: assessed, NotObserved: notObserved, EnvironmentsNotCaptured: notCaptured, EnvironmentsAddedDuringCapture: addedEnvironments}
+	section.Coverage = &core.InventoryCoverage{ExpectedItems: expected, AssessedItems: assessed, NotObserved: notObserved, NoBasis: noBasis, EnvironmentsNotCaptured: notCaptured, EnvironmentsAddedDuringCapture: addedEnvironments}
 	sort.SliceStable(section.Problems, func(i, j int) bool {
 		left, right := problemRank(section.Problems[i].Status), problemRank(section.Problems[j].Status)
 		if left != right {
@@ -205,12 +246,24 @@ func catalogingReport(ctx context.Context, tx *gorm.DB, tenantID identity.ID, in
 		}
 		return nil, err
 	}
-	return &core.InventorySection{Reference: core.InventoryReference{VersionID: draft.ID.String(), VersionNumber: draft.VersionNumber}, Problems: []core.InventoryEntry{}, Informational: []core.InventoryEntry{}}, nil
+	section := &core.InventorySection{Reference: core.InventoryReference{VersionID: draft.ID.String(), VersionNumber: draft.VersionNumber}, Problems: []core.InventoryEntry{}, Informational: []core.InventoryEntry{}}
+	var jobs []database.InventoryJob
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND kind='CATALOG'", tenantID, inspection.ID).Find(&jobs).Error; err != nil {
+		return nil, err
+	}
+	for _, job := range inventoryexecutor.LatestGeneration(jobs) {
+		if job.CandidateTruncated > 0 || job.CandidateImageTruncated > 0 {
+			section.CatalogDiagnostics = &core.InventoryCatalogDiagnostics{ItemsTruncated: job.CandidateTruncated, ImagesTruncated: job.CandidateImageTruncated}
+			break
+		}
+	}
+	return section, nil
 }
 
 func captureRequirements(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID) ([]capturecore.Requirement, error) {
 	var draft database.CaptureDraft
-	if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID).Order("created_at DESC").Take(&draft).Error; err != nil {
+	// A SUBMITTED draft wins over an OPEN recapture (see reportSnapshotRequirements).
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID).Order("(status='SUBMITTED') DESC, created_at DESC").Take(&draft).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -240,6 +293,12 @@ func requirementName(requirements []capturecore.Requirement, key string) string 
 	return "Ambiente"
 }
 
+// noBasisReason lists the strict reasons that leave a baseline item without
+// basis to compare: no baseline view, or a view without assessable condition.
+func noBasisReason(code string) bool {
+	return code == "NO_BASELINE_VIEW" || code == "BASELINE_CONDITION_UNASSESSED"
+}
+
 // environmentKey is the capture requirement key of a pinned environment.
 func environmentKey(env database.InventoryEnvironment) string {
 	return "env:" + env.IdentityID.String()
@@ -259,6 +318,19 @@ func inventoryReasonLabel(code string) string {
 		return "Ambiente não capturado."
 	case "ANALYSIS_FAILED":
 		return "Não foi possível concluir a análise."
+	// The codes below are recorded only by strict (report v3) comparisons.
+	case "NO_BASELINE_VIEW":
+		return core.LimitationNoBaselineView
+	case "BASELINE_CONDITION_UNASSESSED":
+		return core.LimitationNoBaselineCondition
+	case "PAIR_REJECTED":
+		return core.LimitationPairRejected
+	case "ROOM_COVERAGE_INSUFFICIENT":
+		return core.LimitationRoomCoverage
+	case "INCONSISTENT_CLAIM":
+		return core.LimitationInconsistentClaim
+	case "ENVIRONMENT_UNMATCHED":
+		return core.LimitationEnvironmentUnmatched
 	default:
 		return "Não foi possível avaliar o item."
 	}

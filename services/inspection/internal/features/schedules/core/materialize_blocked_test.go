@@ -18,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestMaterializeBlockedOriginContinuesBatchAndRetriesAfterBackoff(t *testing.T) {
+func TestIT058MaterializeBlockedOriginContinuesBatchAndRetriesAfterBackoff(t *testing.T) {
 	db := scheduleTestDB(t)
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	tenantID := identity.NewID()

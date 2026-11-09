@@ -38,17 +38,51 @@ var notObservedReasons = map[string]bool{"OBSTRUCTED": true, "FRAMING": true, "Q
 
 func (p *Processor) compare(ctx context.Context, job database.InventoryJob, in jobInput, definition prompt.Definition, fenced func(func(*gorm.DB) error) error) error {
 	current := representativeImages(in.current, maxRequestImages-1)
-	pairs, err := p.matchEvidence(ctx, job, in, current, definition.ModelAlias)
+	rules := compareRules{strict: in.strict, roomCovered: in.roomCovered}
+	items := in.items
+	var withoutBasis []database.InventoryItem
+	// A pairing revision judges only the items it must judge again; the others
+	// keep generation N-1's results and pairs, staff pairs included.
+	staffPairs := judgedStaffPairs(in.staffPairs, in.carryOver)
+	staff := staffItems(staffPairs)
+	if in.strict {
+		// A strict comparison never judges an item the baseline does not show,
+		// and judges a staff pairing with its own current images.
+		current = withStaffCurrent(in.current, current, staffPairs, maxRequestImages-1)
+		basis := baselineBasis(in)
+		items = make([]database.InventoryItem, 0, len(in.items))
+		for _, item := range in.items {
+			if in.carryOver != nil && !in.carryOver.rejudge[item.IdentityID] {
+				continue
+			}
+			if !basis[item.IdentityID] {
+				withoutBasis = append(withoutBasis, item)
+				continue
+			}
+			items = append(items, item)
+		}
+	}
+	matchInput := in
+	matchInput.items = make([]database.InventoryItem, 0, len(items))
+	for _, item := range items {
+		if !staff[item.IdentityID] {
+			matchInput.items = append(matchInput.items, item)
+		}
+	}
+	pairs, rejected, err := p.matchEvidence(ctx, job, matchInput, current, definition.ModelAlias)
 	if err != nil {
 		return err
 	}
+	// Staff pairings replace the matcher for their items and are kept with the
+	// job's pairs; only their confirmed pairs support a conclusion.
+	pairs = append(pairs, staffPairs...)
 	confirmed := make([]database.InventoryEvidencePair, 0, len(pairs))
 	for _, pair := range pairs {
 		if pair.Confirmed {
 			confirmed = append(confirmed, pair)
 		}
 	}
-	plan, err := compareRequest(definition, in.snapshot, in.environment, in.items, confirmed, in.origin, current)
+	plan, err := compareRequest(definition, in.snapshot, in.environment, items, confirmed, in.origin, current)
 	if err != nil {
 		return err
 	}
@@ -61,9 +95,38 @@ func (p *Processor) compare(ctx context.Context, job database.InventoryJob, in j
 		return fmt.Errorf("inventory compare output: %w", err)
 	}
 	now := p.deps.Now().UTC()
-	results := deriveResults(job, plan.items, output.Items, plan.pairs, now)
+	results := deriveResults(job, plan.items, output.Items, plan.pairs, now, rules)
 	for _, item := range plan.withheld {
 		results = append(results, notObserved(job, item, "NO_CORRESPONDING_VIEW", now))
+	}
+	if in.strict {
+		paired := make(map[identity.ID]bool, len(plan.pairs))
+		for _, pair := range plan.pairs {
+			paired[pair.ItemIdentityID] = true
+		}
+		for i := range results {
+			id := results[i].ItemIdentityID
+			if id != nil && results[i].Status == "NOT_OBSERVED" && value(results[i].ReasonCode) == "NO_CORRESPONDING_VIEW" && rejected[*id] && !paired[*id] {
+				reason := reasonPairRejected
+				results[i].ReasonCode = &reason
+			}
+		}
+		for _, item := range withoutBasis {
+			results = append(results, notObserved(job, item, reasonNoBaselineView, now))
+		}
+		if in.carryOver != nil {
+			judged := make([]database.InventoryItemResult, 0, len(results))
+			for _, row := range results {
+				// Informational observations are carried over with the rest
+				// of the room, never re-read from the new answer.
+				if row.ItemIdentityID != nil {
+					judged = append(judged, row)
+				}
+			}
+			carried, carriedPairs := carriedResults(job, in.carryOver, now)
+			results = append(carried, judged...)
+			pairs = append(carriedPairs, pairs...)
+		}
 	}
 	run, findings := inventoryFindings(job, in, plan.request, response, results, plan.pairs, now)
 	return fenced(func(tx *gorm.DB) error {
@@ -77,6 +140,9 @@ func (p *Processor) compare(ctx context.Context, job database.InventoryJob, in j
 			return nil
 		}
 		if err := replaceResults(tx, job, pairs, results); err != nil {
+			return err
+		}
+		if err := recordAnswerRef(tx, job, in); err != nil {
 			return err
 		}
 		if err := tx.Create(&run).Error; err != nil {
@@ -185,7 +251,7 @@ func compareRequest(definition prompt.Definition, snapshot database.AnalysisProm
 // deriveResults turns model claims into item results. Rows that reference an
 // unknown item or violate the vocabulary are dropped one by one instead of
 // failing the job; baseline items without a usable claim are NOT_OBSERVED.
-func deriveResults(job database.InventoryJob, items []database.InventoryItem, rows []compareRow, pairs []database.InventoryEvidencePair, now time.Time) []database.InventoryItemResult {
+func deriveResults(job database.InventoryJob, items []database.InventoryItem, rows []compareRow, pairs []database.InventoryEvidencePair, now time.Time, rules compareRules) []database.InventoryItemResult {
 	known := make(map[identity.ID]database.InventoryItem, len(items))
 	for _, item := range items {
 		known[item.IdentityID] = item
@@ -200,12 +266,23 @@ func deriveResults(job database.InventoryJob, items []database.InventoryItem, ro
 	outside := 0
 	for _, row := range rows {
 		description := boundedText(row.Description, 500)
+		if rules.strict {
+			// A strict (report v3) comparison never stores the model's free
+			// text: its report is generated from the structured outcome,
+			// conditions and controlled labels only, so no sentence can state
+			// responsibility, normal wear, cost or an unsupported conclusion.
+			description = nil
+		}
 		if row.Status == "OUTSIDE_INVENTORY" {
 			if row.ItemIdentityID != nil || row.OutsideTypeCode == nil || row.OutsideName == nil || !vocabulary.IsItemType(*row.OutsideTypeCode) || vocabulary.ValidateName(strings.TrimSpace(*row.OutsideName)) != nil || outside >= maxItemsPerEnvironment {
 				continue
 			}
 			outside++
 			name := strings.TrimSpace(*row.OutsideName)
+			if rules.strict {
+				// The controlled type label replaces the model's wording.
+				name, _ = vocabulary.ItemLabel(*row.OutsideTypeCode)
+			}
 			results = append(results, database.InventoryItemResult{ID: identity.NewID(), TenantID: job.TenantID, JobID: job.ID, InspectionID: job.InspectionID, Status: row.Status, OutsideTypeCode: row.OutsideTypeCode, OutsideName: &name, Description: description, CreatedAt: now})
 			continue
 		}
@@ -221,7 +298,7 @@ func deriveResults(job database.InventoryJob, items []database.InventoryItem, ro
 			continue
 		}
 		claim := ItemClaim{Status: row.Status, ReasonCode: value(row.ReasonCode), ConditionAfter: value(row.ConditionAfter)}
-		outcome := DeriveItemResult(claim, ItemFacts{ConditionBefore: item.Condition, Observation: item.Observation, Declared: item.Declared, Confirmed: confirmed[id], EnvironmentViewed: environmentViewed})
+		outcome := DeriveItemResult(claim, ItemFacts{ConditionBefore: item.Condition, Observation: item.Observation, Declared: item.Declared, Confirmed: confirmed[id], EnvironmentViewed: environmentViewed, Strict: rules.strict, Movable: vocabulary.IsMovableItem(item.TypeCode), RoomCovered: rules.roomCovered})
 		if outcome.Status == "" {
 			continue
 		}
@@ -255,6 +332,19 @@ type ItemFacts struct {
 	Confirmed bool
 	// EnvironmentViewed reports a confirmed current view of the environment.
 	EnvironmentViewed bool
+	// Strict applies the report v3 evidence rules: every conclusion needs a
+	// confirmed pair of this item, and proven absence of a movable item needs
+	// whole-room coverage.
+	Strict bool
+	// Movable reports an item that may change place inside its room.
+	Movable bool
+	// RoomCovered reports that the whole room was observed.
+	RoomCovered bool
+}
+
+// compareRules carries the per-job facts of the strict (v3) rules.
+type compareRules struct {
+	strict, roomCovered bool
 }
 
 // ItemOutcome is the stored status; an empty Status means the claim is dropped.
@@ -268,11 +358,22 @@ func DeriveItemResult(claim ItemClaim, facts ItemFacts) ItemOutcome {
 	notObserved := func(reason string) ItemOutcome { return ItemOutcome{Status: "NOT_OBSERVED", ReasonCode: reason} }
 	switch claim.Status {
 	case "NOT_OBSERVED":
-		if !notObservedReasons[claim.ReasonCode] {
+		if !notObservedReasons[claim.ReasonCode] || (facts.Strict && !strictModelReasons[claim.ReasonCode]) {
 			return notObserved("NO_CORRESPONDING_VIEW")
 		}
 		return notObserved(claim.ReasonCode)
 	case "MISSING":
+		if facts.Strict {
+			// A vacant former location alone never proves that a movable item
+			// is absent: the whole room must have been observed.
+			if !facts.Confirmed {
+				return notObserved("NO_CORRESPONDING_VIEW")
+			}
+			if facts.Movable && !facts.RoomCovered {
+				return notObserved(reasonRoomCoverage)
+			}
+			return ItemOutcome{Status: "MISSING"}
+		}
 		if facts.Confirmed || (facts.EnvironmentViewed && facts.Observation == "OBSERVED") {
 			return ItemOutcome{Status: "MISSING"}
 		}
@@ -280,6 +381,9 @@ func DeriveItemResult(claim ItemClaim, facts ItemFacts) ItemOutcome {
 	case "PRESENT_UNCHANGED", "CONDITION_CHANGED", "IMPROVED":
 	default:
 		return ItemOutcome{}
+	}
+	if facts.Strict {
+		return deriveStrictCondition(claim, facts)
 	}
 	if !facts.Declared && !facts.Confirmed {
 		return notObserved("NO_CORRESPONDING_VIEW")
@@ -306,6 +410,50 @@ func DeriveItemResult(claim ItemClaim, facts ItemFacts) ItemOutcome {
 		status = "PRESENT_UNCHANGED"
 	}
 	return ItemOutcome{Status: status, ConditionAfter: after}
+}
+
+// deriveStrictCondition applies the report v3 rules to an "unchanged" or
+// change claim. The outcome is derived from the two conditions, never taken
+// from the claim: "unchanged" needs assessable and equal conditions,
+// "changed" assessable conditions that differ (a better one is reported as
+// improved) and "improved" a better assessable current condition, all over
+// the item's own confirmed pair. A baseline view without an assessable
+// condition gives no basis to compare (BASELINE_CONDITION_UNASSESSED, apart
+// from an item the baseline does not show); a current condition that cannot be
+// assessed, or a claim the conditions contradict, leaves the item not
+// observed with its limitation. Declared items follow the same rules: their
+// current condition is never reported as "unchanged" when it differs.
+func deriveStrictCondition(claim ItemClaim, facts ItemFacts) ItemOutcome {
+	notObserved := func(reason string) ItemOutcome { return ItemOutcome{Status: "NOT_OBSERVED", ReasonCode: reason} }
+	if !facts.Confirmed {
+		// "Unchanged" and change outcomes need the item's own paired views,
+		// even for declared items.
+		return notObserved("NO_CORRESPONDING_VIEW")
+	}
+	before := conditionRank(facts.ConditionBefore)
+	if before == 0 {
+		return notObserved(reasonBaselineConditionUnassessed)
+	}
+	if claim.ConditionAfter == "NOT_ASSESSABLE" {
+		return notObserved("QUALITY")
+	}
+	current := conditionRank(claim.ConditionAfter)
+	if current == 0 {
+		return notObserved(reasonInconsistentClaim)
+	}
+	derived := "PRESENT_UNCHANGED"
+	switch {
+	case current > before:
+		derived = "CONDITION_CHANGED"
+	case current < before:
+		derived = "IMPROVED"
+	}
+	// "Changed" names a change in either direction; "unchanged" and
+	// "improved" must match the conditions exactly.
+	if derived != claim.Status && (claim.Status != "CONDITION_CHANGED" || derived == "PRESENT_UNCHANGED") {
+		return notObserved(reasonInconsistentClaim)
+	}
+	return ItemOutcome{Status: derived, ConditionAfter: claim.ConditionAfter}
 }
 
 // conditionRank orders the scale NEW > GOOD > FAIR > POOR; a higher rank is worse.

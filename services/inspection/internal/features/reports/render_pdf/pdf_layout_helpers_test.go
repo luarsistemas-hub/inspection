@@ -113,7 +113,7 @@ func assertVVTask07PDFGeometry(t *testing.T, data []byte, wantImages int) []vvTa
 				t.Errorf("page %d text uses %.2f pt font, below %.1f pt minimum: %q", pageIndex+1, text.fontSize, minPDFReadableFontPt, text.text)
 			}
 			if text.x < pdfLeftRightMarginPt-0.5 || text.x+text.estimatedWidth > page.Width-pdfLeftRightMarginPt+0.5 || text.y+text.fontSize < pdfBottomMarginPt-0.5 || text.y+text.fontSize > page.Height-pdfTopMarginPt+0.5 {
-				t.Errorf("page %d text block x=%.2f..%.2f y=%.2f exceeds margins", pageIndex+1, text.x, text.x+text.estimatedWidth, text.y)
+				t.Errorf("page %d text block x=%.2f..%.2f y=%.2f exceeds margins: %q", pageIndex+1, text.x, text.x+text.estimatedWidth, text.y, text.text)
 			}
 		}
 		pages[pageIndex] = vvTask07PDFPage{images: pageImageGeometry, texts: pageTexts}

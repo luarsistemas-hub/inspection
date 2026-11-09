@@ -7,9 +7,17 @@ model:
 models:
   Query:
     fields:
+      inspectionCoverage:
+        resolver: true
       llmUsageByTenant:
         resolver: true
       llmUsageByInspection:
+        resolver: true
+  Mutation:
+    fields:
+      recordComponentAnswer:
+        resolver: true
+      upsertHandoverRecord:
         resolver: true
   JSON:
     model:
@@ -21,6 +29,10 @@ models:
   OriginVersion:
     fields:
       counterpartyInvitations:
+        resolver: true
+  Inspection:
+    fields:
+      scope:
         resolver: true
 resolver:
   layout: follow-schema

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,8 +26,10 @@ import (
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
+	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	segmentresolve "inspection/services/inspection/internal/features/segments/resolve_definition"
+	templatecatalog "inspection/services/inspection/internal/features/templates/catalog"
 	templateresolve "inspection/services/inspection/internal/features/templates/resolve_template"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
@@ -238,7 +241,7 @@ func TestREO_IT_009ParticipantBeforePropertyIsRejected(t *testing.T) {
 func TestREO_IT_010ConcurrentPropertySavesUseOptimisticVersion(t *testing.T) {
 	admin, runtime := openREOIntegrationDB(t)
 	seed := reoSession(t, admin, runtime, onboardingsession.StepAgency, 1, "AGENCY")
-	payload := map[string]any{"address": "Rua A, 100", "deadline": "2099-01-01", "purpose": "SALE"}
+	payload := map[string]any{"address": "Rua A, 100", "deadline": "2099-01-01", "purpose": "SALE", "propertyType": "APARTMENT"}
 	var wg sync.WaitGroup
 	results := make(chan error, 2)
 	for range 2 {
@@ -593,6 +596,7 @@ func TestREO_UT026ServiceCompleteMapsInspectionFailureAndPreservesCheckpoints(t 
 		func() error { return templateresolve.Setup(templateresolve.Dependencies{DB: runtime, Bus: bus}) },
 		func() error { return participantget.Setup(participantget.Dependencies{DB: runtime, Bus: bus}) },
 		func() error { return assetget.Setup(assetget.Dependencies{DB: runtime, Bus: bus}) },
+		func() error { return originresolve.Setup(originresolve.Dependencies{DB: runtime, Bus: bus}) },
 		func() error { return getprompt.Setup(getprompt.Dependencies{DB: runtime, Bus: bus}) },
 	}
 	for _, setup := range setups {
@@ -627,6 +631,21 @@ func TestREO_UT026ServiceCompleteMapsInspectionFailureAndPreservesCheckpoints(t 
 	if requests != 0 || inspections != 0 {
 		t.Fatalf("failed creation persisted requests=%d inspections=%d", requests, inspections)
 	}
+	// Test seam only: production onboarding always creates CHECKLIST_ONLY. If a
+	// future entrypoint supplies FIXED_ORIGIN, the shared core guard still applies.
+	failCreate = false
+	service.ComparisonMode = templatecatalog.FixedOrigin
+	_, err = service.Complete(context.Background(), seed.locator, seed.csrf, "it-021-moveout")
+	if code, field, message := apperror.Public(err); code != apperror.InvalidState || field != "referenceVersionId" || !strings.Contains(message, "catalogada e aprovada") {
+		t.Fatalf("IT-057 onboarding move-out guard code=%s field=%q message=%q err=%v", code, field, message, err)
+	}
+	if err := admin.Model(&database.Inspection{}).Where("tenant_id=? AND source_key=?", seed.tenant, "onboarding:"+seed.id.String()).Count(&inspections).Error; err != nil {
+		t.Fatal(err)
+	}
+	if inspections != 0 {
+		t.Fatalf("IT-057 onboarding move-out without a baseline persisted %d inspections", inspections)
+	}
+	service.ComparisonMode = ""
 	var afterSession database.OnboardingSession
 	if err := admin.First(&afterSession, "id=?", seed.id).Error; err != nil {
 		t.Fatal(err)

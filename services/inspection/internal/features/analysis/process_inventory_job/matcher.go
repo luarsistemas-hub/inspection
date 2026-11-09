@@ -34,10 +34,13 @@ type matchOutput struct {
 // of one environment. Each distinct origin evidence is proposed once against
 // the environment's current views and the proposal is verified; a pair is
 // confirmed only when both calls answer SAME_VIEW. The pair is recorded for
-// every baseline item that cites that origin evidence.
-func (p *Processor) matchEvidence(ctx context.Context, job database.InventoryJob, in jobInput, current []evidenceInput, modelAlias string) ([]database.InventoryEvidencePair, error) {
+// every baseline item that cites that origin evidence. The returned set lists
+// the items of an origin whose proposal named a current evidence outside the
+// job's room: that pair was rejected.
+func (p *Processor) matchEvidence(ctx context.Context, job database.InventoryJob, in jobInput, current []evidenceInput, modelAlias string) ([]database.InventoryEvidencePair, map[identity.ID]bool, error) {
+	rejected := map[identity.ID]bool{}
 	if len(current) == 0 || len(in.originRows) == 0 {
-		return nil, nil
+		return nil, rejected, nil
 	}
 	originByID := make(map[string]evidenceInput, len(in.origin))
 	for _, input := range in.origin {
@@ -72,7 +75,12 @@ func (p *Processor) matchEvidence(ctx context.Context, job database.InventoryJob
 		origin := originByID[originID]
 		proposals, err := p.callMatch(ctx, modelAlias, origin, current, nil)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if foreignProposal(proposals, originID, currentByID) {
+			for _, itemIdentity := range itemsByOrigin[originID] {
+				rejected[itemIdentity] = true
+			}
 		}
 		proposal, ok := chooseProposal(proposals, originID, currentByID)
 		if !ok {
@@ -83,7 +91,7 @@ func (p *Processor) matchEvidence(ctx context.Context, job database.InventoryJob
 		if proposal.Decision == "SAME_VIEW" {
 			verified, err := p.callMatch(ctx, modelAlias, origin, []evidenceInput{chosen}, []matchPair{proposal})
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			confirmed = pairVerified(proposal, verified)
 		}
@@ -92,7 +100,7 @@ func (p *Processor) matchEvidence(ctx context.Context, job database.InventoryJob
 			pairs = append(pairs, database.InventoryEvidencePair{ID: identity.NewID(), TenantID: job.TenantID, JobID: job.ID, ItemIdentityID: itemIdentity, OriginKind: origin.Kind, OriginMediaID: origin.MediaID, OriginFrameID: origin.FrameID, CurrentKind: chosen.Kind, CurrentMediaID: chosen.MediaID, CurrentFrameID: chosen.FrameID, Decision: proposal.Decision, Confirmed: confirmed, Reason: reason, CreatedAt: p.deps.Now().UTC()})
 		}
 	}
-	return pairs, nil
+	return pairs, rejected, nil
 }
 
 func (p *Processor) callMatch(ctx context.Context, modelAlias string, origin evidenceInput, current []evidenceInput, proposed []matchPair) ([]matchPair, error) {

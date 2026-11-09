@@ -13,7 +13,7 @@ type InventoryView struct {
 
 // InventoryCoverage contains aggregate coverage only, without internal IDs.
 type InventoryCoverage struct {
-	ExpectedItems, AssessedItems, NotObserved               int
+	ExpectedItems, AssessedItems, NotObserved, NoBasis      int
 	EnvironmentsNotCaptured, EnvironmentsAddedDuringCapture []string
 }
 
@@ -21,7 +21,11 @@ type InventoryCoverage struct {
 type InventoryEntry struct {
 	Environment, Type, Name, Status         string
 	ConditionBefore, ConditionAfter, Reason *string
-	Pairs                                   []InventoryPair
+	// StatusLabel is the report v3 label of Status, in the comparison
+	// vocabulary (reportcore.InventoryStatusLabel); nil for reports v1/v2,
+	// whose readers keep their historical labels.
+	StatusLabel *string
+	Pairs       []InventoryPair
 }
 
 // InventoryPair exposes only the evidence references needed to display a pair.
@@ -33,7 +37,7 @@ type InventoryPair struct {
 
 // MapInventory projects a v2 inventory section through an explicit customer allowlist.
 func MapInventory(snapshot reportcore.Snapshot) *InventoryView {
-	if snapshot.SchemaVersion != 2 || snapshot.Inventory == nil {
+	if snapshot.SchemaVersion < 2 || snapshot.Inventory == nil {
 		return nil
 	}
 	view := &InventoryView{ReferenceVersionNumber: snapshot.Inventory.Reference.VersionNumber, Purpose: snapshot.Inventory.Reference.Purpose}
@@ -43,8 +47,16 @@ func MapInventory(snapshot reportcore.Snapshot) *InventoryView {
 	}
 	view.Problems = mapEntriesWithAvailability(snapshot.Inventory.Problems, evidenceByID)
 	view.Informational = mapEntriesWithAvailability(snapshot.Inventory.Informational, evidenceByID)
+	if snapshot.SchemaVersion >= 3 {
+		for _, entries := range [][]InventoryEntry{view.Problems, view.Informational} {
+			for i := range entries {
+				label := reportcore.InventoryStatusLabel(entries[i].Status)
+				entries[i].StatusLabel = &label
+			}
+		}
+	}
 	if coverage := snapshot.Inventory.Coverage; coverage != nil {
-		view.Coverage = &InventoryCoverage{ExpectedItems: coverage.ExpectedItems, AssessedItems: coverage.AssessedItems, NotObserved: coverage.NotObserved, EnvironmentsNotCaptured: append([]string(nil), coverage.EnvironmentsNotCaptured...), EnvironmentsAddedDuringCapture: append([]string(nil), coverage.EnvironmentsAddedDuringCapture...)}
+		view.Coverage = &InventoryCoverage{ExpectedItems: coverage.ExpectedItems, AssessedItems: coverage.AssessedItems, NotObserved: coverage.NotObserved, NoBasis: coverage.NoBasis, EnvironmentsNotCaptured: append([]string(nil), coverage.EnvironmentsNotCaptured...), EnvironmentsAddedDuringCapture: append([]string(nil), coverage.EnvironmentsAddedDuringCapture...)}
 	}
 	return view
 }
@@ -73,6 +85,8 @@ func safeAvailability(value string) string {
 	switch value {
 	case "AVAILABLE", "EXPIRED", "MISSING", "SENSITIVE_BLOCKED":
 		return value
+	case "UNAVAILABLE":
+		return "MISSING"
 	default:
 		return "AVAILABLE"
 	}
@@ -81,13 +95,23 @@ func safeAvailability(value string) string {
 func mapEntries(entries []reportcore.InventoryEntry) []InventoryEntry {
 	result := make([]InventoryEntry, 0, len(entries))
 	for _, entry := range entries {
-		mapped := InventoryEntry{Environment: entry.Environment, Type: entry.Type, Name: entry.Name, Status: entry.Status, ConditionBefore: optionalText(entry.ConditionBefore), ConditionAfter: optionalText(entry.ConditionAfter), Reason: optionalText(entry.Reason), Pairs: make([]InventoryPair, 0, len(entry.Pairs))}
+		mapped := InventoryEntry{Environment: entry.Environment, Type: entry.Type, Name: entry.Name, Status: entry.Status, ConditionBefore: optionalText(entry.ConditionBefore), ConditionAfter: optionalText(entry.ConditionAfter), Reason: optionalText(customerReason(entry.Reason)), Pairs: make([]InventoryPair, 0, len(entry.Pairs))}
 		for _, pair := range entry.Pairs {
 			mapped.Pairs = append(mapped.Pairs, InventoryPair{OriginEvidenceID: pair.Origin, CurrentEvidenceID: pair.Current, TimestampMS: pair.TimestampMS})
 		}
 		result = append(result, mapped)
 	}
 	return result
+}
+
+// customerReason shows a reader the neutral text of a gap whose issued
+// reason describes internal pairing work (the same rule as the comparison
+// limitations); every other reason is kept as issued.
+func customerReason(reason string) string {
+	if limitations := customerLimitations([]string{reason}); len(limitations) == 1 {
+		return limitations[0]
+	}
+	return reason
 }
 
 func optionalText(value string) *string {

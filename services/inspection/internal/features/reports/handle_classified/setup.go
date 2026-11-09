@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
+	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	"inspection/services/inspection/internal/features/notifications/core"
 	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
@@ -21,6 +23,7 @@ import (
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -103,6 +106,33 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) || payload.ClassificationRunID == (identity.ID{}) || payload.VideoPlanID != nil && *payload.VideoPlanID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
+		// rejectPermanently ends a v3 photo event (pinned descriptive scope)
+		// whose inputs can never produce a valid report. Retrying would not help.
+		// When a reissue request is still QUEUED for the inspection, the event is
+		// acknowledged in this transaction and the request is closed as FAILED
+		// instead of blocking new requests forever. Otherwise (for example, the
+		// first classification) it returns messaging.ErrPermanent, so the event
+		// is dead-lettered and stays replayable, as for video and v1/v2 events.
+		// Nothing else has been written by then: the CRITICAL alert is requested
+		// only after a snapshot exists.
+		rejectPermanently := func(reason string, cause error) error {
+			closed := tx.WithContext(ctx).Model(&database.AuditEvent{}).
+				Where("tenant_id=? AND action='report.reissue_requested' AND target_id=? AND outcome='QUEUED'", envelope.TenantID, payload.InspectionID.String()).
+				Update("outcome", "FAILED")
+			if closed.Error != nil {
+				return closed.Error
+			}
+			if closed.RowsAffected == 0 {
+				// No reissue waits for this event: dead-letter it, as before, so
+				// it can be replayed once its inputs are corrected.
+				return fmt.Errorf("%w: %s: %v", messaging.ErrPermanent, reason, cause)
+			}
+			slog.WarnContext(ctx, "report_classified_permanent_failure", "tenantId", envelope.TenantID.String(), "inspectionId", payload.InspectionID.String(), "reason", reason, "error", cause)
+			if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+				recorder.Set("failed")
+			}
+			return nil
+		}
 		var inspection database.Inspection
 		// FOR UPDATE, not SHARE: the handler later writes under this lock (and the
 		// snapshot publishes through the same transaction), so a shared lock would
@@ -116,6 +146,8 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		if inspection.MediaKind == "VIDEO" {
+			// An event that contradicts its own classification run is a contract
+			// violation: it is dead-lettered without a receipt, as before.
 			if payload.VideoPlanID == nil || class.VideoPlanID == nil || *payload.VideoPlanID != *class.VideoPlanID {
 				return messaging.ErrPermanent
 			}
@@ -129,7 +161,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		} else if err != gorm.ErrRecordNotFound {
 			return err
 		}
-		if previousClassification != "CRITICAL" && class.Classification == "CRITICAL" && inspection.Status != "CANCELED" && inspection.Status != "INVALIDATED" {
+		// The CRITICAL alert is requested only after the report snapshot exists
+		// (below): an event acknowledged without a report must not commit an
+		// alert that points to no report.
+		requestCriticalAlert := func() error {
+			if previousClassification == "CRITICAL" || class.Classification != "CRITICAL" || inspection.Status == "CANCELED" || inspection.Status == "INVALIDATED" {
+				return nil
+			}
 			configuredRecipients, err := loadCriticalRecipients(ctx, tx, envelope.TenantID, inspection)
 			if err != nil {
 				return err
@@ -138,9 +176,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			for _, recipient := range configuredRecipients {
 				recipients = append(recipients, requestdelivery.Recipient{ID: recipient.RecipientMembershipID.String(), ChannelID: recipient.ID.String(), Channel: recipient.Channel, Destination: recipient.Destination, Internal: true, Verified: recipient.VerifiedAt != nil, Selected: recipient.Selected})
 			}
-			if err := requestdelivery.Request(ctx, tx, deps.Notifications, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients}); err != nil {
-				return err
-			}
+			return requestdelivery.Request(ctx, tx, deps.Notifications, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients})
 		}
 		var reference database.ReferenceSnapshot
 		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).First(&reference).Error; err != nil {
@@ -225,7 +261,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				continue
 			}
 			var answer database.RequirementAnswer
-			if err := tx.Where("tenant_id=? AND requirement_key=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?))", envelope.TenantID, job.RequirementKey, envelope.TenantID, envelope.TenantID, payload.InspectionID).Order("updated_at DESC").First(&answer).Error; err != nil {
+			if err := latestSubmittedAnswer(ctx, tx, envelope.TenantID, payload.InspectionID, job.RequirementKey, &answer); err != nil {
 				if err == gorm.ErrRecordNotFound {
 					continue
 				}
@@ -296,12 +332,27 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				requirements[i].AnalysisStatus = "PENDING"
 			}
 		}
-		var promptSnapshot database.AnalysisPromptSnapshot
-		if err := tx.Where("id=?", inspection.AnalysisPromptSnapshotID).First(&promptSnapshot).Error; err != nil {
+		promptSnapshot, err := resolvePromptSnapshot(ctx, tx, class.PromptSnapshotID, inspection.AnalysisPromptSnapshotID)
+		if err != nil {
 			return err
 		}
 		evidence = append(referenceEvidence, evidence...)
-		inventorySection, err := buildInventoryReport(ctx, tx, envelope.TenantID, inspection, reference, &evidence)
+		beforeInventory := make(map[string]bool, len(evidence))
+		for _, item := range evidence {
+			beforeInventory[item.ID] = true
+		}
+		inventorySection, err := buildInventoryReport(ctx, tx, envelope.TenantID, inspection, reference, class.CreatedAt, &evidence)
+		if errors.Is(err, errClassificationSuperseded) {
+			// Acknowledged without a version: the newer classification publishes.
+			slog.InfoContext(ctx, "report_classified_superseded", "tenantId", envelope.TenantID.String(), "inspectionId", payload.InspectionID.String(), "classificationRunId", class.ID.String())
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// Report v3 carries the complete comparison of every baseline item
+		// beside the historical exception-first inventory section.
+		comparison, err := buildComparisonReport(ctx, tx, envelope.TenantID, inspection, reference, &evidence)
 		if err != nil {
 			return err
 		}
@@ -310,6 +361,52 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		evidence = append(promotedEvidence, evidence...)
+		evidence, err = includeSupplementalMedia(ctx, tx, envelope.TenantID, payload.InspectionID, evidence)
+		if err != nil {
+			return err
+		}
+		var catalogJobs []database.InventoryJob
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND kind='CATALOG'", envelope.TenantID, payload.InspectionID).Order("generation DESC, created_at DESC").Find(&catalogJobs).Error; err != nil {
+			return err
+		}
+		catalogJobs = inventoryexecutor.LatestGeneration(catalogJobs)
+		var checklist *reportcore.ChecklistSection
+		var processing *reportcore.ProcessingState
+		var scopeSnapshot *reportcore.ScopeSnapshot
+		var handover *reportcore.HandoverSection
+		var provenance *reportcore.Provenance
+		if shouldBuildDescriptiveReport(inspection.MediaKind) {
+			checklist, processing, scopeSnapshot, handover, provenance, err = buildDescriptiveReport(ctx, tx, envelope.TenantID, payload.InspectionID, evidence, findings, promptSnapshot.CanonicalDigest, aggregateReportProcessing(jobs, catalogJobs))
+			if errors.Is(err, messaging.ErrPermanent) {
+				return rejectPermanently("descriptive_input_invalid", err)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		catalogFailed := false
+		catalogIncomplete := false
+		for _, job := range catalogJobs {
+			if job.Status == "FAILED" {
+				catalogFailed = true
+			} else if job.Status != "SUCCEEDED" && job.Status != "COMPLETED" {
+				catalogIncomplete = true
+			}
+		}
+		applyCatalogAvailability(checklist, processing, catalogFailed, catalogIncomplete)
+		if checklist == nil {
+			comparison = nil
+		}
+		// Report v3: the exception-first inventory states the same per-item
+		// results and counts as the complete comparison.
+		alignInventoryWithComparison(inventorySection, comparison)
+		// The alignment drops pairs the comparison does not state (a gap
+		// never shows a pair): their images, added for the inventory
+		// section only, would be orphans in the gallery and the index.
+		if comparison != nil {
+			evidence = dropOrphanInventoryEvidence(evidence, beforeInventory, inventorySection, comparison, checklist, handover, findings)
+			keepProvenanceEvidence(provenance, evidence)
+		}
 		policy, err := effectivePublicationPolicy(ctx, tx, envelope.TenantID)
 		if err != nil {
 			return err
@@ -317,6 +414,9 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		// A canceled or invalidated inspection never releases a report to
 		// customers on its own, whatever the tenant policy says.
 		publicationMode := policy.Mode
+		if checklist != nil {
+			publicationMode = publicationcore.Automatic
+		}
 		if inspection.Status == "CANCELED" || inspection.Status == "INVALIDATED" {
 			publicationMode = ""
 		}
@@ -325,27 +425,148 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if publicationMode == publicationcore.Automatic && deps.CreateSnapshotInTx == nil {
 			return ErrAutomaticPublicationNeedsTransaction
 		}
-		snapshotInput := generatesnapshot.Input{PublicationMode: publicationMode, PublicationPolicyVersion: policy.Version, TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence, Inventory: inventorySection}
+		snapshotInput := generatesnapshot.Input{PublicationMode: publicationMode, PublicationPolicyVersion: policy.Version, TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence, Inventory: inventorySection, Checklist: checklist, Processing: processing, Scope: scopeSnapshot, Handover: handover, Provenance: provenance, Comparison: comparison}
 		var result generatesnapshot.Result
+		// A v3 snapshot is created behind a savepoint so a permanent rejection
+		// acknowledges the event without committing any partial snapshot write.
+		savepoint := checklist != nil && deps.CreateSnapshotInTx != nil
+		if savepoint {
+			if err := tx.SavePoint(reportSnapshotSavepoint).Error; err != nil {
+				return err
+			}
+		}
 		if deps.CreateSnapshotInTx != nil {
 			result, err = deps.CreateSnapshotInTx(ctx, tx, snapshotInput)
 		} else {
 			result, err = deps.CreateSnapshot(ctx, snapshotInput)
 		}
-		if errors.Is(err, generatesnapshot.ErrFrameIntegrity) {
-			return messaging.ErrPermanent
+		if checklist == nil {
+			// Video and legacy v1/v2 reports keep their dead-letter behavior.
+			if errors.Is(err, generatesnapshot.ErrFrameIntegrity) {
+				return messaging.ErrPermanent
+			}
+		} else if reason := permanentSnapshotFailure(err); reason != "" {
+			if savepoint {
+				if rollbackErr := tx.RollbackTo(reportSnapshotSavepoint).Error; rollbackErr != nil {
+					return rollbackErr
+				}
+			}
+			return rejectPermanently(reason, err)
 		}
 		if err != nil {
+			return err
+		}
+		if err := requestCriticalAlert(); err != nil {
 			return err
 		}
 		now := now().UTC()
 		if err := UpsertTriageReviewCase(ctx, tx, envelope.TenantID, payload.InspectionID, class, result.Version, now); err != nil {
 			return err
 		}
+		if err := tx.WithContext(ctx).Model(&database.AuditEvent{}).
+			Where("tenant_id=? AND action='report.reissue_requested' AND target_id=? AND outcome='QUEUED'", envelope.TenantID, payload.InspectionID.String()).
+			Update("outcome", "COMPLETED").Error; err != nil {
+			return err
+		}
 		eventID := identity.NewID()
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "report.snapshot_created.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"snapshotId": result.SnapshotID, "inspectionId": payload.InspectionID, "version": result.Version}})
 
 	}, nil
+}
+
+const reportSnapshotSavepoint = "report_snapshot_v3"
+
+// permanentSnapshotFailure names a v3 snapshot error that no retry can fix.
+func permanentSnapshotFailure(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, generatesnapshot.ErrFrameIntegrity):
+		return "frame_integrity"
+	case errors.Is(err, reportcore.ErrInvalidSnapshot):
+		return "snapshot_validation_failed"
+	case errors.Is(err, messaging.ErrPermanent):
+		return "snapshot_rejected"
+	default:
+		return ""
+	}
+}
+
+func shouldBuildDescriptiveReport(mediaKind string) bool { return mediaKind == "PHOTO" }
+
+func aggregateReportProcessing(jobs []database.ComparisonJob, catalogJobs []database.InventoryJob) string {
+	if len(jobs) == 0 && len(catalogJobs) == 0 {
+		return "INCONCLUSIVE"
+	}
+	status := "COMPLETED"
+	for _, job := range jobs {
+		if job.Status == "FAILED" {
+			return "FAILED"
+		}
+		if job.Status == "INCONCLUSIVE" {
+			status = "INCONCLUSIVE"
+		}
+		if job.Status != "COMPLETED" && job.Status != "FAILED" {
+			status = "INCONCLUSIVE"
+		}
+	}
+	for _, job := range catalogJobs {
+		if job.Status == "FAILED" {
+			return "FAILED"
+		}
+		if job.Status != "SUCCEEDED" && job.Status != "COMPLETED" {
+			status = "INCONCLUSIVE"
+		}
+	}
+	return status
+}
+
+func applyCatalogAvailability(checklist *reportcore.ChecklistSection, processing *reportcore.ProcessingState, failed, incomplete bool) {
+	if !failed && !incomplete {
+		return
+	}
+	if checklist != nil {
+		for i := range checklist.Rooms {
+			for j := range checklist.Rooms[i].Components {
+				component := &checklist.Rooms[i].Components[j]
+				component.Description = ""
+				component.Condition = ""
+				component.AssessedScope = ""
+				if failed {
+					component.Limitations = append(component.Limitations, "Falha na catalogação; a condição não foi determinada.")
+				} else {
+					component.Limitations = append(component.Limitations, "Catalogação pendente ou inconclusiva; a condição não foi determinada.")
+				}
+			}
+		}
+	}
+	if processing == nil {
+		return
+	}
+	if failed {
+		processing.Status = "FAILED"
+		processing.Message = "A catalogação dos componentes falhou; suas condições não foram determinadas."
+	} else if processing.Status != "FAILED" {
+		processing.Status = "INCONCLUSIVE"
+		processing.Message = "A catalogação dos componentes está pendente ou inconclusiva."
+	}
+}
+
+func resolvePromptSnapshot(ctx context.Context, tx *gorm.DB, classificationSnapshotID, legacySnapshotID identity.ID) (database.AnalysisPromptSnapshot, error) {
+	for _, snapshotID := range []identity.ID{classificationSnapshotID, legacySnapshotID} {
+		if snapshotID == (identity.ID{}) {
+			continue
+		}
+		var snapshot database.AnalysisPromptSnapshot
+		err := tx.WithContext(ctx).Where("id=?", snapshotID).Take(&snapshot).Error
+		if err == nil {
+			return snapshot, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return database.AnalysisPromptSnapshot{}, err
+		}
+	}
+	return database.AnalysisPromptSnapshot{}, nil
 }
 
 // effectivePublicationPolicy returns the tenant policy in force when the
@@ -536,6 +757,13 @@ func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.I
 	return context, requirements, evidence, nil
 }
 
+// latestSubmittedAnswer loads the newest answer to one requirement among the
+// inspection's SUBMITTED capture drafts. An OPEN (in progress or abandoned)
+// recapture never contributes evidence or flags to an immutable report.
+func latestSubmittedAnswer(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, requirementKey string, answer *database.RequirementAnswer) error {
+	return capturecore.LatestSubmittedAnswer(ctx, tx, tenantID, inspectionID, requirementKey, answer)
+}
+
 func reportFlags(requirementKey string, flags []string) []string {
 	if strings.HasPrefix(requirementKey, "env:") {
 		return flags
@@ -685,9 +913,11 @@ func reportVideoFrameEvidence(item database.VideoPlanItem, membership database.V
 
 func reportSnapshotRequirements(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, templateDefinition []byte) ([]reportcore.Requirement, error) {
 	var draft database.CaptureDraft
+	// A SUBMITTED draft wins over an OPEN recapture, whose focused requirement
+	// list must not replace the report's requirements before it is submitted.
 	err := tx.WithContext(ctx).
 		Where("tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID).
-		Order("updated_at DESC").First(&draft).Error
+		Order("(status='SUBMITTED') DESC, updated_at DESC").First(&draft).Error
 	if err == nil {
 		return reportRequirementsFromCapture(draft.Requirements)
 	}

@@ -2,6 +2,10 @@ query ExternalCaptureBootstrap {
   externalCapture {
     responsibilityId recaptureRequestId recaptureDeadlineAt replacementDeadlineAt status confirmationOnly kind mediaKind disclosureVersion captureLayout reference policy
     environments { requirementKey identityId typeCode name expected addedDuringCapture mediaCount status }
+    scope
+    componentAnswers { requirementKey componentKey viewKey state reason evidenceIds version }
+    handoverRecords { recordKey kind payload mediaIds declarant version }
+    coverage { expected fullyAssessed partiallyAssessed notObserved notApplicable impossible unknownScope suggestions { requirementKey roomKey roomName componentKey componentLabel missingView } pendingRecords }
     reviewHandoff { inspectionId originVersionId }
     referenceItems { mediaId evidenceId sourceMediaId timestampMs environment component view ambiguous gap requirementKey description reason availability imageUrl imageUrlExpiresAt }
     requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed environmentIdentityId environmentTypeCode environmentName expected addedDuringCapture }
@@ -41,6 +45,9 @@ mutation PresignMediaParts($input: PresignMediaPartsInput!) { presignMediaParts(
 mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) { completeMediaUpload(input: $input) { media { id status } userErrors { code field message correlationId } clientMutationId } }
 
 mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMetadata(input: $input) { media { id status replacesMediaId } userErrors { code field message correlationId } clientMutationId } }
+
+mutation RecordComponentAnswer($input: RecordComponentAnswerInput!) { recordComponentAnswer(input: $input) { answer { requirementKey componentKey viewKey state reason evidenceIds version } userErrors { code field message correlationId } clientMutationId } }
+mutation UpsertHandoverRecord($input: UpsertHandoverRecordInput!) { upsertHandoverRecord(input: $input) { record { recordKey kind payload mediaIds declarant version } userErrors { code field message correlationId } clientMutationId } }
 
 mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 

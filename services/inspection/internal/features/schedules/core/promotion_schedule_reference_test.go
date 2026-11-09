@@ -55,7 +55,7 @@ func TestFollowActiveOriginKeepsCreatedOccurrenceReferenceAfterNextPromotion(t *
 		if query.VersionID != nil {
 			t.Fatalf("follow-active schedule pinned version %s", *query.VersionID)
 		}
-		return originresolve.Result{Version: database.OriginVersion{ID: activeOrigin, MediaKind: "PHOTO"}}, nil
+		return originresolve.Result{Version: database.OriginVersion{ID: activeOrigin, Status: "ACTIVE", HasInventory: true, MediaKind: "PHOTO"}}, nil
 	})
 	var materializedReferences []*identity.ID
 	if err := bus.RegisterCommand(createoccurrence.Command{}, func(ctx context.Context, raw any) (any, error) {

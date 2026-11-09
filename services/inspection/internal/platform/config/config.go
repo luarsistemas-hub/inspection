@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -24,6 +25,7 @@ type Config struct {
 	MigrationDatabaseURL           string
 	AllowedOrigin                  string
 	AllowedOrigins                 []string
+	TrustedProxyCIDRs              []string
 	AdminOrigin                    string
 	CaptureOrigin                  string
 	OnboardingOrigin               string
@@ -141,7 +143,7 @@ func Load() (Config, error) {
 	}
 	c := Config{
 		Environment: environment, Stage: stage, HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
-		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), RuntimeDatabaseURL: env("INSPECTION_RUNTIME_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: os.Getenv("INSPECTION_MIGRATION_DATABASE_URL"), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), AdminOrigin: os.Getenv("INSPECTION_ADMIN_ORIGIN"), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
+		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), RuntimeDatabaseURL: env("INSPECTION_RUNTIME_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: os.Getenv("INSPECTION_MIGRATION_DATABASE_URL"), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), TrustedProxyCIDRs: splitExact(os.Getenv("INSPECTION_TRUSTED_PROXY_CIDRS")), AdminOrigin: os.Getenv("INSPECTION_ADMIN_ORIGIN"), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
 		OnboardingOrigin: os.Getenv("INSPECTION_ONBOARDING_ORIGIN"), TurnstileEnabled: envBool("INSPECTION_TURNSTILE_ENABLED", environment != "local" && environment != "test"), TurnstileSiteKey: os.Getenv("INSPECTION_TURNSTILE_SITE_KEY"), TurnstileSecret: os.Getenv("INSPECTION_TURNSTILE_SECRET"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
 		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
@@ -437,6 +439,11 @@ func strictEnvBool(key string, fallback bool) (bool, error) {
 
 // Validate fails closed for security-sensitive values.
 func (c Config) Validate() error {
+	for _, cidr := range c.TrustedProxyCIDRs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("configuration: INSPECTION_TRUSTED_PROXY_CIDRS contains invalid CIDR %q", cidr)
+		}
+	}
 	if len(c.AllowedOrigins) == 0 && c.AllowedOrigin != "" {
 		c.AllowedOrigins = []string{c.AllowedOrigin}
 	}

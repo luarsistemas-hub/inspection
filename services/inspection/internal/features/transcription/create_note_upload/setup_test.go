@@ -116,6 +116,12 @@ func TestSetupAdmitsScopedNoteAndReservesUploadUT003(t *testing.T) {
 	if err := db.Exec("UPDATE templates.template_versions SET definition_json=? WHERE tenant_id=? AND id=?", []byte(`{"captureLayout":"ENVIRONMENTS"}`), tenant, templateVersionID).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec("UPDATE templates.template_versions SET schema_version=3 WHERE tenant_id=? AND id=?", tenant, templateVersionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if eligible, err := environmentCaptureEligible(db, tenant, inspectionID); err != nil || !eligible {
+		t.Fatalf("v3 environment template should allow voice notes: eligible=%v err=%v", eligible, err)
+	}
 	retry, err := Setup(context.Background(), deps, Command{
 		TenantID: tenant, ResponsibilityID: responsibilityID, ClientNoteID: noteID.String(), RequirementKey: "room-1",
 		VideoAttemptID: &attemptID, StartMS: &start, EndMS: &end, TimeBasis: "CAPTURE_CLOCK",

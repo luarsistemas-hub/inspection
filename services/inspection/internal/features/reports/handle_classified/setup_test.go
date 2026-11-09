@@ -67,6 +67,49 @@ func TestAnalysisStatusAggregatesBySeverityAndRequiresAllUnchangedUT012(t *testi
 	}
 }
 
+func TestResolvePromptSnapshotFallsBackWhenClassificationSnapshotIsMissing(t *testing.T) {
+	db := newPromptSnapshotTestDB(t)
+	legacy := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: "REAL_ESTATE", Task: "FINDINGS", DefinitionJSON: []byte(`{}`), CanonicalDigest: "legacy-digest", CreatedAt: time.Now().UTC()}
+	if err := db.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := resolvePromptSnapshot(context.Background(), db, identity.NewID(), legacy.ID)
+	if err != nil {
+		t.Fatalf("resolve missing classification snapshot: %v", err)
+	}
+	if got.ID != legacy.ID || got.CanonicalDigest != legacy.CanonicalDigest {
+		t.Fatalf("resolved snapshot=%+v, want legacy snapshot %s", got, legacy.ID)
+	}
+}
+
+func TestResolvePromptSnapshotAllowsNoDigestWhenBothSnapshotsAreMissing(t *testing.T) {
+	db := newPromptSnapshotTestDB(t)
+
+	got, err := resolvePromptSnapshot(context.Background(), db, identity.NewID(), identity.NewID())
+	if err != nil {
+		t.Fatalf("resolve missing snapshots: %v", err)
+	}
+	if got.ID != (identity.ID{}) || got.CanonicalDigest != "" {
+		t.Fatalf("resolved snapshot=%+v, want empty snapshot", got)
+	}
+}
+
+func newPromptSnapshotTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE analysis.prompt_snapshots (id text PRIMARY KEY, analysis_type text NOT NULL, task text NOT NULL, definition_json text NOT NULL, canonical_digest text NOT NULL, schema_version integer NOT NULL, created_at datetime NOT NULL)").Error; err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
 func TestMergeCurrentOnlyAnalysisKeepsNoRelevantChangeNull(t *testing.T) {
 	merged := mergeRequirementAnalysis(
 		requirementAnalysis{mode: "CURRENT_ONLY", status: "COMPLETED"},

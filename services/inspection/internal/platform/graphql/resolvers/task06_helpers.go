@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +24,9 @@ import (
 func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	var canonical map[string]any
 	_ = json.Unmarshal(row.CanonicalJSON, &canonical)
+	if canonical != nil {
+		delete(canonical, "verificationCode")
+	}
 	html := string(row.HTML)
 	var decodedHTML string
 	if json.Unmarshal(row.HTML, &decodedHTML) == nil {
@@ -35,6 +39,9 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	}
 	var snapshot reportcore.Snapshot
 	_ = json.Unmarshal(row.CanonicalJSON, &snapshot)
+	if snapshot.VerificationCode != "" {
+		html = strings.ReplaceAll(html, snapshot.VerificationCode, "")
+	}
 	snapshot = reportcore.LocalizeVideoPresentation(snapshot)
 	context := &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{ID: snapshot.Context.Asset.ID, Name: snapshot.Context.Asset.Name, ExternalKey: snapshot.Context.Asset.ExternalKey, Address: snapshot.Context.Asset.Address}, Participant: &graphql1.ReportParticipantContext{ID: snapshot.Context.Participant.ID, Name: snapshot.Context.Participant.Name}, Template: &graphql1.ReportTemplateContext{ID: snapshot.Context.Template.ID, Name: snapshot.Context.Template.Name, Version: snapshot.Context.Template.Version}, Inspection: &graphql1.ReportInspectionContext{ProjectID: optional(snapshot.Context.Inspection.ProjectID), StageID: optional(snapshot.Context.Inspection.StageID), StageLabel: optional(snapshot.Context.Inspection.StageLabel), DueAt: optional(snapshot.Context.Inspection.DueAt), SubmittedAt: optional(snapshot.Context.Inspection.SubmittedAt), GeneratedAt: snapshot.Context.Inspection.GeneratedAt}}
 	requirements := make([]*graphql1.ReportRequirement, 0, len(snapshot.Requirements))
@@ -46,7 +53,7 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	for _, requirement := range snapshot.Requirements {
 		labels[requirement.Key] = requirement.Label
 	}
-	for _, value := range snapshot.Evidence {
+	for evidenceIndex, value := range snapshot.Evidence {
 		var timestamp *int
 		if value.TimestampMS != nil {
 			v := int(*value.TimestampMS)
@@ -69,7 +76,7 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 		if snapshot.VideoPlanID != "" && value.EvidenceKind == "VIDEO_FRAME" {
 			planID = optional(snapshot.VideoPlanID)
 		}
-		evidence = append(evidence, &graphql1.ReportEvidence{ID: value.ID, RequirementKey: value.RequirementKey, Role: value.Role, Description: optional(value.Description), CaptureSource: optional(value.CaptureSource), CapturedAt: optional(value.CapturedAt), DisplayDigest: optional(value.DisplayDigest), Availability: reportAvailability(value.Availability), SourceAvailability: optional(value.SourceAvailability), EvidenceKind: optional(value.EvidenceKind), FrameID: frameID, TimestampMs: timestamp, PtsMicros: pts, PreparationID: preparationID, PlanID: planID, SourceMediaID: sourceID, Component: optional(labels[value.RequirementKey]), Label: optional(labels[value.RequirementKey]), Flags: value.Flags})
+		evidence = append(evidence, &graphql1.ReportEvidence{ID: value.ID, RequirementKey: value.RequirementKey, Role: value.Role, Description: optional(value.Description), CaptureSource: optional(value.CaptureSource), CapturedAt: optional(value.CapturedAt), DisplayDigest: optional(value.DisplayDigest), Availability: reportAvailability(value.Availability), SourceAvailability: optional(value.SourceAvailability), EvidenceKind: optional(value.EvidenceKind), FrameID: frameID, TimestampMs: timestamp, PtsMicros: pts, PreparationID: preparationID, PlanID: planID, SourceMediaID: sourceID, Component: optional(labels[value.RequirementKey]), Label: optional(labels[value.RequirementKey]), Reference: optional(fmt.Sprintf("E%03d", evidenceIndex+1)), Flags: value.Flags})
 	}
 	findings := make([]*graphql1.ReportFinding, 0, len(snapshot.Findings))
 	for _, value := range snapshot.Findings {
@@ -79,7 +86,93 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	for _, value := range snapshot.Timeline {
 		timeline = append(timeline, &graphql1.ReportTimelineEntry{StageID: value.StageID, Classification: optional(value.Classification), Status: value.Status, Position: value.Position})
 	}
-	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Inventory: mapCustomerInventory(customerreport.MapInventory(snapshot)), Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+	reasonLabels := make([]string, 0, len(snapshot.ReasonCodes))
+	for _, code := range snapshot.ReasonCodes {
+		reasonLabels = append(reasonLabels, reportcore.ReasonLabel(code))
+	}
+	return &graphql1.Report{EvidenceNotice: reportcore.EvidenceNotice(snapshot), ScopeStatements: append([]string{}, snapshot.ScopeStatements...), ReasonLabels: reasonLabels, ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, ClassificationLabel: reportcore.ClassificationLabelForSnapshot(snapshot), Limited: reportcore.ClassificationLimitedForSnapshot(snapshot), JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Inventory: mapCustomerInventory(customerreport.MapInventory(snapshot)), Checklist: mapInternalChecklist(snapshot), Processing: mapReportProcessing(snapshot.Processing), Handover: mapInternalHandover(snapshot), Comparison: mapInternalComparison(snapshot.Comparison), Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+}
+
+func mapInternalChecklist(snapshot reportcore.Snapshot) *graphql1.ReportChecklist {
+	value := snapshot.Checklist
+	if value == nil {
+		return nil
+	}
+	out := &graphql1.ReportChecklist{Coverage: &graphql1.ReportChecklistCoverage{Expected: value.Coverage.Expected, FullyAssessed: value.Coverage.FullyAssessed, PartiallyAssessed: value.Coverage.PartiallyAssessed, NotObserved: value.Coverage.NotObserved, NotApplicable: value.Coverage.NotApplicable, Impossible: value.Coverage.Impossible, UnknownScope: value.Coverage.UnknownScope}, Rooms: []*graphql1.ReportChecklistRoom{}}
+	for _, room := range value.Rooms {
+		r := &graphql1.ReportChecklistRoom{Key: room.Key, TypeCode: room.TypeCode, Name: room.Name, Components: []*graphql1.ReportChecklistComponent{}}
+		for _, component := range room.Components {
+			r.Components = append(r.Components, &graphql1.ReportChecklistComponent{Key: component.Key, TypeCode: optional(component.TypeCode), Label: component.Label, Status: component.Status, Description: optional(component.Description), Condition: optional(component.Condition), ReviewStatus: optional(component.ReviewStatus), ReviewLabel: optional(reportcore.PresentationLabel(component.ReviewStatus)), AssessedScope: optional(component.AssessedScope), NotAssessed: component.NotAssessed, EvidenceIds: component.EvidenceIDs, Limitations: component.Limitations, Conflict: component.Conflict, OutsideScope: component.OutsideScope, AttributeSources: formatAttributeSources(snapshot, component)})
+		}
+		out.Rooms = append(out.Rooms, r)
+	}
+	return out
+}
+
+func formatAttributeSources(snapshot reportcore.Snapshot, component reportcore.ChecklistComponent) []string {
+	out := make([]string, 0, len(component.AttributeSources))
+	for _, source := range component.AttributeSources {
+		out = append(out, reportcore.FormatAttributeSourceForSnapshot(snapshot, source))
+	}
+	return out
+}
+
+func mapReportProcessing(value *reportcore.ProcessingState) *graphql1.ReportProcessing {
+	if value == nil {
+		return nil
+	}
+	return &graphql1.ReportProcessing{Status: value.Status, Message: optional(value.Message)}
+}
+
+func mapCustomerReportProcessing(value *reportcore.ProcessingState) *graphql1.ReportProcessing {
+	if value == nil {
+		return nil
+	}
+	message := reportcore.CustomerProcessingMessage(value.Status)
+	return &graphql1.ReportProcessing{Status: value.Status, Message: optional(message)}
+}
+
+func mapInternalHandover(snapshot reportcore.Snapshot) *graphql1.ReportHandover {
+	value := snapshot.Handover
+	if value == nil {
+		return nil
+	}
+	out := &graphql1.ReportHandover{Entries: []*graphql1.ReportHandoverEntry{}}
+	for _, entry := range value.Entries {
+		var payload map[string]any
+		_ = json.Unmarshal(entry.Payload, &payload)
+		if payload == nil {
+			payload = map[string]any{}
+		}
+		payload["presentation"] = reportcore.FormatHandoverForSnapshot(snapshot, entry, true)
+		out.Entries = append(out.Entries, &graphql1.ReportHandoverEntry{Key: entry.Key, Kind: entry.Kind, Status: entry.Status, Payload: payload, EvidenceIds: entry.EvidenceIDs, Declarant: optional(entry.Declarant)})
+	}
+	return out
+}
+
+func mapCustomerChecklist(value *customerreport.ChecklistView) *graphql1.CustomerChecklist {
+	if value == nil {
+		return nil
+	}
+	out := &graphql1.CustomerChecklist{Coverage: &graphql1.ReportChecklistCoverage{Expected: value.Coverage.Expected, FullyAssessed: value.Coverage.FullyAssessed, PartiallyAssessed: value.Coverage.PartiallyAssessed, NotObserved: value.Coverage.NotObserved, NotApplicable: value.Coverage.NotApplicable, Impossible: value.Coverage.Impossible, UnknownScope: value.Coverage.UnknownScope}, Rooms: []*graphql1.CustomerChecklistRoom{}}
+	for _, room := range value.Rooms {
+		r := &graphql1.CustomerChecklistRoom{Name: room.Name, Components: []*graphql1.CustomerChecklistComponent{}}
+		for _, component := range room.Components {
+			r.Components = append(r.Components, &graphql1.CustomerChecklistComponent{Label: component.Label, Status: component.Status, Description: optional(component.Description), Condition: optional(component.Condition), ReviewLabel: optional(component.ReviewLabel), EvidenceIds: component.EvidenceIDs, Limitations: component.Limitations})
+		}
+		out.Rooms = append(out.Rooms, r)
+	}
+	return out
+}
+func mapCustomerHandover(value *customerreport.ChecklistView) *graphql1.CustomerHandover {
+	if value == nil {
+		return nil
+	}
+	out := &graphql1.CustomerHandover{Entries: []*graphql1.CustomerHandoverEntry{}}
+	for _, entry := range value.Handover {
+		out.Entries = append(out.Entries, &graphql1.CustomerHandoverEntry{Label: entry.Label, Kind: entry.Kind, Status: entry.Status, Type: optional(entry.Type), Value: optional(entry.Value), Unit: optional(entry.Unit), Date: optional(entry.Date), Declarant: optional(entry.Declarant), EvidenceIds: entry.EvidenceIDs})
+	}
+	return out
 }
 
 func mapCustomerInventory(section *customerreport.InventoryView) *graphql1.CustomerInventory {
@@ -88,7 +181,7 @@ func mapCustomerInventory(section *customerreport.InventoryView) *graphql1.Custo
 	}
 	out := &graphql1.CustomerInventory{ReferenceVersionNumber: section.ReferenceVersionNumber, Purpose: section.Purpose, Problems: mapCustomerInventoryEntries(section.Problems), Informational: mapCustomerInventoryEntries(section.Informational)}
 	if section.Coverage != nil {
-		out.Coverage = &graphql1.CustomerInventoryCoverage{ExpectedItems: section.Coverage.ExpectedItems, AssessedItems: section.Coverage.AssessedItems, NotObserved: section.Coverage.NotObserved, EnvironmentsNotCaptured: section.Coverage.EnvironmentsNotCaptured, EnvironmentsAddedDuringCapture: section.Coverage.EnvironmentsAddedDuringCapture}
+		out.Coverage = &graphql1.CustomerInventoryCoverage{ExpectedItems: section.Coverage.ExpectedItems, AssessedItems: section.Coverage.AssessedItems, NotObserved: section.Coverage.NotObserved, NoBasis: section.Coverage.NoBasis, EnvironmentsNotCaptured: section.Coverage.EnvironmentsNotCaptured, EnvironmentsAddedDuringCapture: section.Coverage.EnvironmentsAddedDuringCapture}
 	}
 	return out
 }
@@ -104,7 +197,7 @@ func customerInventoryFromSnapshot(raw []byte) *graphql1.CustomerInventory {
 func mapCustomerInventoryEntries(entries []customerreport.InventoryEntry) []*graphql1.CustomerInventoryEntry {
 	out := make([]*graphql1.CustomerInventoryEntry, 0, len(entries))
 	for _, entry := range entries {
-		item := &graphql1.CustomerInventoryEntry{Environment: entry.Environment, Type: entry.Type, Name: entry.Name, Status: entry.Status, ConditionBefore: entry.ConditionBefore, ConditionAfter: entry.ConditionAfter, Reason: entry.Reason, Pairs: make([]*graphql1.CustomerInventoryPair, 0, len(entry.Pairs))}
+		item := &graphql1.CustomerInventoryEntry{Environment: entry.Environment, Type: entry.Type, Name: entry.Name, Status: entry.Status, StatusLabel: entry.StatusLabel, ConditionBefore: entry.ConditionBefore, ConditionAfter: entry.ConditionAfter, Reason: entry.Reason, Pairs: make([]*graphql1.CustomerInventoryPair, 0, len(entry.Pairs))}
 		for _, pair := range entry.Pairs {
 			var timestamp *int
 			if pair.TimestampMS != nil {
@@ -390,4 +483,85 @@ func inspectionScopeCondition(meta requestctx.Metadata, inspectionColumn string)
 		return "1=0", nil
 	}
 	return inspectionColumn + " IN (SELECT s.id FROM inspections.inspections s WHERE s.tenant_id = ? AND (" + strings.Join(clauses, " OR ") + "))", args
+}
+
+func reportHistoryLabels(snapshot reportcore.Snapshot) (string, string) {
+	scope := "Escopo não disponível nesta versão"
+	if snapshot.Checklist != nil {
+		coverage := snapshot.Checklist.Coverage
+		if coverage.UnknownScope {
+			scope = "Escopo não definido"
+		} else {
+			noun := "componentes"
+			if coverage.Expected == 1 {
+				noun = "componente"
+			}
+			scope = fmt.Sprintf("%d %s no escopo", coverage.Expected, noun)
+		}
+	}
+	statuses := []string{}
+	if snapshot.Checklist != nil {
+		for _, room := range snapshot.Checklist.Rooms {
+			for _, component := range room.Components {
+				if component.ReviewStatus == "" {
+					continue
+				}
+				label := reportcore.PresentationLabel(component.ReviewStatus)
+				if !slices.Contains(statuses, label) {
+					statuses = append(statuses, label)
+				}
+			}
+		}
+	}
+	review := strings.Join(statuses, " · ")
+	if review == "" && snapshot.Processing != nil {
+		review = reportcore.AnalysisStatusLabel(snapshot.Processing.Status)
+	}
+	if review == "" {
+		review = "Revisão não informada"
+	}
+	return scope, review
+}
+
+func reportHistoryLabelsFromJSON(canonical []byte) [2]string {
+	var facts struct {
+		Coverage *struct {
+			Expected     int  `json:"expected"`
+			UnknownScope bool `json:"unknownScope"`
+		} `json:"coverage"`
+		ReviewStatuses []string `json:"reviewStatuses"`
+		Processing     *struct {
+			Status string `json:"status"`
+		} `json:"processing"`
+	}
+	if err := json.Unmarshal(canonical, &facts); err != nil {
+		return [2]string{"Escopo não disponível nesta versão", "Revisão não informada"}
+	}
+	scope := "Escopo não disponível nesta versão"
+	if facts.Coverage != nil {
+		if facts.Coverage.UnknownScope {
+			scope = "Escopo não definido"
+		} else {
+			noun := "componentes"
+			if facts.Coverage.Expected == 1 {
+				noun = "componente"
+			}
+			scope = fmt.Sprintf("%d %s no escopo", facts.Coverage.Expected, noun)
+		}
+	}
+	labels := make([]string, 0, len(facts.ReviewStatuses))
+	for _, status := range facts.ReviewStatuses {
+		label := reportcore.PresentationLabel(status)
+		if !slices.Contains(labels, label) {
+			labels = append(labels, label)
+		}
+	}
+	review := strings.Join(labels, " · ")
+	if review == "" && facts.Processing != nil {
+		review = reportcore.AnalysisStatusLabel(facts.Processing.Status)
+	}
+	if review == "" {
+		review = "Revisão não informada"
+	}
+	return [2]string{scope, review}
 }

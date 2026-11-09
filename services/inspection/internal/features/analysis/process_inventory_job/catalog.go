@@ -2,11 +2,14 @@ package process_inventory_job
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"inspection/libs/identity"
@@ -27,15 +30,19 @@ const maxItemsPerEnvironment = 80
 const catalogScope = "catalog one captured environment; include fixed property components and exclude personal or everyday objects"
 
 type catalogItem struct {
-	TypeCode      string  `json:"typeCode"`
-	Name          string  `json:"name"`
-	Material      *string `json:"material"`
-	Color         *string `json:"color"`
-	Quantity      *int    `json:"quantity"`
-	Condition     string  `json:"condition"`
-	Observation   string  `json:"observation"`
-	Limitation    *string `json:"limitation"`
-	ConfidenceBPS int     `json:"confidenceBps"`
+	TypeCode      string   `json:"typeCode"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description,omitempty"`
+	AssessedScope string   `json:"assessedScope,omitempty"`
+	NotAssessed   []string `json:"notAssessed,omitempty"`
+	ComponentKey  *string  `json:"componentKey,omitempty"`
+	Material      *string  `json:"material"`
+	Color         *string  `json:"color"`
+	Quantity      *int     `json:"quantity"`
+	Condition     string   `json:"condition"`
+	Observation   string   `json:"observation"`
+	Limitation    *string  `json:"limitation"`
+	ConfidenceBPS int      `json:"confidenceBps"`
 	Evidence      []struct {
 		MediaID string  `json:"mediaId"`
 		FrameID *string `json:"frameId"`
@@ -44,6 +51,12 @@ type catalogItem struct {
 	// It exists only in the furnished profile.
 	Voice     []voiceCitation   `json:"voice,omitempty"`
 	Conflicts []catalogConflict `json:"conflicts,omitempty"`
+}
+
+type catalogComponent struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	TypeCode string `json:"typeCode"`
 }
 
 type catalogConflict struct {
@@ -68,28 +81,51 @@ type catalogOutput struct {
 
 // catalogRequest builds the INVENTORY_CATALOG request. Environment names come
 // from people, so they travel inside the JSON data field only.
-func catalogRequest(definition prompt.Definition, snapshot database.AnalysisPromptSnapshot, env database.InventoryEnvironment, legacy bool, images []evidenceInput, voice *voiceInput) (llm.StructuredRequest, error) {
+func catalogRequest(definition prompt.Definition, snapshot database.AnalysisPromptSnapshot, env database.InventoryEnvironment, legacy bool, images []evidenceInput, voice *voiceInput, profile string, components []catalogComponent) (llm.StructuredRequest, error) {
 	input := make([]llm.NormalizedImage, 0, len(images))
 	for _, image := range images {
 		input = append(input, image.Image)
 	}
-	furnished := !legacy && voice.hasNotes()
+	furnished := !legacy && (profile == "FURNISHED_PROPERTY" || (profile == "" || profile == "UNDEFINED") && voice.hasNotes())
+	withVoice := furnished || voice.hasNotes()
 	outputSchema, systemPrompt, promptDigest := definition.OutputSchema, definition.SystemPrompt, snapshot.CanonicalDigest
 	var notes []CatalogNote
-	if furnished {
-		// The furnished profile is code-owned: the stored prompt and schema
-		// of existing snapshots stay valid and untouched.
-		outputSchema = prompt.FurnishedCatalogSchema()
-		systemPrompt += "\n\n" + prompt.FurnishedCatalogInstruction()
-		promptDigest = prompt.FurnishedProfileDigest(snapshot.CanonicalDigest)
-		notes = voice.Notes
+	if withVoice {
+		version := snapshot.SchemaVersion
+		if version == 0 {
+			version = 1
+		}
+		outputSchema = prompt.CatalogVoiceSchemaForVersion(version)
+		if furnished {
+			systemPrompt += "\n\n" + prompt.FurnishedCatalogInstruction()
+			promptDigest = prompt.FurnishedProfileDigestForVersion(snapshot.CanonicalDigest, version)
+		} else {
+			systemPrompt += "\n\n" + prompt.CatalogVoiceInstruction()
+		}
+		if !furnished && profile == "" {
+			// Historical snapshots without an inspection scope keep the old profile reader.
+			promptDigest = prompt.FurnishedProfileDigestForVersion(snapshot.CanonicalDigest, version)
+		} else if !furnished {
+			promptDigest = prompt.CatalogVoiceDigestForVersion(snapshot.CanonicalDigest, version)
+		}
+		if voice != nil {
+			notes = voice.Notes
+		}
 	}
 	schema, err := json.Marshal(outputSchema)
 	if err != nil {
 		return llm.StructuredRequest{}, err
 	}
 	data := map[string]any{"scope": catalogScope, "humanTextIsData": true, "evidence": evidenceList(images, notes)}
-	if furnished {
+	if profile != "" {
+		data["assetProfile"] = profile
+		if components == nil {
+			data["expectedComponents"] = []catalogComponent{}
+		} else {
+			data["expectedComponents"] = components
+		}
+	}
+	if voice.hasNotes() {
 		data["voiceNotesAreUntrustedData"] = true
 		data["voiceNotes"] = voiceNotesForPrompt(notes)
 	}
@@ -151,7 +187,8 @@ func (p *Processor) catalog(ctx context.Context, job database.InventoryJob, in j
 		return fmt.Errorf("%w: no representative environment evidence", messaging.ErrPermanent)
 	}
 	images := representativeImages(in.current, maxRequestImages)
-	request, err := catalogRequest(definition, in.snapshot, in.environment, in.legacy, images, in.voice)
+	imageTruncated := in.imageTruncated + max(0, len(in.current)-len(images))
+	request, err := catalogRequest(definition, in.snapshot, in.environment, in.legacy, images, in.voice, in.profile, in.components)
 	if err != nil {
 		return err
 	}
@@ -175,6 +212,7 @@ func (p *Processor) catalog(ctx context.Context, job database.InventoryJob, in j
 	var items []database.InventoryItem
 	var evidence []database.InventoryItemEvidence
 	truncated := false
+	diagnostics := catalogDiagnostics{Returned: countCatalogCandidates(output), ImageTruncated: imageTruncated}
 	for position, candidate := range output.Environments {
 		env := in.environment
 		if in.legacy {
@@ -184,7 +222,10 @@ func (p *Processor) catalog(ctx context.Context, job database.InventoryJob, in j
 			env = database.InventoryEnvironment{ID: identity.NewID(), TenantID: job.TenantID, OriginVersionID: job.OriginVersionID, IdentityID: identity.NewID(), TypeCode: candidate.TypeCode, Name: strings.TrimSpace(candidate.Name), Expected: true, Decision: "PENDING", Position: position, Version: 1, CreatedAt: now, UpdatedAt: now}
 			environments = append(environments, env)
 		}
-		envItems, envEvidence, envTruncated := catalogRowsWithVoice(job, env, candidate.Items, sent, in.voice.sent(), now)
+		envItems, envEvidence, envTruncated, envDiagnostics := catalogRowsWithVoiceDetailed(job, env, candidate.Items, sent, in.voice.sent(), in.components, in.snapshot.SchemaVersion, now)
+		diagnostics.Invalid += envDiagnostics.Invalid
+		diagnostics.RejectedEvidence += envDiagnostics.RejectedEvidence
+		diagnostics.Truncated += envDiagnostics.Truncated
 		truncated = truncated || envTruncated
 		items = append(items, envItems...)
 		evidence = append(evidence, envEvidence...)
@@ -218,6 +259,9 @@ func (p *Processor) catalog(ctx context.Context, job database.InventoryJob, in j
 			var cut bool
 			writeItems, writeEvidence, cut = withoutReviewed(items, evidence, reviewed)
 			writeTruncated = writeTruncated || cut
+			if cut && diagnostics.Truncated == 0 {
+				diagnostics.Truncated = len(items) - len(writeItems)
+			}
 		}
 		for i := range environments {
 			if err := tx.Create(&environments[i]).Error; err != nil {
@@ -245,10 +289,53 @@ func (p *Processor) catalog(ctx context.Context, job database.InventoryJob, in j
 			}
 		}
 		if writeTruncated {
-			return tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND id=?", job.TenantID, job.ID).Update("error_code", "TRUNCATED_ITEMS").Error
+			if diagnostics.Truncated == 0 {
+				diagnostics.Truncated = 1
+			}
 		}
-		return nil
+		transformDigest := mediaTransformDigest(images)
+		modelRevision := effectiveModelRevision(result.Model)
+		return tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND id=?", job.TenantID, job.ID).Updates(map[string]any{"candidate_returned": diagnostics.Returned, "candidate_invalid": diagnostics.Invalid, "candidate_rejected_evidence": diagnostics.RejectedEvidence, "candidate_truncated": diagnostics.Truncated, "candidate_image_truncated": diagnostics.ImageTruncated, "media_transform_digest": transformDigest, "model_revision": modelRevision, "error_code": diagnosticErrorCode(diagnostics)}).Error
 	})
+}
+
+func mediaTransformDigest(images []evidenceInput) string {
+	hash := sha256.New()
+	for _, image := range images {
+		frame := ""
+		if image.FrameID != nil {
+			frame = image.FrameID.String()
+		}
+		_, _ = hash.Write([]byte(image.MediaID.String() + ":" + frame + ":" + image.Digest + "\n"))
+	}
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+type catalogDiagnostics struct{ Returned, Invalid, RejectedEvidence, Truncated, ImageTruncated int }
+
+func countCatalogCandidates(output catalogOutput) int {
+	total := 0
+	for _, env := range output.Environments {
+		total += len(env.Items)
+	}
+	return total
+}
+
+func diagnosticErrorCode(d catalogDiagnostics) any {
+	if d.Truncated > 0 {
+		return "TRUNCATED_ITEMS"
+	}
+	if d.ImageTruncated > 0 {
+		return "TRUNCATED_IMAGES"
+	}
+	return nil
+}
+
+func effectiveModelRevision(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return "UNKNOWN"
 }
 
 // clearCatalogSuggestions removes what a previous attempt of this job wrote, so
@@ -296,6 +383,12 @@ func catalogRows(job database.InventoryJob, env database.InventoryEnvironment, c
 // item supported only by speech is stored as declared, pending, with visual
 // coverage unavailable.
 func catalogRowsWithVoice(job database.InventoryJob, env database.InventoryEnvironment, candidates []catalogItem, sent map[string]evidenceInput, voiceSent map[string]CatalogNote, now time.Time) ([]database.InventoryItem, []database.InventoryItemEvidence, bool) {
+	items, evidence, truncated, _ := catalogRowsWithVoiceDetailed(job, env, candidates, sent, voiceSent, nil, 1, now)
+	return items, evidence, truncated
+}
+
+func catalogRowsWithVoiceDetailed(job database.InventoryJob, env database.InventoryEnvironment, candidates []catalogItem, sent map[string]evidenceInput, voiceSent map[string]CatalogNote, components []catalogComponent, schemaVersion int, now time.Time) ([]database.InventoryItem, []database.InventoryItemEvidence, bool, catalogDiagnostics) {
+	diagnostics := catalogDiagnostics{}
 	type suggestion struct {
 		item     database.InventoryItem
 		evidence []evidenceInput
@@ -303,19 +396,23 @@ func catalogRowsWithVoice(job database.InventoryJob, env database.InventoryEnvir
 	suggestions := make([]suggestion, 0, len(candidates))
 	for _, candidate := range candidates {
 		if !validCatalogItem(candidate) {
+			diagnostics.Invalid++
 			continue
 		}
 		var authorized []evidenceInput
 		used := map[string]bool{}
+		foreignEvidence := false
 		for _, e := range candidate.Evidence {
 			mediaID, err := identity.ParseID(e.MediaID)
 			if err != nil {
+				foreignEvidence = true
 				continue
 			}
 			var frameID *identity.ID
 			if e.FrameID != nil {
 				parsed, err := identity.ParseID(*e.FrameID)
 				if err != nil {
+					foreignEvidence = true
 					continue
 				}
 				frameID = &parsed
@@ -324,20 +421,51 @@ func catalogRowsWithVoice(job database.InventoryJob, env database.InventoryEnvir
 			if input, ok := sent[ref]; ok && !used[ref] {
 				used[ref] = true
 				authorized = append(authorized, input)
+			} else {
+				foreignEvidence = true
 			}
 		}
 		cited := acceptedVoice(candidate.Voice, voiceSent)
 		conflicts := acceptedConflicts(candidate.Conflicts, cited, candidate)
 		voiceOnly := len(authorized) == 0
 		if voiceOnly && !declaresName(cited) {
+			if len(candidate.Evidence) > 0 {
+				diagnostics.RejectedEvidence++
+			} else {
+				diagnostics.Invalid++
+			}
 			continue
+		}
+		if foreignEvidence {
+			diagnostics.RejectedEvidence++
+		}
+		if schemaVersion >= prompt.CurrentCatalogSchemaVersion {
+			candidate.ComponentKey = validComponent(candidate.ComponentKey, components)
+			if candidate.ComponentKey == nil && len(components) > 0 {
+				candidate.Condition = "NOT_ASSESSABLE"
+				candidate.Observation = "NOT_ASSESSABLE"
+			}
+		} else if candidate.ComponentKey != nil {
+			candidate.ComponentKey = nil
 		}
 		confidence := candidate.ConfidenceBPS
 		name := strings.TrimSpace(candidate.Name)
+		if schemaVersion >= prompt.CurrentCatalogSchemaVersion && hasUnsupportedClaim(name) {
+			name = "Item observado"
+		}
+		if schemaVersion >= prompt.CurrentCatalogSchemaVersion && hasUnsupportedClaim(stringValue(candidate.Limitation)) {
+			candidate.Limitation = nil
+		}
 		if voiceOnly {
 			candidate = declaredOnlyByVoice(candidate, cited)
 		}
-		body := map[string]any{"typeCode": candidate.TypeCode, "name": name, "material": candidate.Material, "color": candidate.Color, "quantity": candidate.Quantity, "condition": candidate.Condition, "observation": candidate.Observation, "limitation": candidate.Limitation, "confidenceBps": confidence}
+		if len(authorized) == 0 && len(cited) == 0 {
+			candidate.Material, candidate.Color = nil, nil
+		}
+		if schemaVersion >= prompt.CurrentCatalogSchemaVersion {
+			candidate.Description = normalizeCatalogDescription(candidate, name, len(authorized) > 0, cited)
+		}
+		body := map[string]any{"typeCode": candidate.TypeCode, "name": name, "material": candidate.Material, "color": candidate.Color, "quantity": candidate.Quantity, "condition": candidate.Condition, "observation": candidate.Observation, "limitation": candidate.Limitation, "confidenceBps": confidence, "description": candidate.Description, "assessedScope": candidate.AssessedScope, "notAssessed": candidate.NotAssessed, "componentKey": candidate.ComponentKey}
 		if len(cited) > 0 {
 			body["voice"] = cited
 		}
@@ -345,10 +473,13 @@ func catalogRowsWithVoice(job database.InventoryJob, env database.InventoryEnvir
 			body["conflicts"] = conflicts
 		}
 		suggested, _ := json.Marshal(body)
-		item := database.InventoryItem{ID: identity.NewID(), TenantID: job.TenantID, OriginVersionID: job.OriginVersionID, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: candidate.TypeCode, Name: name, Material: candidate.Material, Color: candidate.Color, Quantity: candidate.Quantity, Condition: candidate.Condition, Observation: candidate.Observation, Limitation: candidate.Limitation, ConfidenceBps: &confidence, Origin: "AI", Declared: voiceOnly, Decision: "PENDING", Suggested: suggested, Version: 1, CreatedAt: now, UpdatedAt: now}
+		item := database.InventoryItem{ID: identity.NewID(), TenantID: job.TenantID, OriginVersionID: job.OriginVersionID, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: candidate.TypeCode, Name: name, Description: candidate.Description, AssessedScope: candidate.AssessedScope, NotAssessed: mustJSONValue(candidate.NotAssessed), ComponentKey: candidate.ComponentKey, Material: candidate.Material, Color: candidate.Color, Quantity: candidate.Quantity, Condition: candidate.Condition, Observation: candidate.Observation, Limitation: candidate.Limitation, ConfidenceBps: &confidence, Origin: "AI", Declared: voiceOnly, Decision: "PENDING", Suggested: suggested, Version: 1, CreatedAt: now, UpdatedAt: now}
 		suggestions = append(suggestions, suggestion{item: item, evidence: authorized})
 	}
 	truncated := len(suggestions) > maxItemsPerEnvironment
+	if truncated {
+		diagnostics.Truncated = len(suggestions) - maxItemsPerEnvironment
+	}
 	sort.SliceStable(suggestions, func(i, j int) bool {
 		a, b := confidence(suggestions[i].item), confidence(suggestions[j].item)
 		if a != b {
@@ -367,7 +498,101 @@ func catalogRowsWithVoice(job database.InventoryJob, env database.InventoryEnvir
 			evidence = append(evidence, database.InventoryItemEvidence{ID: identity.NewID(), TenantID: job.TenantID, ItemID: s.item.ID, Kind: input.Kind, MediaID: input.MediaID, FrameID: input.FrameID, Position: order, CreatedAt: now})
 		}
 	}
-	return items, evidence, truncated
+	return items, evidence, truncated, diagnostics
+}
+
+func validComponent(key *string, components []catalogComponent) *string {
+	if key == nil {
+		return nil
+	}
+	for _, component := range components {
+		if *key == component.Key {
+			value := *key
+			return &value
+		}
+	}
+	return nil
+}
+
+func normalizeCatalogDescription(candidate catalogItem, name string, hasVisual bool, declarations []VoiceCitation) string {
+	if !hasVisual {
+		return name
+	}
+	description := strings.TrimSpace(candidate.Description)
+	if description == "" || utf8.RuneCountInString(description) > 1000 {
+		return name
+	}
+	if hasUnsupportedClaim(strings.Join([]string{name, description, stringValue(candidate.Limitation), candidate.Observation}, " ")) {
+		return name
+	}
+	lower := strings.ToLower(description)
+	for _, term := range unsupportedClaimTerms {
+		if containsWord(lower, term) {
+			return name
+		}
+	}
+	declaredMaterial := false
+	for _, citation := range declarations {
+		if containsString(citation.Attributes, "material") {
+			declaredMaterial = true
+			break
+		}
+	}
+	if candidate.Material == nil && !declaredMaterial {
+		for _, term := range []string{"madeira", "metálico", "metal", "vidro", "plástico", "alumínio", "aço", "mármore", "granito", "tecido", "couro", "cerâmica"} {
+			if containsWord(lower, term) {
+				return name
+			}
+		}
+	}
+	return description
+}
+
+func hasUnsupportedClaim(text string) bool {
+	lower := strings.ToLower(text)
+	for _, term := range unsupportedClaimTerms {
+		if containsWord(lower, term) {
+			return true
+		}
+	}
+	return false
+}
+
+var unsupportedClaimTerms = []string{"proprietário", "proprietaria", "pertence ao", "do inquilino", "da inquilina", "antigo", "antiga", "antigos", "antigas", "recente", "recentes", "funciona", "funcionando", "em funcionamento", "com defeito", "operacional", "novo", "nova", "novos", "novas", "usado", "usada", "usados", "usadas", "velho", "velha", "velhos", "velhas", "anos", "dono", "locatário"}
+
+func containsWord(text, term string) bool {
+	textRunes, termRunes := []rune(text), []rune(term)
+	for start := 0; start+len(termRunes) <= len(textRunes); start++ {
+		if string(textRunes[start:start+len(termRunes)]) != string(termRunes) {
+			continue
+		}
+		leftWord := start > 0 && isWordRune(textRunes[start-1])
+		end := start + len(termRunes)
+		rightWord := end < len(textRunes) && isWordRune(textRunes[end])
+		if !leftWord && !rightWord {
+			return true
+		}
+	}
+	return false
+}
+
+func isWordRune(value rune) bool {
+	return value == '_' || unicode.IsLetter(value) || unicode.IsDigit(value)
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func mustJSONValue(value any) json.RawMessage {
+	if items, ok := value.([]string); ok && items == nil {
+		return json.RawMessage(`[]`)
+	}
+	raw, _ := json.Marshal(value)
+	return raw
 }
 
 // acceptedConflicts retains bounded visual disagreements only for attributes
@@ -410,7 +635,7 @@ func validCatalogItem(c catalogItem) bool {
 	if c.ConfidenceBPS < 0 || c.ConfidenceBPS > 10000 || (c.Quantity != nil && (*c.Quantity < 1 || *c.Quantity > 999)) {
 		return false
 	}
-	return optionalText(c.Material, 200) && optionalText(c.Color, 100) && optionalText(c.Limitation, 200)
+	return optionalText(c.Material, 200) && optionalText(c.Color, 100) && optionalText(c.Limitation, 200) && utf8.RuneCountInString(c.Description) <= 1000 && utf8.RuneCountInString(c.AssessedScope) <= 200 && len(c.NotAssessed) <= 20
 }
 
 func optionalText(value *string, maxRunes int) bool {

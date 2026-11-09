@@ -82,7 +82,7 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 				if query.AssetID != assetID || query.MediaKind != mediaKind || query.VersionID != nil {
 					t.Fatalf("origin query = %+v, want asset %s, media kind %s, and no pinned version", query, assetID, mediaKind)
 				}
-				return originresolve.Result{Version: database.OriginVersion{ID: activeOriginID, MediaKind: mediaKind}}, nil
+				return originresolve.Result{Version: database.OriginVersion{ID: activeOriginID, Status: "ACTIVE", HasInventory: true, MediaKind: mediaKind}}, nil
 			})
 
 			var occurrenceCommand createoccurrence.Command
@@ -114,8 +114,12 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 			if created.ReferenceVersionID != nil {
 				t.Fatalf("created schedule pinned origin %s; want nil", *created.ReferenceVersionID)
 			}
-			if originResolveCalls != 0 {
-				t.Fatalf("creation resolved the active origin %d times; want deferred resolution", originResolveCalls)
+			wantCreationResolve := 0
+			if mediaKind == "PHOTO" {
+				wantCreationResolve = 1
+			}
+			if originResolveCalls != wantCreationResolve {
+				t.Fatalf("creation resolved the active origin %d times; want %d", originResolveCalls, wantCreationResolve)
 			}
 			if _, err := bus.Ask(context.Background(), originresolve.Query{TenantID: tenantID, AssetID: assetID, MediaKind: mediaKind}); err != nil {
 				t.Fatalf("initial active origin %s was not resolvable: %v", originID, err)

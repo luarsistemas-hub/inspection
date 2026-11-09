@@ -1,0 +1,14 @@
+{
+  "caseId": "CLD-SAN-001",
+  "profile": "FURNISHED_PROPERTY",
+  "room": {"key": "cozinha", "typeCode": "KITCHEN", "name": "Cozinha"},
+  "expectedComponents": [
+    {"key": "cozinha.piso", "typeCode": "FLOOR", "label": "Piso"},
+    {"key": "cozinha.armarios", "typeCode": "CABINET", "label": "Armários"}
+  ],
+  "observations": [
+    {"componentKey": "cozinha.piso", "description": "Piso cerâmico claro visível", "assessedScope": "área central visível", "notAssessed": ["área sob os móveis"], "condition": "GOOD", "evidence": ["00000000-0000-4000-8000-000000000001"], "material": null, "materialSource": "UNKNOWN"},
+    {"componentKey": null, "description": "Conjunto de pratos visível", "assessedScope": "peças no escorredor", "notAssessed": [], "condition": "NOT_ASSESSABLE", "evidence": ["00000000-0000-4000-8000-000000000001"], "material": null, "materialSource": "UNKNOWN"}
+  ],
+  "declarations": [{"attribute": "quantity", "value": 6, "source": "FIXTURE-DECLARATION-1"}]
+}

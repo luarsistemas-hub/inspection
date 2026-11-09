@@ -331,6 +331,7 @@ type AnalysisPromptSnapshot struct {
 	Task            string          `gorm:"size:32;not null;default:FINDINGS;uniqueIndex:uq_analysis_prompt_snapshot_task_digest,priority:2"`
 	DefinitionJSON  json.RawMessage `gorm:"type:jsonb;not null"`
 	CanonicalDigest string          `gorm:"size:64;not null;uniqueIndex:uq_analysis_prompt_snapshot_task_digest,priority:3"`
+	SchemaVersion   int             `gorm:"not null;default:1"`
 	CreatedAt       time.Time       `gorm:"not null"`
 }
 
@@ -691,6 +692,8 @@ type MediaObject struct {
 	AttentionItems   json.RawMessage `gorm:"type:jsonb"`
 	CaptureSource    string          `gorm:"size:16"`
 	CapturedAt       *time.Time
+	ReceivedAt       *time.Time      `gorm:"index"`
+	CapturedAtSource string          `gorm:"size:24;not null;default:SERVER_FALLBACK"`
 	DeviceContext    json.RawMessage `gorm:"type:jsonb"`
 	LatitudeE6       *int32
 	LongitudeE6      *int32
@@ -964,6 +967,42 @@ type RequirementAnswer struct {
 
 func (RequirementAnswer) TableName() string { return "capture.requirement_answers" }
 
+// ComponentAnswer records one participant decision against the pinned scope.
+type ComponentAnswer struct {
+	ID             identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID       identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_component_answer,priority:1"`
+	DraftID        identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_component_answer,priority:2"`
+	RequirementKey string          `gorm:"size:200;not null;uniqueIndex:uq_component_answer,priority:3"`
+	ComponentKey   string          `gorm:"size:120;not null;uniqueIndex:uq_component_answer,priority:4"`
+	ViewKey        string          `gorm:"size:120;not null;default:'';uniqueIndex:uq_component_answer,priority:5"`
+	State          string          `gorm:"size:24;not null"`
+	Reason         string          `gorm:"size:2000;not null;default:''"`
+	EvidenceIDs    json.RawMessage `gorm:"type:jsonb;not null;default:'[]'"`
+	Version        int64           `gorm:"not null;default:1"`
+	ActorID        *identity.ID    `gorm:"type:uuid"`
+	CreatedAt      time.Time       `gorm:"not null"`
+	UpdatedAt      time.Time       `gorm:"not null"`
+}
+
+func (ComponentAnswer) TableName() string { return "capture.component_answers" }
+
+// HandoverRecord stores a typed participant declaration separately from room observations.
+type HandoverRecord struct {
+	ID        identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID  identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_handover_record_revision,priority:1"`
+	DraftID   identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_handover_record_revision,priority:2"`
+	RecordKey string          `gorm:"size:120;not null;uniqueIndex:uq_handover_record_revision,priority:3"`
+	Kind      string          `gorm:"size:16;not null"`
+	Payload   json.RawMessage `gorm:"type:jsonb;not null"`
+	MediaIDs  json.RawMessage `gorm:"type:jsonb;not null;default:'[]'"`
+	Declarant string          `gorm:"size:200;not null"`
+	Version   int64           `gorm:"not null;default:1;uniqueIndex:uq_handover_record_revision,priority:4"`
+	CreatedAt time.Time       `gorm:"not null"`
+	UpdatedAt time.Time       `gorm:"not null"`
+}
+
+func (HandoverRecord) TableName() string { return "capture.handover_records" }
+
 type SubmissionVersion struct {
 	ID                identity.ID `gorm:"type:uuid;primaryKey"`
 	TenantID          identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_submission_version,priority:1"`
@@ -1177,6 +1216,8 @@ type Inspection struct {
 	TemplateID                identity.ID     `gorm:"type:uuid;not null"`
 	TemplateVersionID         identity.ID     `gorm:"type:uuid;not null"`
 	AnalysisPromptSnapshotID  identity.ID     `gorm:"type:uuid"`
+	FindingsCurrentSnapshotID *identity.ID    `gorm:"type:uuid"`
+	FindingsCompareSnapshotID *identity.ID    `gorm:"type:uuid"`
 	InventoryPromptSnapshotID *identity.ID    `gorm:"type:uuid"`
 	ProjectID                 *identity.ID    `gorm:"type:uuid;index"`
 	StageID                   *identity.ID    `gorm:"type:uuid;index"`
@@ -1253,6 +1294,23 @@ type ReferenceSnapshot struct {
 }
 
 func (ReferenceSnapshot) TableName() string { return "inspections.reference_snapshots" }
+
+// InspectionScopeSnapshot pins the effective checklist scope for one inspection.
+type InspectionScopeSnapshot struct {
+	ID                identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID          identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_inspection_scope,priority:1"`
+	InspectionID      identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_inspection_scope,priority:2"`
+	TemplateVersionID identity.ID     `gorm:"type:uuid;not null"`
+	Profile           string          `gorm:"size:32;not null"`
+	Document          json.RawMessage `gorm:"type:jsonb;not null"`
+	Digest            string          `gorm:"size:64;not null"`
+	Version           int             `gorm:"not null;default:1"`
+	ConfirmedBy       *identity.ID    `gorm:"type:uuid"`
+	CreatedAt         time.Time       `gorm:"not null"`
+	UpdatedAt         time.Time
+}
+
+func (InspectionScopeSnapshot) TableName() string { return "inspections.scope_snapshots" }
 
 type Project struct {
 	ID             identity.ID `gorm:"type:uuid;primaryKey"`
@@ -1423,15 +1481,19 @@ func (InventoryEnvironment) TableName() string { return "origins.inventory_envir
 
 // InventoryItem is a versioned asset item and its review state.
 type InventoryItem struct {
-	ID                        identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID                  identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:1"`
-	OriginVersionID           identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:2"`
-	EnvironmentID             identity.ID `gorm:"type:uuid;not null;index"`
-	IdentityID                identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:3"`
-	TypeCode                  string      `gorm:"size:40;not null"`
-	Name                      string      `gorm:"size:80;not null"`
-	Material                  *string     `gorm:"size:200"`
-	Color                     *string     `gorm:"size:100"`
+	ID                        identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID                  identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:1"`
+	OriginVersionID           identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:2"`
+	EnvironmentID             identity.ID     `gorm:"type:uuid;not null;index"`
+	IdentityID                identity.ID     `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:3"`
+	TypeCode                  string          `gorm:"size:40;not null"`
+	Name                      string          `gorm:"size:80;not null"`
+	Description               string          `gorm:"type:text;not null;default:''"`
+	AssessedScope             string          `gorm:"size:200;not null;default:''"`
+	NotAssessed               json.RawMessage `gorm:"type:jsonb;not null;default:'[]'"`
+	ComponentKey              *string         `gorm:"size:160"`
+	Material                  *string         `gorm:"size:200"`
+	Color                     *string         `gorm:"size:100"`
 	Quantity                  *int
 	Condition                 string  `gorm:"size:24;not null"`
 	Observation               string  `gorm:"size:24;not null;default:OBSERVED"`
@@ -1569,18 +1631,30 @@ type InventoryJob struct {
 	Kind            string      `gorm:"size:16;not null;uniqueIndex:uq_inventory_job_input,priority:3"`
 	RequirementKey  string      `gorm:"size:200;not null;uniqueIndex:uq_inventory_job_input,priority:4"`
 	// Generation increases when an inspection is re-analyzed.
-	Generation            int          `gorm:"not null;default:1;uniqueIndex:uq_inventory_job_input,priority:5"`
-	EnvironmentIdentityID *identity.ID `gorm:"type:uuid"`
-	Status                string       `gorm:"size:16;not null;default:PENDING;index"`
-	Attempts              int          `gorm:"not null;default:0"`
-	NextAttemptAt         time.Time    `gorm:"not null;index"`
-	LeaseToken            *identity.ID `gorm:"type:uuid"`
-	LeaseUntil            *time.Time
-	ErrorCode             *string      `gorm:"size:64"`
-	PromptSnapshotID      *identity.ID `gorm:"type:uuid"`
-	InputDigest           *string      `gorm:"size:64"`
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	Generation                int          `gorm:"not null;default:1;uniqueIndex:uq_inventory_job_input,priority:5"`
+	EnvironmentIdentityID     *identity.ID `gorm:"type:uuid"`
+	Status                    string       `gorm:"size:16;not null;default:PENDING;index"`
+	Attempts                  int          `gorm:"not null;default:0"`
+	NextAttemptAt             time.Time    `gorm:"not null;index"`
+	LeaseToken                *identity.ID `gorm:"type:uuid"`
+	LeaseUntil                *time.Time
+	ErrorCode                 *string      `gorm:"size:64"`
+	PromptSnapshotID          *identity.ID `gorm:"type:uuid"`
+	SchemaVersion             int          `gorm:"not null;default:1"`
+	SchemaDigest              *string      `gorm:"size:64"`
+	ModelRevision             string       `gorm:"size:200;not null;default:'UNKNOWN'"`
+	MediaTransformDigest      *string      `gorm:"size:64"`
+	CandidateReturned         int          `gorm:"not null;default:0"`
+	CandidateInvalid          int          `gorm:"not null;default:0"`
+	CandidateRejectedEvidence int          `gorm:"not null;default:0"`
+	CandidateTruncated        int          `gorm:"not null;default:0"`
+	CandidateImageTruncated   int          `gorm:"not null;default:0"`
+	InputDigest               *string      `gorm:"size:64"`
+	// CaptureAnswerRef identifies the submitted capture answer a strict
+	// (report v3) COMPARE job read: "<answer id>:<version>" or "none".
+	CaptureAnswerRef *string `gorm:"size:120"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 func (InventoryJob) TableName() string { return "analysis.inventory_jobs" }
@@ -1600,7 +1674,10 @@ type InventoryEvidencePair struct {
 	Decision       string       `gorm:"size:20;not null"`
 	Confirmed      bool         `gorm:"not null;default:false"`
 	Reason         *string      `gorm:"size:300"`
-	CreatedAt      time.Time
+	// Source is MATCHER for pairs proposed and verified by the model and STAFF
+	// for a pairing decided by authorized staff for a later generation.
+	Source    string `gorm:"size:16;not null;default:'MATCHER'"`
+	CreatedAt time.Time
 }
 
 func (InventoryEvidencePair) TableName() string { return "analysis.inventory_evidence_pairs" }
@@ -1944,10 +2021,10 @@ func Models() []any {
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
 		&Origin{}, &OriginVersion{}, &OriginEvidence{}, &OriginPromotion{}, &InventoryEnvironment{}, &InventoryItem{}, &InventoryItemEvidence{}, &InventoryDecision{}, &BaselinePolicy{}, &CounterpartyInvitation{},
 		&MediaObject{}, &MultipartUpload{}, &UploadPart{}, &MediaDerivative{}, &ScreeningRun{}, &VideoPolicy{}, &VideoAdmission{}, &VideoAttempt{}, &VideoPreparationJob{}, &VideoSource{}, &VideoFrame{}, &VideoEvidenceReference{}, &VideoSourceLease{}, &VideoScopeItem{},
-		&CaptureDraft{}, &RequirementAnswer{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{}, &VideoReplacement{},
+		&CaptureDraft{}, &RequirementAnswer{}, &ComponentAnswer{}, &HandoverRecord{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{}, &VideoReplacement{},
 		&Delivery{}, &ChannelAttempt{}, &NotificationAttempt{}, &NotificationPayload{}, &NotificationRecipient{}, &ProviderCallback{},
 		&Schedule{}, &OccurrenceMaterialization{}, &ReminderPlan{},
-		&Inspection{}, &Responsibility{}, &PolicySnapshot{}, &ReferenceSnapshot{},
+		&Inspection{}, &Responsibility{}, &PolicySnapshot{}, &ReferenceSnapshot{}, &InspectionScopeSnapshot{},
 		&Project{}, &ProjectStage{}, &StageTransition{},
 		&ComparisonJob{}, &InventoryJob{}, &InventoryEvidencePair{}, &InventoryItemResult{}, &VideoPlan{}, &VideoPlanItem{}, &VideoPlanItemFrame{}, &AnalysisRun{}, &FindingRecord{}, &ClassificationRun{},
 		&ReportSnapshot{}, &ReportArtifact{}, &RetentionPolicy{},

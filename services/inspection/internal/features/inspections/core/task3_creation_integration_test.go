@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,6 +74,18 @@ func TestUT100UT101UT103UT104UT174InspectionCreatePinsRequirementsAndPromptSnaps
 				t.Fatalf("v2 video requirement=%+v", requirement)
 			}
 		}
+		var pinnedScope database.InspectionScopeSnapshot
+		if err := h.WithinTenant(ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+			return tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&pinnedScope).Error
+		}); err != nil {
+			t.Fatalf("real Service.Create video inspection did not pin its scope row: %v", err)
+		}
+		var created database.Inspection
+		if err := h.WithinTenant(ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+			return tx.Where("tenant_id=? AND id=?", fx.seed.TenantID, view.Inspection.ID).Take(&created).Error
+		}); err != nil || created.MediaKind != "VIDEO" {
+			t.Fatalf("created inspection media kind=%q err=%v", created.MediaKind, err)
+		}
 	})
 	t.Run("UT-103 no inventory keeps requirements empty and v2 schema", func(t *testing.T) {
 		fx := newTask3CreateFixture(t, h, "PHOTO", 2, false)
@@ -101,8 +114,8 @@ func TestUT100UT101UT103UT104UT174InspectionCreatePinsRequirementsAndPromptSnaps
 	t.Run("v1 template rejects inventory reference before creating draft", func(t *testing.T) {
 		fx := newTask3CreateFixture(t, h, "PHOTO", 1, true)
 		_, err := fx.createErr(catalog.FixedOrigin, &fx.referenceID, "v1-inventory")
-		if !apperror.Is(err, apperror.InvalidState) || err.Error() != "CATALOG_ORIGIN_FIRST" {
-			t.Fatalf("v1 template with inventory returned %v; want InvalidState CATALOG_ORIGIN_FIRST", err)
+		if !apperror.Is(err, apperror.InvalidState) || !strings.Contains(err.Error(), "Cadastre e aprove") {
+			t.Fatalf("v1 template with inventory returned %v; want safe catalog-first error", err)
 		}
 	})
 }
@@ -140,6 +153,20 @@ func newTask3CreateFixture(t *testing.T, h *harness.Harness, mediaKind string, s
 		requirements[i] = capturecore.Requirement{Key: "env:" + id.String(), EvidenceKind: mediaKind, EnvironmentIdentityID: id.String(), EnvironmentTypeCode: "BEDROOM", EnvironmentName: "Quarto " + string(rune('1'+i)), Required: true, Expected: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: map[string]int{"PHOTO": 20, "VIDEO": 3}[mediaKind]}
 	}
 	reference := originresolve.Result{Version: database.OriginVersion{ID: referenceID, OriginID: identity.NewID(), TenantID: seed.TenantID, Status: "ACTIVE", MediaKind: "PHOTO", HasInventory: inventory}, Requirements: requirements}
+	if inventory {
+		originID := reference.Version.OriginID
+		if err := h.WithinTenant(context.Background(), seed.TenantID, func(tx *gorm.DB) error {
+			origin := database.Origin{ID: originID, TenantID: seed.TenantID, AssetID: seed.AssetID, ActiveVersionID: &referenceID, Version: 1}
+			if err := tx.Create(&origin).Error; err != nil {
+				return err
+			}
+			purpose := "INVENTORY_UPDATE"
+			version := database.OriginVersion{ID: referenceID, TenantID: seed.TenantID, OriginID: originID, VersionNumber: 1, Purpose: &purpose, HasInventory: true, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "task3-reference-" + referenceID.String(), CreatedAt: time.Now().UTC()}
+			return tx.Create(&version).Error
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	bus := mediator.New()
 	register := func(message any, handler func(context.Context, any) (any, error)) {
 		t.Helper()
@@ -153,8 +180,15 @@ func newTask3CreateFixture(t *testing.T, h *harness.Harness, mediaKind string, s
 	})
 	resolvedVersion := &version
 	register(templateresolve.Query{}, func(_ context.Context, raw any) (any, error) { return *resolvedVersion, nil })
-	register(originresolve.Query{}, func(_ context.Context, raw any) (any, error) { return reference, nil })
-	return &task3CreateFixture{h: h, seed: seed, bus: bus, version: version, resolvedVersion: resolvedVersion, reference: reference, templateVersionID: templateVersionID, referenceID: referenceID, requirements: requirements, service: Service{DB: h.DB, Bus: bus}}
+	var fixture *task3CreateFixture
+	register(originresolve.Query{}, func(_ context.Context, raw any) (any, error) {
+		if fixture != nil {
+			return fixture.reference, nil
+		}
+		return reference, nil
+	})
+	fixture = &task3CreateFixture{h: h, seed: seed, bus: bus, version: version, resolvedVersion: resolvedVersion, reference: reference, templateVersionID: templateVersionID, referenceID: referenceID, requirements: requirements, service: Service{DB: h.DB, Bus: bus}}
+	return fixture
 }
 
 func (f *task3CreateFixture) setRequirements(requirements []capturecore.Requirement) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ type fixedOriginFixture struct {
 	lastQuery  originresolve.Query
 	resolvedID identity.ID
 	video      bool
+	inventory  bool
 }
 
 func newFixedOriginFixture(t *testing.T) (*fixedOriginFixture, *mediator.Bus) {
@@ -39,7 +41,7 @@ func newFixedOriginFixture(t *testing.T) (*fixedOriginFixture, *mediator.Bus) {
 
 func newFixedOriginFixtureWithVideo(t *testing.T, video bool) (*fixedOriginFixture, *mediator.Bus) {
 	t.Helper()
-	fixture := &fixedOriginFixture{input: Input{TenantID: identity.NewID(), AssetID: identity.NewID(), ParticipantID: identity.NewID(), TemplateID: identity.NewID(), ComparisonMode: catalog.FixedOrigin, RRule: "FREQ=MONTHLY", Timezone: "UTC", StartsAt: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), DeadlineMinutes: 60, IdempotencyKey: "schedule-fixed-origin"}, assetUnit: identity.NewID(), personUnit: identity.NewID(), resolvedID: identity.NewID(), video: video}
+	fixture := &fixedOriginFixture{input: Input{TenantID: identity.NewID(), AssetID: identity.NewID(), ParticipantID: identity.NewID(), TemplateID: identity.NewID(), ComparisonMode: catalog.FixedOrigin, RRule: "FREQ=MONTHLY", Timezone: "UTC", StartsAt: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), DeadlineMinutes: 60, IdempotencyKey: "schedule-fixed-origin"}, assetUnit: identity.NewID(), personUnit: identity.NewID(), resolvedID: identity.NewID(), video: video, inventory: true}
 	definition, err := json.Marshal(catalog.TemplateDocument{DefaultComparisonMode: catalog.ChecklistOnly, IsVideo: video})
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +66,7 @@ func newFixedOriginFixtureWithVideo(t *testing.T, video bool) (*fixedOriginFixtu
 			if fixture.lastQuery.MediaKind == "VIDEO" {
 				return nil, apperror.New(apperror.InvalidInput, "referenceVersionId", "reference modality must match the inspection modality")
 			}
-			return originresolve.Result{Version: database.OriginVersion{ID: fixture.resolvedID, MediaKind: "PHOTO"}}, fixture.originErr
+			return originresolve.Result{Version: database.OriginVersion{ID: fixture.resolvedID, Status: "ACTIVE", MediaKind: "PHOTO", HasInventory: fixture.inventory}}, fixture.originErr
 		}},
 	} {
 		if err := bus.RegisterQuery(registration.query, registration.handler); err != nil {
@@ -97,8 +99,8 @@ func TestCreateFixedOriginRequiresActiveOrigin(t *testing.T) {
 	fixture.input.ReferenceVersionID = &requestedID
 	fixture.originErr = apperror.New(apperror.InvalidInput, "referenceVersionId", "active origin is required")
 	_, err := (Service{Bus: bus, Authorizer: auth.Authorizer{}}).Create(principalContext(fixture.input.TenantID, auth.TenantAdmin), fixture.input)
-	if !errors.Is(err, fixture.originErr) {
-		t.Fatalf("Create error = %v, want %v", err, fixture.originErr)
+	if !apperror.Is(err, apperror.InvalidState) || !strings.Contains(err.Error(), "catalogada e aprovada") {
+		t.Fatalf("Create error = %v, want Portuguese approved-baseline error", err)
 	}
 	if fixture.originAsks != 1 || fixture.lastQuery.VersionID == nil || *fixture.lastQuery.VersionID != requestedID || fixture.lastQuery.AssetID != fixture.input.AssetID {
 		t.Fatalf("origin query = %+v after %d asks", fixture.lastQuery, fixture.originAsks)
@@ -124,6 +126,24 @@ func TestResolveFixedOriginValidatesExplicitVersionWithoutChangingMediaKind(t *t
 	}
 	if fixture.originAsks != 1 || fixture.lastQuery.MediaKind != "PHOTO" || fixture.lastQuery.VersionID == nil || *fixture.lastQuery.VersionID != requestedID {
 		t.Fatalf("origin query = %+v after %d asks", fixture.lastQuery, fixture.originAsks)
+	}
+}
+
+func TestIT018CreateScheduleRequiresApprovedPhotoBaseline(t *testing.T) {
+	fixture, bus := newFixedOriginFixture(t)
+	fixture.inventory = false
+	db := scheduleTestDB(t)
+	service := Service{DB: db, Bus: bus, Authorizer: auth.Authorizer{}}
+	_, err := service.Create(principalContext(fixture.input.TenantID, auth.TenantAdmin), fixture.input)
+	if !apperror.Is(err, apperror.InvalidState) || !strings.Contains(err.Error(), "catalogada e aprovada") {
+		t.Fatalf("IT-018 schedule creation error=%v, want Portuguese baseline-required error", err)
+	}
+	var count int64
+	if err := db.Table("schedules.schedules").Where("tenant_id=?", fixture.input.TenantID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("IT-018 created %d schedules without an approved baseline", count)
 	}
 }
 

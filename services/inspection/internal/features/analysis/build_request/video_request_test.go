@@ -62,7 +62,7 @@ func TestVideoPlanRequestPinsDistinctFrameEvidenceToOneComponentPairUT046(t *tes
 		"CREATE TABLE analysis.video_plans (id TEXT PRIMARY KEY, tenant_id TEXT, inspection_id TEXT, reference_version_id TEXT, status TEXT)",
 		"CREATE TABLE analysis.video_plan_items (id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT, component_id TEXT, requirement_key TEXT, outcome TEXT, core_groups BLOB)",
 		"CREATE TABLE inspections.inspections (id TEXT PRIMARY KEY, tenant_id TEXT, analysis_prompt_snapshot_id TEXT)",
-		"CREATE TABLE analysis.prompt_snapshots (id TEXT PRIMARY KEY, analysis_type TEXT, definition_json BLOB, canonical_digest TEXT)",
+		"CREATE TABLE analysis.prompt_snapshots (id TEXT PRIMARY KEY, analysis_type TEXT, task TEXT, definition_json BLOB, canonical_digest TEXT)",
 		"CREATE TABLE inspections.reference_snapshots (id TEXT PRIMARY KEY, tenant_id TEXT, inspection_id TEXT, reference_version_id TEXT)",
 		"CREATE TABLE media.video_frames (id TEXT PRIMARY KEY, tenant_id TEXT, sha256 TEXT, object_key TEXT)",
 		"CREATE TABLE media.video_sources (id TEXT PRIMARY KEY, tenant_id TEXT, media_id TEXT, screening_status TEXT)",
@@ -74,7 +74,8 @@ func TestVideoPlanRequestPinsDistinctFrameEvidenceToOneComponentPairUT046(t *tes
 	}
 	tenantID, inspectionID, planID, itemID, componentID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	originVersionID, promptID, originFrameID, currentFrameID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
-	definition, promptDigest, err := analysisprompt.Canonicalize(analysisprompt.DefaultDefinition())
+	taskDefinition := analysisprompt.DefinitionForTaskVersion(string(analysisprompt.FindingsCompare), 1)
+	definition, promptDigest, err := analysisprompt.CanonicalizeTask(string(analysisprompt.FindingsCompare), taskDefinition)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,11 +95,11 @@ func TestVideoPlanRequestPinsDistinctFrameEvidenceToOneComponentPairUT046(t *tes
 	insert("INSERT INTO analysis.video_plans (id,tenant_id,inspection_id,reference_version_id,status) VALUES (?,?,?,?,?)", planID, tenantID, inspectionID, originVersionID, "SEALED")
 	insert("INSERT INTO analysis.video_plan_items (id,tenant_id,plan_id,component_id,requirement_key,outcome,core_groups) VALUES (?,?,?,?,?,?,?)", itemID, tenantID, planID, componentID, "video:"+componentID.String(), preparevideocomparisons.Matched, pairs)
 	insert("INSERT INTO inspections.inspections (id,tenant_id,analysis_prompt_snapshot_id) VALUES (?,?,?)", inspectionID, tenantID, promptID)
-	insert("INSERT INTO analysis.prompt_snapshots (id,analysis_type,definition_json,canonical_digest) VALUES (?,?,?,?)", promptID, analysisprompt.RealEstate, definition, promptDigest)
+	insert("INSERT INTO analysis.prompt_snapshots (id,analysis_type,task,definition_json,canonical_digest) VALUES (?,?,?,?,?)", promptID, analysisprompt.RealEstate, analysisprompt.FindingsCompare, definition, promptDigest)
 	insert("INSERT INTO inspections.reference_snapshots (id,tenant_id,inspection_id,reference_version_id) VALUES (?,?,?,?)", identity.NewID(), tenantID, inspectionID, originVersionID)
 	insert("INSERT INTO media.video_frames (id,tenant_id,sha256,object_key) VALUES (?,?,?,?)", originFrameID, tenantID, hex.EncodeToString(originHash[:]), "frames/F01.jpg")
 	insert("INSERT INTO media.video_frames (id,tenant_id,sha256,object_key) VALUES (?,?,?,?)", currentFrameID, tenantID, hex.EncodeToString(currentHash[:]), "frames/F11.jpg")
-	request, err := build(objectstore.Store{Bucket: "test", Client: objects})(context.Background(), db, database.ComparisonJob{TenantID: tenantID, InspectionID: inspectionID, VideoPlanID: &planID, VideoPlanItemID: &itemID}, processcomparison.Payload{})
+	request, err := build(objectstore.Store{Bucket: "test", Client: objects})(context.Background(), db, database.ComparisonJob{TenantID: tenantID, InspectionID: inspectionID, PromptSnapshotID: promptID, VideoPlanID: &planID, VideoPlanItemID: &itemID}, processcomparison.Payload{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,7 +30,7 @@ func TestSeedQAPinsFindingsSnapshotWhenTasksShareTimestamp(t *testing.T) {
 	if err := db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`CREATE TABLE analysis.prompt_snapshots(id TEXT PRIMARY KEY,analysis_type TEXT,task TEXT,definition_json BLOB,canonical_digest TEXT,created_at DATETIME)`).Error; err != nil {
+	if err := db.Exec(`CREATE TABLE analysis.prompt_snapshots(id TEXT PRIMARY KEY,analysis_type TEXT,task TEXT,definition_json BLOB,canonical_digest TEXT,schema_version INTEGER NOT NULL DEFAULT 1,created_at DATETIME)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)

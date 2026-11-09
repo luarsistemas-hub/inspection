@@ -26,6 +26,7 @@ func TestResolveReusesExistingSnapshot(t *testing.T) {
 			task TEXT NOT NULL DEFAULT 'FINDINGS',
 			definition_json BLOB NOT NULL,
 			canonical_digest TEXT NOT NULL,
+			schema_version INTEGER NOT NULL DEFAULT 1,
 			revision INTEGER NOT NULL,
 			updated_by TEXT NOT NULL,
 			created_at DATETIME NOT NULL,
@@ -38,6 +39,7 @@ func TestResolveReusesExistingSnapshot(t *testing.T) {
 			task TEXT NOT NULL DEFAULT 'FINDINGS',
 			definition_json BLOB NOT NULL,
 			canonical_digest TEXT NOT NULL,
+			schema_version INTEGER NOT NULL DEFAULT 1,
 			created_at DATETIME NOT NULL
 		);
 		CREATE UNIQUE INDEX analysis.uq_analysis_prompt_snapshot_task_digest ON prompt_snapshots (analysis_type,task,canonical_digest);
@@ -71,7 +73,7 @@ func TestResolveInventoryTask_UT170(t *testing.T) {
 	require.NoError(t, db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE analysis.prompts (id TEXT PRIMARY KEY, analysis_type TEXT NOT NULL, task TEXT NOT NULL, definition_json BLOB NOT NULL, canonical_digest TEXT NOT NULL, revision INTEGER NOT NULL, updated_by TEXT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
-		CREATE TABLE analysis.prompt_snapshots (id TEXT PRIMARY KEY, analysis_type TEXT NOT NULL, task TEXT NOT NULL, definition_json BLOB NOT NULL, canonical_digest TEXT NOT NULL, created_at DATETIME NOT NULL);
+		CREATE TABLE analysis.prompt_snapshots (id TEXT PRIMARY KEY, analysis_type TEXT NOT NULL, task TEXT NOT NULL, definition_json BLOB NOT NULL, canonical_digest TEXT NOT NULL, schema_version INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL);
 		CREATE UNIQUE INDEX analysis.uq_prompt_task_digest ON prompt_snapshots (analysis_type,task,canonical_digest);
 	`).Error)
 	definition, digest, err := prompt.CanonicalizeTask(string(prompt.InventoryCatalog), prompt.DefaultDefinitionForTask(string(prompt.InventoryCatalog)))

@@ -54,3 +54,16 @@ export async function openDashboardRoute(page: Page, label: string): Promise<voi
   await navigation.getByRole("button", { name: /^Mais destinos/ }).click();
   await page.getByRole("navigation", { name: "Painel — outros destinos" }).getByRole("link", { name: label, exact: true }).click();
 }
+
+
+/** Authenticates the local Admin in cross-app end-to-end journeys. */
+export async function loginAsLocalAdminPortal(page: Page, returnTo: string): Promise<void> {
+  await page.goto(returnTo);
+  await page.getByRole("button", { name: "Entrar com conta administrativa" }).click();
+  await page.waitForURL(/localhost:8081\/realms\/inspection\/protocol\/openid-connect\/auth/);
+  await page.locator("#username").fill(process.env.INSPECTION_E2E_USERNAME ?? "admin");
+  await page.locator("#password").fill(process.env.INSPECTION_E2E_PASSWORD ?? "admin");
+  await page.locator("button[type=submit]").click();
+  await page.waitForURL(`**${returnTo}`);
+  await expect(page.getByRole("heading", { level: 1, name: /Organização|Identidade e acesso|Acessos|Responsáveis pela vistoria|Configuração de vistorias|Governança|Auditoria|Prompts de análise|Visão administrativa|Consumo de LLM/ })).toBeVisible();
+}

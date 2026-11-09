@@ -28,6 +28,9 @@ func (m Migrator) Migrate(ctx context.Context) error {
 	if err := repairLegacyAnalysisProfileTenantIDs(db); err != nil {
 		return err
 	}
+	if err := backfillInventoryNotAssessedBeforeAutoMigrate(db); err != nil {
+		return err
+	}
 	models := Models()
 	// Version 2 created the legacy tenant-scoped profile tables before the
 	// global prompt migration removed them. Bootstrap those tables only on a
@@ -110,8 +113,32 @@ func (m Migrator) Migrate(ctx context.Context) error {
 	return nil
 }
 
+// backfillInventoryNotAssessedBeforeAutoMigrate prevents GORM from trying to
+// add NOT NULL to an already existing column while legacy rows still contain
+// NULL. Migration 126 records the default and constraint in the planner.
+func backfillInventoryNotAssessedBeforeAutoMigrate(db *gorm.DB) error {
+	var table *string
+	if err := db.Raw(`SELECT to_regclass('origins.inventory_items')`).Scan(&table).Error; err != nil {
+		return fmt.Errorf("inspect inventory item table: %w", err)
+	}
+	if table == nil {
+		return nil
+	}
+	var columnExists bool
+	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='origins' AND table_name='inventory_items' AND column_name='not_assessed')`).Scan(&columnExists).Error; err != nil {
+		return fmt.Errorf("inspect inventory limitation column: %w", err)
+	}
+	if !columnExists {
+		return nil
+	}
+	if err := db.Exec(`UPDATE origins.inventory_items SET not_assessed='[]'::jsonb WHERE not_assessed IS NULL`).Error; err != nil {
+		return fmt.Errorf("normalize legacy inventory limitations: %w", err)
+	}
+	return nil
+}
+
 func ensureAnalysisPromptSeed(db *gorm.DB) error {
-	return ensureAnalysisPromptSeedTasks(db, []string{string(analysisprompt.Findings), string(analysisprompt.InventoryCatalog), string(analysisprompt.InventoryCompare)})
+	return ensureAnalysisPromptSeedTasks(db, []string{string(analysisprompt.Findings), string(analysisprompt.FindingsCurrent), string(analysisprompt.FindingsCompare), string(analysisprompt.InventoryCatalog), string(analysisprompt.InventoryCompare)})
 }
 
 func ensureAnalysisPromptSeedTasks(db *gorm.DB, tasks []string) error {
@@ -131,7 +158,15 @@ func ensureAnalysisPromptSeedTasks(db *gorm.DB, tasks []string) error {
 		}
 		var snapshot AnalysisPromptSnapshot
 		if err := db.Where("analysis_type=? AND task=? AND canonical_digest=?", current.AnalysisType, task, current.CanonicalDigest).First(&snapshot).Error; err == gorm.ErrRecordNotFound {
-			snapshot = AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: current.AnalysisType, Task: task, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now}
+			definition, parseErr := analysisprompt.ParseTask(task, current.DefinitionJSON)
+			if parseErr != nil {
+				return fmt.Errorf("parse analysis prompt seed %s: %w", task, parseErr)
+			}
+			schemaVersion := definition.SchemaVersion
+			if schemaVersion == 0 {
+				schemaVersion = 1
+			}
+			snapshot = AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: current.AnalysisType, Task: task, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, SchemaVersion: schemaVersion, CreatedAt: now}
 			if err := db.Create(&snapshot).Error; err != nil {
 				return fmt.Errorf("seed analysis prompt snapshot: %w", err)
 			}

@@ -265,6 +265,12 @@ func applyPatch(item *database.InventoryItem, p ItemPatch) {
 	if p.Name != nil {
 		item.Name = *p.Name
 	}
+	if p.Description != nil {
+		item.Description = *p.Description
+	}
+	if p.AssessedScope != nil {
+		item.AssessedScope = *p.AssessedScope
+	}
 	if p.Material != nil {
 		if *p.Material == "" {
 			item.Material = nil

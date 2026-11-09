@@ -142,15 +142,18 @@ func (p *promotionFixture) autoAcceptNote(promotionID identity.ID) string {
 }
 
 // catalogJob stores a CATALOG job of the draft for one room generation.
-func (p *promotionFixture) catalogJob(draft identity.ID, key string, generation int, errorCode *string) {
+func (p *promotionFixture) catalogJob(draft identity.ID, key string, generation int, errorCode *string) identity.ID {
 	p.t().Helper()
-	if err := p.h.AdminDB.Create(&database.InventoryJob{ID: identity.NewID(), TenantID: p.f.TenantID, InspectionID: p.f.InspectionID, OriginVersionID: draft, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "SUCCEEDED", NextAttemptAt: p.now, ErrorCode: errorCode, CreatedAt: p.now, UpdatedAt: p.now}).Error; err != nil {
+	id := identity.NewID()
+	if err := p.h.AdminDB.Create(&database.InventoryJob{ID: id, TenantID: p.f.TenantID, InspectionID: p.f.InspectionID, OriginVersionID: draft, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "SUCCEEDED", NextAttemptAt: p.now, ErrorCode: errorCode, CreatedAt: p.now, UpdatedAt: p.now}).Error; err != nil {
 		p.t().Fatal(err)
 	}
+	return id
 }
 
 func TestTruncationOnlyBlocksPromotionWhileItIsTheLatestGenerationOfTheRoom(t *testing.T) {
 	truncated := "TRUNCATED_ITEMS"
+	truncatedImages := "TRUNCATED_IMAGES"
 	t.Run("a truncated latest generation still blocks", func(t *testing.T) {
 		p := newPromotionFixture(t, "COMPLETED")
 		promotion := p.request("truncated-latest", p.status())
@@ -160,6 +163,38 @@ func TestTruncationOnlyBlocksPromotionWhileItIsTheLatestGenerationOfTheRoom(t *t
 		p.process(promotion.ID)
 		if final := p.loadPromotion(promotion.ID); final.Status != "FAILED" || final.FailureCode == nil || *final.FailureCode != "INCOMPLETE_ANALYSIS" {
 			t.Fatalf("promotion = %+v, want INCOMPLETE_ANALYSIS", final)
+		}
+	})
+	t.Run("image-only truncation remains diagnostic and does not block promotion", func(t *testing.T) {
+		p := newPromotionFixture(t, "COMPLETED")
+		promotion := p.request("truncated-images", p.status())
+		draft := *promotion.DraftVersionID
+		p.readyDraft(draft, promotion.ID, "ACCEPTED")
+		jobID := p.catalogJob(draft, "env:truncated-images", 1, &truncatedImages)
+		if err := p.h.AdminDB.Model(&database.InventoryJob{}).Where("id=?", jobID).Update("candidate_image_truncated", 2).Error; err != nil {
+			t.Fatal(err)
+		}
+		p.process(promotion.ID)
+		if final := p.loadPromotion(promotion.ID); final.Status != "COMPLETED" || final.OriginVersionID == nil {
+			t.Fatalf("promotion = %+v, want image limitation to remain promotable", final)
+		}
+		var job database.InventoryJob
+		if err := p.h.AdminDB.Where("id=?", jobID).Take(&job).Error; err != nil || job.CandidateImageTruncated != 2 || job.ErrorCode == nil || *job.ErrorCode != "TRUNCATED_IMAGES" {
+			t.Fatalf("image truncation diagnostic was not preserved: %+v err=%v", job, err)
+		}
+	})
+	t.Run("item and image truncation combination blocks promotion", func(t *testing.T) {
+		p := newPromotionFixture(t, "COMPLETED")
+		promotion := p.request("truncated-items-and-images", p.status())
+		draft := *promotion.DraftVersionID
+		p.readyDraft(draft, promotion.ID, "ACCEPTED")
+		jobID := p.catalogJob(draft, "env:combined", 1, &truncated)
+		if err := p.h.AdminDB.Model(&database.InventoryJob{}).Where("id=?", jobID).Update("candidate_image_truncated", 2).Error; err != nil {
+			t.Fatal(err)
+		}
+		p.process(promotion.ID)
+		if final := p.loadPromotion(promotion.ID); final.Status != "FAILED" || final.FailureCode == nil || *final.FailureCode != "INCOMPLETE_ANALYSIS" {
+			t.Fatalf("promotion = %+v, want combined truncation to block due to TRUNCATED_ITEMS", final)
 		}
 	})
 	t.Run("a clean regeneration replaces the truncated first generation", func(t *testing.T) {

@@ -1,0 +1,8 @@
+{
+  "PRESENT_UNCHANGED": "Sem alteração",
+  "CONDITION_CHANGED": "Alterado",
+  "IMPROVED": "Melhorou",
+  "MISSING": "Ausência comprovada",
+  "NOT_OBSERVED": "Não observado",
+  "NO_BASIS": "Sem base para comparar"
+}

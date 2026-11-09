@@ -2,13 +2,16 @@ package resolvers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"inspection/libs/identity"
+	reportcore "inspection/services/inspection/internal/features/reports/core"
 	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
+	"inspection/services/inspection/internal/features/reports/customer/screening"
 	customertimeline "inspection/services/inspection/internal/features/reports/customer_timeline"
 	publicationcore "inspection/services/inspection/internal/features/reports/publication/core"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -94,6 +97,18 @@ func (r *queryResolver) customerTimeline(ctx context.Context, assetID, projectID
 // requested historical version. A superseded version keeps its safe body and is
 // labeled historical; an invalidated one exposes status metadata only.
 func (r *queryResolver) customerReport(ctx context.Context, inspectionID string, version *int) (*graphql1.CustomerReport, error) {
+	return r.customerReportWithComparison(ctx, inspectionID, version, nil)
+}
+
+// customerReportWithComparison is customerReport with an optional comparison
+// outcome filter. The filter only selects the displayed comparison items; the
+// counts keep the whole baseline denominator. An invalid filter is rejected
+// before any report is read.
+func (r *queryResolver) customerReportWithComparison(ctx context.Context, inspectionID string, version *int, comparisonOutcome *graphql1.ComparisonOutcome) (*graphql1.CustomerReport, error) {
+	outcome, err := comparisonOutcomeFilter(comparisonOutcome)
+	if err != nil {
+		return nil, err
+	}
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
@@ -107,7 +122,7 @@ func (r *queryResolver) customerReport(ctx context.Context, inspectionID string,
 	}
 	// Published visibility does not replace business-unit/asset scope checks;
 	// customer views answer NOT_FOUND so out-of-scope reports stay undisclosed.
-	if err := authorizeReportResource(ctx, r.DB, meta, id, "inspectionId", "Relatório não encontrado."); err != nil {
+	if err := authorizeReportResource(ctx, r.DB, meta, id, "inspectionId", "Laudo não encontrado."); err != nil {
 		return nil, err
 	}
 	row, publication, err := r.customerSnapshot(ctx, meta.TenantID, id, version)
@@ -118,10 +133,36 @@ func (r *queryResolver) customerReport(ctx context.Context, inspectionID string,
 		return nil, err
 	}
 	if publication.Status == publicationcore.Invalidated {
-		return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Status: publication.Status, Historical: true, Context: &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{}, Participant: &graphql1.ReportParticipantContext{}, Template: &graphql1.ReportTemplateContext{}, Inspection: &graphql1.ReportInspectionContext{}}, Requirements: []*graphql1.ReportRequirement{}}, nil
+		return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: "", ClassificationLabel: "", Limited: false, Status: publication.Status, Historical: true, EvidenceNotice: "", ScopeStatements: []string{}, ReasonLabels: []string{}, Context: &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{}, Participant: &graphql1.ReportParticipantContext{}, Template: &graphql1.ReportTemplateContext{}, Inspection: &graphql1.ReportInspectionContext{}}, Requirements: []*graphql1.ReportRequirement{}}, nil
 	}
 	view := mapReport(row)
-	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, Advisory: view.Advisory, Status: publication.Status, Historical: publication.Status != publicationcore.Published, Context: view.Context, Requirements: view.Requirements, Inventory: customerInventoryFromSnapshot(row.CanonicalJSON)}, nil
+	var snapshot reportcore.Snapshot
+	if err := json.Unmarshal(row.CanonicalJSON, &snapshot); err != nil {
+		return nil, apperror.New(apperror.NotFound, "inspectionId", "Laudo não encontrado.")
+	}
+	// Customer notices and video wording must follow the same triaged,
+	// localized presentation used by the customer HTML/PDF.
+	screened := screening.RedactBlocked(snapshot)
+	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		return screening.ApplyDecisions(ctx, tx.Session(&gorm.Session{NewDB: true}), meta.TenantID, &screened)
+	}); err != nil {
+		return nil, err
+	}
+	screened = reportcore.LocalizeVideoPresentation(screened)
+	descriptive := customerreport.ProjectChecklist(screened)
+	// The paired images of a comparison follow the same customer triage as
+	// the customer PDF: the snapshot's own blocks plus the screening
+	// decisions in force now (screening package).
+	comparison, err := customerreport.ProjectComparison(screened, outcome)
+	if err != nil {
+		return nil, invalidComparisonFilter()
+	}
+	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, ClassificationLabel: reportcore.ClassificationLabelForSnapshot(screened), Limited: reportcore.ClassificationLimitedForSnapshot(screened), Advisory: view.Advisory, Status: publication.Status, Historical: publication.Status != publicationcore.Published, EvidenceNotice: reportcore.EvidenceNotice(screened), ScopeStatements: append([]string{}, screened.ScopeStatements...), ReasonLabels: customerReasonLabels(screened), Context: view.Context, Requirements: view.Requirements, Inventory: customerInventoryFromSnapshot(row.CanonicalJSON), Checklist: mapCustomerChecklist(descriptive), Processing: func() *graphql1.ReportProcessing {
+		if snapshot.SchemaVersion >= 3 {
+			return mapCustomerReportProcessing(snapshot.Processing)
+		}
+		return mapReportProcessing(snapshot.Processing)
+	}(), Handover: mapCustomerHandover(descriptive), Comparison: mapCustomerComparison(comparison)}, nil
 }
 
 // customerSnapshot resolves the snapshot and ledger row a customer may see.
@@ -164,7 +205,7 @@ func (r *queryResolver) customerEvidence(ctx context.Context, inspectionID strin
 	}
 	// Published visibility does not replace business-unit/asset scope checks;
 	// customer views answer NOT_FOUND so out-of-scope reports stay undisclosed.
-	if err := authorizeReportResource(ctx, r.DB, meta, id, "inspectionId", "Relatório não encontrado."); err != nil {
+	if err := authorizeReportResource(ctx, r.DB, meta, id, "inspectionId", "Laudo não encontrado."); err != nil {
 		return nil, err
 	}
 	row, publication, err := r.customerSnapshot(ctx, meta.TenantID, id, nil)
@@ -200,6 +241,17 @@ func (r *queryResolver) customerEvidence(ctx context.Context, inspectionID strin
 	if err != nil {
 		return nil, err
 	}
+	var referenceSnapshot reportcore.Snapshot
+	if err := json.Unmarshal(row.CanonicalJSON, &referenceSnapshot); err != nil {
+		return nil, apperror.New(apperror.NotFound, "inspectionId", "Laudo não encontrado.")
+	}
+	referenceSnapshot = screening.RedactBlocked(referenceSnapshot)
+	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		return screening.ApplyDecisions(ctx, tx.Session(&gorm.Session{NewDB: true}), meta.TenantID, &referenceSnapshot)
+	}); err != nil {
+		return nil, err
+	}
+	referenceSnapshot = reportcore.LocalizeVideoPresentation(referenceSnapshot)
 	start, err := decodeEvidenceCursor(stringValue(after), meta.TenantID, row.ID)
 	if err != nil {
 		return nil, graphql1Error("after")
@@ -264,7 +316,7 @@ func (r *queryResolver) customerEvidence(ctx context.Context, inspectionID strin
 		if item.ReplacedBy != "" && blockedFrames[item.ReplacedBy] {
 			replacedBy = optional(blockedFrameNodeID(row.ID, item.ReplacedBy))
 		}
-		node := &graphql1.CustomerEvidenceItem{ID: nodeID, RequirementKey: item.RequirementKey, Section: section, Label: label, Role: item.Role, Description: optional(item.Description), CaptureSource: optional(item.CaptureSource), CapturedAt: optional(item.CapturedAt), State: item.State, LineageID: lineageID, ReplacedBy: replacedBy, MediaAvailability: availability, SourceAvailability: sourceAvailability, EvidenceKind: optional(item.EvidenceKind), FrameID: frameID, PtsMicros: ptsMicros, PreparationID: preparationID, PlanID: planID, SourceMediaID: sourceMediaID, Component: label, Flags: item.Flags, URL: url}
+		node := &graphql1.CustomerEvidenceItem{ID: nodeID, RequirementKey: item.RequirementKey, Section: section, Label: label, Reference: reportcore.EvidenceReference(referenceSnapshot, item.ID), Role: item.Role, Description: optional(item.Description), CaptureSource: optional(item.CaptureSource), CapturedAt: optional(item.CapturedAt), State: item.State, LineageID: lineageID, ReplacedBy: replacedBy, MediaAvailability: availability, SourceAvailability: sourceAvailability, EvidenceKind: optional(item.EvidenceKind), FrameID: frameID, PtsMicros: ptsMicros, PreparationID: preparationID, PlanID: planID, SourceMediaID: sourceMediaID, Component: label, Flags: item.Flags, URL: url}
 		if timestampMs != nil {
 			value := int(*timestampMs)
 			node.TimestampMs = &value
@@ -512,4 +564,12 @@ func authorizePublicationInspection(ctx context.Context, db *gorm.DB, meta reque
 		return err
 	}
 	return authorizeReportResource(ctx, db, meta, inspectionID, "publicationId", message)
+}
+
+func customerReasonLabels(snapshot reportcore.Snapshot) []string {
+	labels := make([]string, 0, len(snapshot.ReasonCodes))
+	for _, code := range snapshot.ReasonCodes {
+		labels = append(labels, reportcore.ReasonLabel(code))
+	}
+	return labels
 }

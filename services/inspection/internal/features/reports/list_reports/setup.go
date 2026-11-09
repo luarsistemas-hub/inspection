@@ -32,6 +32,7 @@ type Input struct {
 	After            string
 	Search           string
 	Classification   string
+	InspectionID     identity.ID
 }
 
 type Item struct {
@@ -40,6 +41,7 @@ type Item struct {
 	GeneratedAt                                                time.Time
 	Classification                                             string
 	Version                                                    int
+	HistoryFacts                                               []byte `gorm:"column:history_facts"`
 }
 
 type Result struct {
@@ -79,11 +81,29 @@ func Setup(deps Dependencies) (func(context.Context, Input) (Result, error), err
 			participantName = "json_extract(s.canonical_json, '$.context.participant.name')"
 			searchOperator = "LIKE"
 		}
+		historyFacts := `jsonb_build_object(
+			'coverage', jsonb_build_object(
+				'expected', NULLIF(s.canonical_json #>> '{checklist,coverage,expected}', '')::int,
+				'unknownScope', COALESCE((s.canonical_json #>> '{checklist,coverage,unknownScope}')::boolean, false)),
+			'reviewStatuses', COALESCE((SELECT jsonb_agg(DISTINCT component->>'reviewStatus') FROM jsonb_path_query(s.canonical_json, '$.checklist.rooms[*].components[*]') AS components(component) WHERE NULLIF(component->>'reviewStatus', '') IS NOT NULL), '[]'::jsonb),
+			'processing', jsonb_build_object('status', s.canonical_json #>> '{processing,status}'))`
+		if deps.DB.Dialector.Name() == "sqlite" {
+			historyFacts = `json_object(
+				'coverage', json_object(
+					'expected', json_extract(s.canonical_json, '$.checklist.coverage.expected'),
+					'unknownScope', json_extract(s.canonical_json, '$.checklist.coverage.unknownScope')),
+				'reviewStatuses', json(COALESCE((SELECT json_group_array(status) FROM (SELECT DISTINCT json_extract(component.value, '$.reviewStatus') AS status FROM json_each(s.canonical_json, '$.checklist.rooms') AS room, json_each(room.value, '$.components') AS component WHERE json_extract(component.value, '$.reviewStatus') IS NOT NULL AND json_extract(component.value, '$.reviewStatus') <> '')), '[]')),
+				'processing', json_object('status', json_extract(s.canonical_json, '$.processing.status')))`
+		}
 		query := deps.DB.WithContext(ctx).Table("reports.report_snapshots AS s").
-			Select("s.id, s.inspection_id, s.created_at AS generated_at, s.classification, s.version_number AS version, "+assetName+" AS asset_name, "+assetAddress+" AS asset_address, "+assetKey+" AS asset_external_key, "+participantName+" AS participant_name").
+			Select("s.id, s.inspection_id, s.created_at AS generated_at, s.classification, s.version_number AS version, "+assetName+" AS asset_name, "+assetAddress+" AS asset_address, "+assetKey+" AS asset_external_key, "+participantName+" AS participant_name, "+historyFacts+" AS history_facts").
 			Joins("JOIN inspections.inspections i ON i.tenant_id=s.tenant_id AND i.id=s.inspection_id").
-			Joins("JOIN (SELECT tenant_id, inspection_id, MAX(version_number) AS version_number FROM reports.report_snapshots GROUP BY tenant_id, inspection_id) latest ON latest.tenant_id=s.tenant_id AND latest.inspection_id=s.inspection_id AND latest.version_number=s.version_number").
 			Where("s.tenant_id=?", in.TenantID)
+		if in.InspectionID == (identity.ID{}) {
+			query = query.Joins("JOIN (SELECT tenant_id, inspection_id, MAX(version_number) AS version_number FROM reports.report_snapshots GROUP BY tenant_id, inspection_id) latest ON latest.tenant_id=s.tenant_id AND latest.inspection_id=s.inspection_id AND latest.version_number=s.version_number")
+		} else {
+			query = query.Where("s.inspection_id=?", in.InspectionID)
+		}
 		if !in.TenantAdmin {
 			var scopeParts []string
 			var scopeArgs []any

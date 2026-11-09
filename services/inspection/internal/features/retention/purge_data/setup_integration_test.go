@@ -4,6 +4,7 @@ package purge_data
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -113,6 +114,90 @@ func TestInspectionPurgePreservesPhotoEvidenceOfActiveInventoryAndDeletesDiscard
 				t.Fatalf("discarded photo evidence retained: objectErr=%v mediaRows=%d evidenceRows=%d derivativeErr=%v derivativeRows=%d", openErr, mediaRows, evidenceRows, derivativeErr, derivativeRows)
 			}
 		})
+	}
+}
+
+func TestInspectionPurgeDeletesPinnedScopeSnapshot(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	ctx := context.Background()
+	h, err := harness.NewPostgresFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{InspectionStatus: "COMPLETED"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := database.InspectionScopeSnapshot{ID: identity.NewID(), TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, TemplateVersionID: fixture.TemplateVersionID, Profile: "PROPERTY_COMPONENTS", Document: []byte(`{"rooms":[]}`), Digest: strings.Repeat("a", 64), Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error { return tx.Create(&row).Error }); err != nil {
+		t.Fatal(err)
+	}
+	snapshotID := identity.NewID()
+	verificationCode := "01234567890123456789012345678901"
+	canonical, _ := json.Marshal(map[string]any{"schemaVersion": 3, "verificationCode": ""})
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&database.ReportSnapshot{ID: snapshotID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, Mode: "HISTORICAL", Classification: "ATTENTION", JSONDigest: strings.Repeat("b", 64), HTMLDigest: strings.Repeat("c", 64), SchemaVersion: 3, VersionNumber: 1, CanonicalJSON: canonical, HTML: json.RawMessage(`"<p>Laudo</p>"`), CreatedAt: time.Now().UTC()}).Error; err != nil {
+			return err
+		}
+		codeHash := strings.Repeat("d", 32) + snapshotID.String()[:32]
+		return tx.Exec(`INSERT INTO reports.report_verification_codes(tenant_id,snapshot_id,inspection_id,code_hash,verification_code) VALUES (?,?,?,?,?)`, fixture.TenantID, snapshotID, fixture.InspectionID, codeHash, verificationCode).Error
+	}); err != nil {
+		t.Fatalf("seed v3 report verification row: %v", err)
+	}
+	now := time.Now().UTC()
+	answer := database.ComponentAnswer{ID: identity.NewID(), TenantID: fixture.TenantID, DraftID: fixture.DraftID, RequirementKey: "env:kitchen", ComponentKey: "floor", State: "NOT_OBSERVED", EvidenceIDs: []byte("[]"), Version: 1, CreatedAt: now, UpdatedAt: now}
+	handover := database.HandoverRecord{ID: identity.NewID(), TenantID: fixture.TenantID, DraftID: fixture.DraftID, RecordKey: "meter", Kind: "METER", Payload: []byte(`{"reading":123.4,"unit":"kWh"}`), MediaIDs: []byte("[]"), Declarant: "Participante", Version: 1, CreatedAt: now, UpdatedAt: now}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&answer).Error; err != nil {
+			return err
+		}
+		return tx.Create(&handover).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	adminDB := h.MigrationDB
+	if adminDB == nil {
+		adminDB = h.AdminDB
+	}
+	var runtimeCanDeleteVerification bool
+	if err := adminDB.Raw("SELECT has_table_privilege('inspection_runtime', 'reports.report_verification_codes', 'DELETE')").Scan(&runtimeCanDeleteVerification).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !runtimeCanDeleteVerification {
+		t.Fatal("inspection_runtime lacks DELETE on report verification codes")
+	}
+	// Exercise the same restricted runtime role used by the worker; the code
+	// table has a restrictive FK to report snapshots and must be purged first.
+	err = h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		_, err := PurgeWithStore(ctx, tx, h.Store, fixture.TenantID, fixture.InspectionID, retentioncore.Clock{Class: retentioncore.EvidenceReports, StartsAt: now.Add(-time.Hour), DueAt: now.Add(-time.Minute)})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := adminDB.Model(&database.InspectionScopeSnapshot{}).Where("tenant_id=? AND inspection_id=?", fixture.TenantID, fixture.InspectionID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("scope snapshots after retention purge=%d, want 0", count)
+	}
+	if err := adminDB.Table("reports.report_verification_codes").Where("tenant_id=? AND snapshot_id=?", fixture.TenantID, snapshotID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("v3 report verification codes after retention purge=%d, want 0", count)
+	}
+	for _, model := range []any{&database.ComponentAnswer{}, &database.HandoverRecord{}} {
+		if err := adminDB.Model(model).Where("tenant_id=? AND draft_id=?", fixture.TenantID, fixture.DraftID).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("%T rows after retention purge=%d, want 0", model, count)
+		}
 	}
 }
 

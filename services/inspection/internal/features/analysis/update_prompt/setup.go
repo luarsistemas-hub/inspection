@@ -57,18 +57,25 @@ func Setup(d Dependencies) error {
 		if !prompt.IsKnownTask(c.Task) {
 			return nil, apperror.New(apperror.InvalidInput, "task", "unknown analysis task")
 		}
-		definition := prompt.DefaultDefinitionForTask(c.Task)
-		definition.SystemPrompt = strings.TrimSpace(c.SystemPrompt)
-		canonical, digest, err := prompt.CanonicalizeTask(c.Task, definition)
-		if err != nil {
-			return nil, apperror.New(apperror.InvalidInput, "systemPrompt", "invalid system prompt")
-		}
 		var out database.AnalysisPrompt
 		within := d.Within
 		if within == nil {
 			within = (tenanttx.Runner{DB: d.DB}).Within
 		}
 		err = within(ctx, c.TenantID, func(tx *gorm.DB) error {
+			var current database.AnalysisPrompt
+			if err := tx.WithContext(ctx).Where("analysis_type=? AND task=?", c.AnalysisType, c.Task).Take(&current).Error; err != nil {
+				return err
+			}
+			definition, err := prompt.ParseTask(c.Task, current.DefinitionJSON)
+			if err != nil {
+				return apperror.New(apperror.InvalidState, "task", "A definição atual do prompt não pode ser editada com segurança.")
+			}
+			definition.SystemPrompt = strings.TrimSpace(c.SystemPrompt)
+			canonical, digest, err := prompt.CanonicalizeTask(c.Task, definition)
+			if err != nil {
+				return apperror.New(apperror.InvalidInput, "systemPrompt", "invalid system prompt")
+			}
 			meta, _ := requestctx.FromContext(ctx)
 			var oldDigest string
 			var updateErr error

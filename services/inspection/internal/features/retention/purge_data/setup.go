@@ -347,6 +347,9 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		if err := deleteWhere(&database.ReportArtifact{}, "tenant_id=? AND snapshot_id IN (SELECT id FROM reports.report_snapshots WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID); err != nil {
 			return err
 		}
+		if err := tx.Exec("DELETE FROM reports.report_verification_codes WHERE tenant_id=? AND inspection_id=?", tenantID, inspectionID).Error; err != nil {
+			return err
+		}
 		for _, model := range []any{&database.ReportSnapshot{}, &database.FindingRecord{}, &database.AnalysisRun{}, &database.ComparisonJob{}, &database.ClassificationRun{}} {
 			var err error
 			switch model.(type) {
@@ -380,14 +383,14 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			return err
 		}
 		for _, item := range []any{
-			&database.UsageRecord{}, &database.LLMCallRecord{}, &database.DashboardInspection{}, &database.ReferenceSnapshot{}, &database.PolicySnapshot{},
+			&database.UsageRecord{}, &database.LLMCallRecord{}, &database.DashboardInspection{}, &database.ReferenceSnapshot{}, &database.PolicySnapshot{}, &database.InspectionScopeSnapshot{},
 			&database.DeletionRequest{},
 		} {
 			var err error
 			switch item.(type) {
 			case *database.UsageRecord, *database.LLMCallRecord:
 				err = deleteWhere(item, "tenant_id=? AND inspection_id=?", tenantID, inspectionID)
-			case *database.DashboardInspection, *database.ReferenceSnapshot, *database.PolicySnapshot, *database.DeletionRequest:
+			case *database.DashboardInspection, *database.ReferenceSnapshot, *database.PolicySnapshot, *database.InspectionScopeSnapshot, *database.DeletionRequest:
 				err = deleteWhere(item, "tenant_id=? AND inspection_id=?", tenantID, inspectionID)
 			}
 			if err != nil {
@@ -434,7 +437,7 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			return err
 		}
 		if len(responsibilityIDs) > 0 {
-			for _, model := range []any{&database.RequirementAnswer{}, &database.SubmissionVersion{}, &database.CaptureDraft{}, &database.RecaptureRequirement{}, &database.RecaptureRequest{}, &database.OriginEvidence{}, &database.OriginVersion{}, &database.ProcessingAcceptance{}, &database.ExternalSession{}, &database.OTPChallenge{}, &database.Invitation{}} {
+			for _, model := range []any{&database.ComponentAnswer{}, &database.HandoverRecord{}, &database.RequirementAnswer{}, &database.SubmissionVersion{}, &database.CaptureDraft{}, &database.RecaptureRequirement{}, &database.RecaptureRequest{}, &database.OriginEvidence{}, &database.OriginVersion{}, &database.ProcessingAcceptance{}, &database.ExternalSession{}, &database.OTPChallenge{}, &database.Invitation{}} {
 				if err := deleteByResponsibilities(tx, model, tenantID, responsibilityIDs); err != nil {
 					return err
 				}
@@ -724,8 +727,9 @@ func deleteByResponsibilities(tx *gorm.DB, model any, tenantID identity.ID, resp
 		return tx.Where("tenant_id=? AND responsibility_id IN ?", tenantID, responsibilityIDs).Delete(model).Error
 	case *database.OTPChallenge:
 		return tx.Where("tenant_id=? AND invitation_id IN (SELECT id FROM invitations.invitations WHERE tenant_id=? AND responsibility_id IN ?)", tenantID, tenantID, responsibilityIDs).Delete(model).Error
-	case *database.ProcessingAcceptance, *database.ExternalSession, *database.CaptureDraft, *database.RequirementAnswer, *database.SubmissionVersion:
-		if _, ok := model.(*database.RequirementAnswer); ok {
+	case *database.ProcessingAcceptance, *database.ExternalSession, *database.CaptureDraft, *database.RequirementAnswer, *database.ComponentAnswer, *database.HandoverRecord, *database.SubmissionVersion:
+		switch model.(type) {
+		case *database.RequirementAnswer, *database.ComponentAnswer, *database.HandoverRecord:
 			return tx.Where("tenant_id=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id IN ?)", tenantID, tenantID, responsibilityIDs).Delete(model).Error
 		}
 		return tx.Where("tenant_id=? AND responsibility_id IN ?", tenantID, responsibilityIDs).Delete(model).Error

@@ -2,9 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 const pageInfo = { endCursor: null, hasNextPage: false };
 const activeVersion = {
-  id: "version-active", originId: "origin-a", versionNumber: 2, status: "ACTIVE", mediaKind: "PHOTO", activatedAt: "2026-10-12T12:00:00Z", activatedBy: "membership-author", purpose: "MOVE_IN", source: "INSPECTION", sourceInspectionId: "inspection-a", hasInventory: true, draftState: "READY", sourceAvailability: "EXPIRED", counts: { included: 9, rejected: 1, notReviewed: 0 }, contestationSummary: { pending: 0, acknowledged: 1, contested: 1, open: 0, noResponse: 1 }, counterpartyInvitations: [{ id: "invite-failed", participantId: "participant-a", response: "PENDING", deadlineAt: "2026-11-01T00:00:00Z", respondedAt: null, statement: null, resolution: "OPEN", resolutionReason: null, adjustmentVersionId: null, deliveryStatus: "FAILED", deliveryId: "delivery-a" }, { id: "invite-contested", participantId: "participant-b", response: "CONTESTED", deadlineAt: "2026-11-01T00:00:00Z", respondedAt: "2026-10-20T12:00:00Z", statement: "O revestimento já tinha esta condição.", resolution: "OPEN", resolutionReason: null, adjustmentVersionId: null, deliveryStatus: "DELIVERED", deliveryId: "delivery-b" }] as Array<Record<string, unknown>>,
+  id: "version-active", originId: "origin-a", versionNumber: 2, status: "ACTIVE", mediaKind: "PHOTO", activatedAt: "2026-10-12T12:00:00Z", activatedBy: "membership-author", purpose: "MOVE_IN", purposeLabel: "Entrada de locação", source: "INSPECTION", sourceInspectionId: "inspection-a", hasInventory: true, draftState: "READY", sourceAvailability: "EXPIRED", counts: { included: 9, rejected: 1, notReviewed: 0 }, contestationSummary: { pending: 0, acknowledged: 1, contested: 1, open: 0, noResponse: 1 }, counterpartyInvitations: [{ id: "invite-failed", participantId: "participant-a", response: "PENDING", deadlineAt: "2026-11-01T00:00:00Z", respondedAt: null, statement: null, resolution: "OPEN", resolutionReason: null, adjustmentVersionId: null, deliveryStatus: "FAILED", deliveryId: "delivery-a" }, { id: "invite-contested", participantId: "participant-b", response: "CONTESTED", deadlineAt: "2026-11-01T00:00:00Z", respondedAt: "2026-10-20T12:00:00Z", statement: "O revestimento já tinha esta condição.", resolution: "OPEN", resolutionReason: null, adjustmentVersionId: null, deliveryStatus: "DELIVERED", deliveryId: "delivery-b" }] as Array<Record<string, unknown>>,
 };
-const earlierVersion = { ...activeVersion, id: "version-earlier", versionNumber: 1, status: "SUPERSEDED", activatedBy: "membership-old", purpose: "CONSTRUCTION_HANDOVER", sourceInspectionId: "inspection-earlier", sourceAvailability: "RETAINED", contestationSummary: { pending: 0, acknowledged: 0, contested: 0, open: 0, noResponse: 0 }, counterpartyInvitations: [] };
+const earlierVersion = { ...activeVersion, id: "version-earlier", versionNumber: 1, status: "SUPERSEDED", activatedBy: "membership-old", purpose: "CONSTRUCTION_HANDOVER", purposeLabel: "Entrega de obra", sourceInspectionId: "inspection-earlier", sourceAvailability: "RETAINED", contestationSummary: { pending: 0, acknowledged: 0, contested: 0, open: 0, noResponse: 0 }, counterpartyInvitations: [] };
 const draftVersion = { ...activeVersion, id: "draft-a", versionNumber: 3, status: "DRAFT", activatedAt: null, activatedBy: null, purpose: null, sourceAvailability: "AVAILABLE", draftState: "READY", contestationSummary: { pending: 0, acknowledged: 0, contested: 0, open: 0, noResponse: 0 }, counterpartyInvitations: [] };
 
 async function openBaselines(page: Page, role = "MANAGER", returnTo = "/baselines") {
@@ -66,7 +66,10 @@ async function openBaselines(page: Page, role = "MANAGER", returnTo = "/baseline
     await expect(page.getByRole("heading", { name: "Inventários", exact: true })).toBeVisible();
     const versionHistory = page.locator("details.baseline-history-item");
     for (let index = 0; index < await versionHistory.count(); index += 1) {
-      await versionHistory.nth(index).evaluate((element) => { (element as HTMLDetailsElement).open = true; });
+      const entry = versionHistory.nth(index);
+      if (await entry.locator("summary").getAttribute("aria-expanded") !== "true") {
+        await entry.locator("summary").click();
+      }
     }
   }
   return calls;
@@ -160,6 +163,7 @@ test("E2E-015 customer selects a published exception report; unpublished reports
 
 test("E2E-017 labels expired baseline source and E2E-018 discards a draft", async ({ page }, testInfo) => {
   const calls = await openBaselines(page);
+  await page.locator("details").filter({ hasText: "original não disponível; quadro preservado" }).evaluate((element) => { (element as HTMLDetailsElement).open = true; });
   await expect(page.getByText("original não disponível; quadro preservado")).toBeVisible();
   await navigate(page, "Inventários");
   await page.getByRole("button", { name: /^Revisar rascunho/ }).click();
@@ -175,7 +179,7 @@ test("E2E-017 labels expired baseline source and E2E-018 discards a draft", asyn
   await expect(discarded.getByText("Descartada", { exact: true })).toBeVisible();
   await discarded.getByRole("button", { name: "Ver inventário", exact: true }).click();
   await expect(page).toHaveURL(/\/baselines\/review\/draft-a$/);
-  await expect(page.getByText("Este inventário está em modo somente leitura.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Este rascunho foi descartado e está disponível somente para consulta.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ativar inventário", exact: true })).toHaveCount(0);
 });
 

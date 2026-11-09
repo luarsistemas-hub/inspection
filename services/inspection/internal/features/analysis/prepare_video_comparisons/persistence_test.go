@@ -39,6 +39,18 @@ func TestPlanEvidenceReferencesCoverOriginAndCurrentIdempotently(t *testing.T) {
 	}
 }
 
+func TestVideoComparisonUsesPinnedComparePromptWithLegacyFallback(t *testing.T) {
+	legacy, comparison := identity.NewID(), identity.NewID()
+	inspection := database.Inspection{AnalysisPromptSnapshotID: legacy, FindingsCompareSnapshotID: &comparison}
+	if got := findingsComparisonSnapshotID(inspection); got != comparison {
+		t.Fatalf("comparison prompt=%s, want pinned compare snapshot %s", got, comparison)
+	}
+	inspection.FindingsCompareSnapshotID = nil
+	if got := findingsComparisonSnapshotID(inspection); got != legacy {
+		t.Fatalf("legacy fallback prompt=%s, want %s", got, legacy)
+	}
+}
+
 func TestDBPlanWriterRecordsG1PreparationRolesIdempotently(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {

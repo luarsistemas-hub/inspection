@@ -214,6 +214,33 @@ func TestService_Decide(t *testing.T) {
 	}
 }
 
+func TestTask03DescriptiveItemEditAndValidationUT036UT037(t *testing.T) {
+	db := inventoryTestDB(t)
+	tenant, version, env, actor := seedReadyDraft(t, db)
+	suggestion := json.RawMessage(`{"description":"Sugestão original","assessedScope":"vista frontal"}`)
+	item := database.InventoryItem{ID: identity.NewID(), TenantID: tenant, OriginVersionID: version, EnvironmentID: env, IdentityID: identity.NewID(), TypeCode: "OTHER", Name: "Item", Description: "Sugestão original", AssessedScope: "vista frontal", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Declared: true, Suggested: suggestion, Version: 1}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	description, assessedScope := "Descrição revisada", "superfície visível"
+	if _, err := testService(db).Decide(context.Background(), DecideInput{TenantID: tenant, OriginVersionID: version, ActorMembershipID: actor, Decisions: []Decision{{ItemID: item.ID, Action: "EDIT", ExpectedVersion: 1, Patch: &ItemPatch{Description: &description, AssessedScope: &assessedScope}}}}); err != nil {
+		t.Fatalf("UT-036 descriptive edit failed: %v", err)
+	}
+	var stored database.InventoryItem
+	if err := db.Where("id=?", item.ID).Take(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Description != description || stored.AssessedScope != assessedScope || string(stored.Suggested) != string(suggestion) {
+		t.Fatalf("UT-036 edit lost fields or original suggestion: %+v", stored)
+	}
+	tooLong := strings.Repeat("a", 1001)
+	_, err := testService(db).Decide(context.Background(), DecideInput{TenantID: tenant, OriginVersionID: version, ActorMembershipID: actor, Decisions: []Decision{{ItemID: item.ID, Action: "EDIT", ExpectedVersion: stored.Version, Patch: &ItemPatch{Description: &tooLong}}}})
+	code, field, _ := apperror.Public(err)
+	if code != apperror.InvalidInput || field != "description" {
+		t.Fatalf("UT-037 invalid description error=%v code=%s field=%s", err, code, field)
+	}
+}
+
 func inventoryTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
@@ -229,7 +256,7 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE origins.origins (id text primary key, tenant_id text, asset_id text, active_version_id text, version integer, created_at datetime, updated_at datetime, UNIQUE(tenant_id,asset_id))`,
 		`CREATE TABLE origins.origin_versions (id text primary key, tenant_id text, origin_id text, version_number integer, responsibility_id text, purpose text, source text, source_inspection_id text, source_version_id text, has_inventory numeric, draft_state text, activated_by_membership_id text, discarded_at datetime, supersedes_id text, status text, media_kind text, video_preparation_id text, video_plan_id text, scope_manifest_digest text, idempotency_key text, created_at datetime, submitted_at datetime, activated_at datetime, superseded_at datetime, invalidated_at datetime, UNIQUE(tenant_id,origin_id,version_number), UNIQUE(idempotency_key))`,
 		`CREATE TABLE origins.inventory_environments (id text primary key, tenant_id text, origin_version_id text, identity_id text, type_code text, name text, expected numeric, added_during_capture numeric, requirement_key text, decision text, position integer, version integer, created_at datetime, updated_at datetime)`,
-		`CREATE TABLE origins.inventory_items (id text primary key, tenant_id text, origin_version_id text, environment_id text, identity_id text, type_code text, name text, material text, color text, quantity integer, condition text, observation text, limitation text, confidence_bps integer, origin text, declared numeric, decision text, rejection_reason text, rejection_text text, suggested json, merged_into_id text, decided_by text, auto_accepted_by_promotion_id text, decided_at datetime, version integer, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE origins.inventory_items (id text primary key, tenant_id text, origin_version_id text, environment_id text, identity_id text, type_code text, name text, description text, assessed_scope text, not_assessed json, component_key text, material text, color text, quantity integer, condition text, observation text, limitation text, confidence_bps integer, origin text, declared numeric, decision text, rejection_reason text, rejection_text text, suggested json, merged_into_id text, decided_by text, auto_accepted_by_promotion_id text, decided_at datetime, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE origins.inventory_item_evidence (id text primary key, tenant_id text, item_id text, kind text, media_id text, frame_id text, region json, position integer, created_at datetime)`,
 		`CREATE TABLE inventory.item_attribute_sources (id text primary key, tenant_id text, item_id text, origin_version_id text, attribute_name text, source_kind text, note_id text, revision_id text, visual_evidence_id text, reviewed_by text, created_at datetime)`,
 		`CREATE TABLE origins.inventory_decisions (id text primary key, tenant_id text, origin_version_id text, target_type text, target_id text, action text, before json, after json, reason text, actor_membership_id text, occurred_at datetime, created_at datetime)`,
@@ -242,9 +269,9 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE inspections.inspections (id text, tenant_id text, status text, asset_id text)`,
 		`CREATE TABLE inspections.responsibilities (id text, tenant_id text, inspection_id text, participant_id text, status text, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE inspections.reference_snapshots (id text, tenant_id text, inspection_id text, reference_version_id text)`,
-		`CREATE TABLE analysis.inventory_jobs (id text, tenant_id text, inspection_id text, origin_version_id text, kind text, requirement_key text, generation integer NOT NULL DEFAULT 1, environment_identity_id text, status text, attempts integer, next_attempt_at datetime, lease_token text, lease_until datetime, error_code text, prompt_snapshot_id text, input_digest text, created_at datetime, updated_at datetime, UNIQUE(tenant_id,inspection_id,kind,requirement_key,generation))`,
+		`CREATE TABLE analysis.inventory_jobs (id text, tenant_id text, inspection_id text, origin_version_id text, kind text, requirement_key text, generation integer NOT NULL DEFAULT 1, environment_identity_id text, status text, attempts integer, next_attempt_at datetime, lease_token text, lease_until datetime, error_code text, prompt_snapshot_id text, schema_version integer NOT NULL DEFAULT 1, schema_digest text, model_revision text NOT NULL DEFAULT 'UNKNOWN', media_transform_digest text, candidate_returned integer NOT NULL DEFAULT 0, candidate_invalid integer NOT NULL DEFAULT 0, candidate_rejected_evidence integer NOT NULL DEFAULT 0, candidate_truncated integer NOT NULL DEFAULT 0, candidate_image_truncated integer NOT NULL DEFAULT 0, input_digest text, capture_answer_ref text, created_at datetime, updated_at datetime, UNIQUE(tenant_id,inspection_id,kind,requirement_key,generation))`,
 		`CREATE TABLE analysis.inventory_item_results (id text, tenant_id text, job_id text, inspection_id text, item_identity_id text, status text, condition_after text, outside_type_code text, outside_name text)`,
-		`CREATE TABLE analysis.inventory_evidence_pairs (id text, tenant_id text, job_id text, item_identity_id text, origin_kind text, origin_media_id text, origin_frame_id text, current_kind text, current_media_id text, current_frame_id text, decision text, confirmed numeric, reason text, created_at datetime)`,
+		`CREATE TABLE analysis.inventory_evidence_pairs (id text, tenant_id text, job_id text, item_identity_id text, origin_kind text, origin_media_id text, origin_frame_id text, current_kind text, current_media_id text, current_frame_id text, decision text, confirmed numeric, reason text, source text NOT NULL DEFAULT 'MATCHER', created_at datetime)`,
 		`CREATE TABLE capture.capture_drafts (id text, tenant_id text, responsibility_id text, kind text, media_kind text, template_version_id text, reference_payload json, policy_payload json, requirements json, status text, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE assets.assets (id text, tenant_id text, status text, updated_at datetime)`,
 		`CREATE TABLE transcription.audio_notes (id text, tenant_id text, inspection_id text, requirement_key text, status text, anchor_status text, no_speech numeric, current_revision_id text)`,

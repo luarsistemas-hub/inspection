@@ -20,6 +20,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
+	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/objectstore"
@@ -31,6 +32,14 @@ import (
 )
 
 const rendererVersion = 1
+const descriptiveRendererVersion = 1
+
+func rendererVersionForSchema(schemaVersion int) int {
+	if schemaVersion >= 3 {
+		return descriptiveRendererVersion
+	}
+	return rendererVersion
+}
 
 var (
 	errPermanentPDF   = errors.New("permanent report PDF error")
@@ -72,11 +81,12 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if snapshot.InspectionID != payload.InspectionID {
 			return messaging.ErrPermanent
 		}
-		if snapshot.PDFRenderVersion != rendererVersion {
+		version := rendererVersionForSchema(snapshot.SchemaVersion)
+		if snapshot.PDFRenderVersion != version {
 			return nil
 		}
 		for _, audience := range []string{"PDF", "PDF_CUSTOMER"} {
-			job := database.ReportPDFJob{ID: identity.NewID(), TenantID: envelope.TenantID, SnapshotID: snapshot.ID, Audience: audience, RendererVersion: rendererVersion, Status: "QUEUED", NextAttemptAt: deps.Now().UTC(), CreatedAt: deps.Now().UTC(), UpdatedAt: deps.Now().UTC()}
+			job := database.ReportPDFJob{ID: identity.NewID(), TenantID: envelope.TenantID, SnapshotID: snapshot.ID, Audience: audience, RendererVersion: version, Status: "QUEUED", NextAttemptAt: deps.Now().UTC(), CreatedAt: deps.Now().UTC(), UpdatedAt: deps.Now().UTC()}
 			if err := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "snapshot_id"}, {Name: "audience"}}, DoNothing: true}).Create(&job).Error; err != nil {
 				return err
 			}
@@ -205,6 +215,19 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 	_, canonicalDigest, err := reportcore.CanonicalJSON(value)
 	if err != nil || !strings.EqualFold(canonicalDigest, snapshot.JSONDigest) {
 		return fail(errPermanentPDF, false)
+	}
+	if value.SchemaVersion >= 3 && e.db.Dialector.Name() == "postgres" {
+		var code string
+		err := e.db.WithContext(workCtx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", reserved.job.TenantID.String()).Error; err != nil {
+				return err
+			}
+			return tx.Raw("SELECT verification_code FROM reports.report_verification_codes WHERE tenant_id=? AND snapshot_id=?", reserved.job.TenantID, reserved.job.SnapshotID).Scan(&code).Error
+		})
+		if err != nil || code == "" {
+			return fail(errPermanentPDF, false)
+		}
+		value.VerificationCode = code
 	}
 	projected, internal, err := projectForAudience(value, reserved.job.Audience)
 	if err != nil {
@@ -398,7 +421,8 @@ func (e *Executor) reserve(ctx context.Context) (*reservation, bool, error) {
 			}
 			return err
 		}
-		if snapshot.PDFRenderVersion != rendererVersion || job.RendererVersion != rendererVersion {
+		version := rendererVersionForSchema(snapshot.SchemaVersion)
+		if snapshot.PDFRenderVersion != version || job.RendererVersion != version {
 			return tx.Model(&job).Updates(map[string]any{"status": "CANCELED", "lease_token": nil, "lease_expires_at": nil, "last_error": "renderer_version_unsupported", "updated_at": now}).Error
 		}
 		if job.Attempts >= e.limits.MaxAttempts {
@@ -446,7 +470,7 @@ func (e *Executor) loadDisplayAssets(ctx context.Context, tenantID identity.ID, 
 	ids := make([]identity.ID, 0, len(snapshot.Evidence))
 	seen := make(map[identity.ID]struct{}, len(snapshot.Evidence))
 	for _, item := range snapshot.Evidence {
-		if item.Availability == "MISSING" {
+		if !reportcore.EvidenceAvailable(item.Availability) {
 			continue
 		}
 		id, err := identity.ParseID(item.ID)
@@ -470,7 +494,7 @@ func (e *Executor) loadDisplayAssets(ctx context.Context, tenantID identity.ID, 
 	}
 	videoIDs := make([]identity.ID, 0)
 	for _, item := range snapshot.Evidence {
-		if item.EvidenceKind == "VIDEO_FRAME" && item.Availability != "MISSING" {
+		if item.EvidenceKind == "VIDEO_FRAME" && reportcore.EvidenceAvailable(item.Availability) {
 			id, _ := identity.ParseID(item.ID)
 			videoIDs = append(videoIDs, id)
 		}
@@ -491,7 +515,7 @@ func (e *Executor) loadDisplayAssets(ctx context.Context, tenantID identity.ID, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if item.Availability == "MISSING" {
+		if !reportcore.EvidenceAvailable(item.Availability) {
 			continue
 		}
 		mediaID, _ := identity.ParseID(item.ID)
@@ -738,13 +762,74 @@ func errorCode(err error) string {
 }
 
 func projectForAudience(snapshot reportcore.Snapshot, audience string) (reportcore.Snapshot, bool, error) {
+	if snapshot.SchemaVersion >= 3 {
+		if err := reportcore.Validate(snapshot); err != nil {
+			return reportcore.Snapshot{}, false, errPermanentPDF
+		}
+	}
 	switch audience {
 	case "PDF":
 		return snapshot, true, nil
 	case "PDF_CUSTOMER":
 		snapshot.Findings = nil
+		snapshot = projectCustomerSnapshot(snapshot)
+		if snapshot.SchemaVersion >= 3 && reportcore.ValidateCustomerSnapshot(snapshot) != nil {
+			return reportcore.Snapshot{}, false, errPermanentPDF
+		}
 		return redactBlockedEvidence(snapshot), false, nil
 	default:
 		return reportcore.Snapshot{}, false, errPermanentPDF
 	}
+}
+
+func projectCustomerSnapshot(snapshot reportcore.Snapshot) reportcore.Snapshot {
+	if checklist, handover := customerreport.FilterDescriptive(snapshot); checklist != nil {
+		snapshot.Checklist, snapshot.Handover = checklist, handover
+	}
+	if snapshot.Processing != nil {
+		snapshot.Processing = &reportcore.ProcessingState{Status: snapshot.Processing.Status, Message: reportcore.CustomerProcessingMessage(snapshot.Processing.Status)}
+	}
+	if snapshot.SchemaVersion >= 3 {
+		snapshot.Scope = nil
+		snapshot.Provenance = nil
+		snapshot.Comparison = customerreport.FilterComparison(snapshot)
+	}
+	if snapshot.SchemaVersion >= 3 && snapshot.Inventory != nil {
+		view := customerreport.MapInventory(snapshot)
+		// The reference keeps every field the snapshot validation requires of a
+		// comparative report (purpose and activation time) without its ID.
+		inventory := &reportcore.InventorySection{Reference: reportcore.InventoryReference{VersionNumber: view.ReferenceVersionNumber, Purpose: view.Purpose, ActivatedAt: snapshot.Inventory.Reference.ActivatedAt, VersionID: "customer-reference"}, Problems: []reportcore.InventoryEntry{}, Informational: []reportcore.InventoryEntry{}}
+		if view.Coverage != nil {
+			inventory.Coverage = &reportcore.InventoryCoverage{ExpectedItems: view.Coverage.ExpectedItems, AssessedItems: view.Coverage.AssessedItems, NotObserved: view.Coverage.NotObserved, NoBasis: view.Coverage.NoBasis, EnvironmentsNotCaptured: view.Coverage.EnvironmentsNotCaptured, EnvironmentsAddedDuringCapture: view.Coverage.EnvironmentsAddedDuringCapture}
+		}
+		// The customer view keeps entries and pairs in snapshot order, so each
+		// pair keeps the decision the snapshot recorded for it (SAME_VIEW,
+		// NOT_COMPARABLE or UNCERTAIN) instead of a fabricated one.
+		for _, source := range []struct {
+			original []reportcore.InventoryEntry
+			items    []customerreport.InventoryEntry
+			target   *[]reportcore.InventoryEntry
+		}{{snapshot.Inventory.Problems, view.Problems, &inventory.Problems}, {snapshot.Inventory.Informational, view.Informational, &inventory.Informational}} {
+			for i, item := range source.items {
+				entry := reportcore.InventoryEntry{Environment: item.Environment, Type: item.Type, Name: item.Name, Status: item.Status, ConditionBefore: valueText(item.ConditionBefore), ConditionAfter: valueText(item.ConditionAfter), Reason: valueText(item.Reason)}
+				for j, pair := range item.Pairs {
+					decision := ""
+					if i < len(source.original) && j < len(source.original[i].Pairs) {
+						decision = source.original[i].Pairs[j].Decision
+					}
+					entry.Pairs = append(entry.Pairs, reportcore.InventoryEvidencePair{Origin: pair.OriginEvidenceID, Current: pair.CurrentEvidenceID, Decision: decision, TimestampMS: pair.TimestampMS})
+				}
+				*source.target = append(*source.target, entry)
+			}
+		}
+		snapshot.Inventory = inventory
+	}
+	return snapshot
+}
+
+func valueText(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

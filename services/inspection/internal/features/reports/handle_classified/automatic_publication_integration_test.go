@@ -76,6 +76,21 @@ func seedAutomaticClassification(ctx context.Context, t *testing.T, h *harness.H
 	return runID
 }
 
+func seedManualClassification(ctx context.Context, t *testing.T, h *harness.Harness, f harness.Task06Fixture, classification string) identity.ID {
+	t.Helper()
+	runID := identity.NewID()
+	now := time.Now().UTC()
+	if err := h.WithinTenant(ctx, f.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&database.PublicationPolicy{ID: identity.NewID(), TenantID: f.TenantID, Mode: "MANUAL", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.ClassificationRun{ID: runID, TenantID: f.TenantID, InspectionID: f.InspectionID, PromptSnapshotID: f.PromptSnapshotID, Classification: classification, ReasonCodes: json.RawMessage(`[]`), CreatedAt: now}).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return runID
+}
+
 func assertNoHang(t *testing.T, err error) {
 	t.Helper()
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
@@ -123,7 +138,7 @@ func TestAutomaticFinalizationPublishesThroughRealHandlerWithoutHang(t *testing.
 // TestAutomaticFinalizationConcurrentDeliveriesDoNotDeadlock delivers the same
 // event twice and two distinct events of one classification at once; none may
 // hang or fail with a deadlock, and one release stays active.
-func TestAutomaticFinalizationConcurrentDeliveriesDoNotDeadlock(t *testing.T) {
+func TestIT013AutomaticFinalizationConcurrentDeliveriesDoNotDeadlock(t *testing.T) {
 	withCriticalFixture(t, func(ctx context.Context, h *harness.Harness, f harness.Task06Fixture, deps notificationrequest.Dependencies) {
 		ctx, cancel := context.WithTimeout(ctx, automaticHandlerTimeout)
 		defer cancel()
@@ -149,6 +164,36 @@ func TestAutomaticFinalizationConcurrentDeliveriesDoNotDeadlock(t *testing.T) {
 		snapshots, active, total := publicationCounts(t, h, f)
 		if active != 1 || snapshots < 1 || total != snapshots {
 			t.Fatalf("snapshots=%d active=%d publications=%d; want one active release per snapshot lineage", snapshots, active, total)
+		}
+	})
+}
+
+// TestIT013V3ConcurrentSameFactsCreateOneSnapshotAndPublication exercises the
+// idempotency contract with a real pinned photo scope and concurrent events.
+func TestIT013V3ConcurrentSameFactsCreateOneSnapshotAndPublication(t *testing.T) {
+	withCriticalFixture(t, func(ctx context.Context, h *harness.Harness, f harness.Task06Fixture, deps notificationrequest.Dependencies) {
+		seedTask04Scope(t, ctx, h, f, "OBSERVED", false)
+		runID := seedAutomaticClassification(ctx, t, h, f, "NORMAL")
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		errs := make(chan error, 2)
+		for range 2 {
+			wg.Add(1)
+			go func(eventID identity.ID) {
+				defer wg.Done()
+				<-start
+				errs <- deliverClassified(ctx, h, f, deps, eventID, runID, "NORMAL")
+			}(identity.NewID())
+		}
+		close(start)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			assertNoHang(t, err)
+		}
+		snapshots, active, total := publicationCounts(t, h, f)
+		if snapshots != 1 || active != 1 || total != 1 {
+			t.Fatalf("v3 concurrent deliveries left snapshots=%d active=%d publications=%d; want exactly 1/1/1", snapshots, active, total)
 		}
 	})
 }

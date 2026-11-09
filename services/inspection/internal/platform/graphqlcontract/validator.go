@@ -30,6 +30,7 @@ type Manifest struct {
 }
 
 var capabilityRow = regexp.MustCompile("(?m)^\\|\\s*\\d+\\s*\\|\\s*`([^`]+)`\\s*\\|\\s*([^|]+?)\\s*\\|\\s*[^|]*\\|\\s*(.+?)\\s*\\|\\s*$")
+var capabilityEvidence = regexp.MustCompile(`(?i)\s+Evidence:\s*([A-Z0-9, -]+)\s*$`)
 
 // ParseCapabilityMatrix turns the reviewed Markdown matrix into an executable root-field mapping.
 func ParseCapabilityMatrix(markdown []byte) ([]Capability, error) {
@@ -51,16 +52,25 @@ func matrixCapabilities(section, rootKind string) []Capability {
 		owner := strings.TrimSpace(match[2])
 		root := rootKind + "." + strings.TrimSpace(match[1])
 		evidence := "IT-001"
+		journey := strings.TrimSpace(match[3])
+		if explicit := capabilityEvidence.FindStringSubmatch(journey); len(explicit) == 2 {
+			evidence = strings.TrimSpace(explicit[1])
+			journey = strings.TrimSpace(capabilityEvidence.ReplaceAllString(journey, ""))
+		}
 		if root == "Query.customerPortfolio" {
 			evidence = "IT-054"
 		}
-		capabilities = append(capabilities, Capability{Root: root, Owner: owner, Persona: personaForOwner(owner), Journey: strings.TrimSpace(match[3]), Evidence: evidence})
+		capabilities = append(capabilities, Capability{Root: root, Owner: owner, Persona: personaForOwner(owner), Journey: journey, Evidence: evidence})
 	}
 	return capabilities
 }
 
 func personaForOwner(owner string) string {
 	switch {
+	case strings.Contains(owner, "Anonymous public"):
+		return "anonymous public visitor"
+	case strings.Contains(owner, "manager or authorized employee"):
+		return "manager or authorized employee with report correction permission"
 	case strings.Contains(owner, "Policy Admin"):
 		return "TENANT_ADMIN or INSPECTION_CONFIG_ADMIN"
 	case strings.Contains(owner, "Capture"):

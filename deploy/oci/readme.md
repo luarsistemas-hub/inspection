@@ -34,6 +34,8 @@ Comandos `deploy/oci/ops.sh` são executados na estação do operador, a partir 
 
 Copie [production.env.example](production.env.example) para `/etc/inspection/public.env` na VM, substitua todos os exemplos e proteja o arquivo com `root:root` e modo `0600`. Use a região principal, nomes DNS públicos, hostname compatível com OCI S3, bucket, namespace, OCID do compartment e subject inicial corretos. Os sete hostnames precisam resolver publicamente antes de o proxy solicitar certificados.
 
+O `reverse_proxy` do Caddy encaminha `X-Forwarded-For` ao `inspection-api` com o IP do cliente. O peer TCP imediato da API é o container Caddy na rede Docker `app`. O `compose.yaml` fixa essa rede em `172.30.0.0/24`, limita a alocação dinâmica a `172.30.0.0/25` e dá ao Caddy o endereço estável `172.30.0.250`, que não muda quando o container é recriado; por isso o exemplo de produção usa `INSPECTION_TRUSTED_PROXY_CIDRS=172.30.0.250/32`. Sem essa confiança, todos os clientes compartilham o IP do Caddy e o limite de 30 verificações por minuto do `verifyReport` vira global. Não confie na sub-rede `app` inteira (outros containers poderiam forjar o cabeçalho), na VCN pública ou em faixas públicas. Um valor vazio continua seguro: a API usa o IP da conexão e ignora cabeçalhos encaminhados. Se a faixa colidir com uma rede do host, ajuste juntos o bloco `ipam`, o `ipv4_address` do Caddy e a variável. Na primeira implantação com o bloco `ipam`, a rede `inspection_app` existente precisa ser recriada (`docker compose down` seguido de `up` na VM, em janela de manutenção), porque o Docker não altera a sub-rede de uma rede já criada.
+
 | Entrada | Segredo? | Onde definir |
 |---|---|---|
 | Tenancy, compartment, home region, AD and Ubuntu ARM64 image OCID | No | Resource Manager stack variables |
@@ -61,6 +63,7 @@ Use a tabela abaixo como inventário completo de entradas. Não há valores padr
 | `ADMIN_ORIGIN`, `DASHBOARD_ORIGIN`, `CAPTURE_ORIGIN`, `ONBOARDING_ORIGIN`, `API_ORIGIN`, `AUTH_ORIGIN`, `STORAGE_ORIGIN` | Required; no default | `https://admin.example.com` | `/etc/inspection/public.env`; GitHub variables below |
 | `OIDC_ISSUER`, `OIDC_JWKS_URL` | Required; no default | `https://auth.example.com/realms/inspection` | `/etc/inspection/public.env` |
 | `INSPECTION_ALLOWED_ORIGINS` | Required; no default | comma-separated four app origins | `/etc/inspection/public.env` |
+| `INSPECTION_TRUSTED_PROXY_CIDRS` | Optional; empty is safe | `172.30.0.250/32`, the fixed Caddy address on the Docker `app` network | `/etc/inspection/public.env` |
 | `OCI_S3_HOST`, `OCI_S3_ENDPOINT`, `OCI_S3_BUCKET`, `INSPECTION_NAMESPACE` | Required; no default | `namespace.compat.objectstorage.us-ashburn-1.oraclecloud.com` | `/etc/inspection/public.env` |
 | `SUPER_ADMIN_SUBJECT`, `TURNSTILE_SITE_KEY`, `SMTP_ADDRESS`, `SMTP_FROM`, `RABBITMQ_USER` | Required; no default | approved user UUID, public site key, regional SMTP endpoint | `/etc/inspection/public.env` |
 | `INSPECTION_TRANSCRIPTION_WORKER` | `1`; only exact `0` disables | `1` | `/etc/inspection/public.env`; takes effect on the next deployment |

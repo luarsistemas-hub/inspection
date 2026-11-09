@@ -123,7 +123,7 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	if _, err := s.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: in.TenantID, Roles: []string{auth.TenantAdmin, auth.Manager}, Resource: &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, Mutate: true, NewWork: true}); err != nil {
 		return database.Schedule{}, err
 	}
-	if mode == catalog.FixedOrigin && in.ReferenceVersionID != nil {
+	if mode == catalog.FixedOrigin && (document.MediaKind() == "PHOTO" || in.ReferenceVersionID != nil) {
 		// Validate that an active origin exists without pinning it: each occurrence
 		// resolves the origin active at its own creation, so a later promotion does
 		// not break the remaining recurrences. A nil version deliberately defers
@@ -456,8 +456,24 @@ func (s Service) withSchedule(ctx context.Context, tenantID, scheduleID identity
 }
 
 func resolveFixedOrigin(ctx context.Context, bus *mediator.Bus, in Input, mediaKind string) error {
-	_, err := bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID, MediaKind: mediaKind})
-	return err
+	raw, err := bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID, MediaKind: mediaKind})
+	if err != nil {
+		if mediaKind == "PHOTO" {
+			var appErr *apperror.Error
+			if errors.As(err, &appErr) && appErr.Field == "referenceVersionId" {
+				return apperror.New(apperror.InvalidState, "referenceVersionId", "A origem precisa ser catalogada e aprovada antes de agendar uma vistoria de saída.")
+			}
+		}
+		return err
+	}
+	resolved := raw.(originresolve.Result)
+	if mediaKind == "PHOTO" && !resolved.Version.HasInventory {
+		return apperror.New(apperror.InvalidState, "referenceVersionId", "A origem precisa ser catalogada e aprovada antes de agendar uma vistoria de saída.")
+	}
+	if mediaKind == "PHOTO" && resolved.Version.MediaKind == "VIDEO" {
+		return apperror.New(apperror.InvalidState, "referenceVersionId", "A vistoria de saída exige uma referência fotográfica aprovada.")
+	}
+	return nil
 }
 
 func validateOffsets(deadlineMinutes int, offsets []int) error {

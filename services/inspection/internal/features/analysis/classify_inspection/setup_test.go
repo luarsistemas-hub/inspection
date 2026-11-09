@@ -245,3 +245,68 @@ func TestPendingRecaptureGateIncludesOnlyActiveRequestStates(t *testing.T) {
 		}
 	}
 }
+
+// TestForcedReissueWithoutJobsClosesPendingRequest covers the permanent "no
+// comparison job" path: a forced event from reissueReport closes its QUEUED
+// request as FAILED instead of leaving it pending forever, while an ordinary
+// event keeps the permanent dead-letter rejection.
+func TestForcedReissueWithoutJobsClosesPendingRequest(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{"inspections", "analysis", "audit"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE inspections.inspections (id text PRIMARY KEY, tenant_id text NOT NULL, media_kind text NOT NULL, status text NOT NULL, active_video_plan_id text, analysis_prompt_snapshot_id text, updated_at datetime, version integer NOT NULL DEFAULT 1)`,
+		`CREATE TABLE analysis.video_plans (id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, parent_plan_id text, status text NOT NULL, generation integer NOT NULL)`,
+		`CREATE TABLE analysis.video_plan_items (id text PRIMARY KEY, tenant_id text NOT NULL, plan_id text NOT NULL, carried_result_job_id text, requirement_key text, outcome text)`,
+		`CREATE TABLE analysis.comparison_jobs (id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, video_plan_id text, requirement_key text, video_core_group integer, status text NOT NULL, updated_at datetime)`,
+		`CREATE TABLE audit.events (id text PRIMARY KEY, tenant_id text, actor_id text, action text, target_type text, target_id text, outcome text, reason text, correlation_id text, occurred_at datetime)`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenantID, inspectionID, planID := identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Exec(`INSERT INTO inspections.inspections (id,tenant_id,media_kind,status,active_video_plan_id,analysis_prompt_snapshot_id) VALUES (?,?,?,?,?,?)`, inspectionID, tenantID, "VIDEO", "ANALYZING", planID, identity.NewID()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO analysis.video_plans (id,tenant_id,inspection_id,status,generation) VALUES (?,?,?,?,?)`, planID, tenantID, inspectionID, "SEALED", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: identity.NewID(), Action: "report.reissue_requested", TargetType: "inspection", TargetID: inspectionID.String(), Outcome: "QUEUED", Reason: "expectedVersion=1", CorrelationID: "reissue:test", OccurredAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	handler, err := Setup(Dependencies{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deliver := func(force bool) error {
+		payload, _ := json.Marshal(map[string]any{"inspectionId": inspectionID, "force": force})
+		envelope := events.RawEnvelope{ID: identity.NewID(), TenantID: tenantID, CorrelationID: identity.NewID().String(), Payload: payload}
+		return db.Transaction(func(tx *gorm.DB) error { return handler(context.Background(), tx, envelope) })
+	}
+	outcome := func() string {
+		var value string
+		if err := db.Table("audit.events").Select("outcome").Where("correlation_id=?", "reissue:test").Scan(&value).Error; err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	if err := deliver(false); !errors.Is(err, messaging.ErrPermanent) {
+		t.Fatalf("ordinary event without jobs err=%v, want permanent rejection", err)
+	}
+	if got := outcome(); got != "QUEUED" {
+		t.Fatalf("ordinary event changed the reissue request to %q", got)
+	}
+	if err := deliver(true); err != nil {
+		t.Fatalf("forced reissue without jobs err=%v, want acknowledged FAILED request", err)
+	}
+	if got := outcome(); got != "FAILED" {
+		t.Fatalf("forced reissue without jobs left the request %q", got)
+	}
+}

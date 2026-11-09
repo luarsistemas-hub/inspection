@@ -8,7 +8,7 @@ test.use({ serviceWorkers: "block" });
 
 const requirement = (key: string, name: string, typeCode: string, addedDuringCapture = false, mediaKind: "PHOTO" | "VIDEO" = "PHOTO") => ({ key, section: name, label: name, instructions: name, required: true, minimumMedia: 1, maximumMedia: mediaKind === "VIDEO" ? 3 : 20, descriptionRequired: false, captureSourcePolicy: "CAMERA_DEFAULT", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: true, environmentIdentityId: `identity-${key}`, environmentTypeCode: typeCode, environmentName: name, expected: !addedDuringCapture, addedDuringCapture });
 const environment = (key: string, name: string, typeCode: string, addedDuringCapture: boolean) => ({ requirementKey: key, identityId: `identity-${key}`, typeCode, name, expected: !addedDuringCapture, addedDuringCapture, mediaCount: 0, status: "PENDING" });
-const bootstrap = (overrides: Record<string, unknown> = {}) => ({ responsibilityId: "environment-responsibility", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "PHOTO", disclosureVersion: "v1", captureLayout: "ENVIRONMENTS", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: true, gpsRequired: false, maxDurationSeconds: 900 }, requirements: [], environments: [], reviewHandoff: null, answers: [], ...overrides });
+const bootstrap = (overrides: Record<string, unknown> = {}) => ({ responsibilityId: "environment-responsibility", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", mediaKind: "PHOTO", disclosureVersion: "v1", captureLayout: "ENVIRONMENTS", reference: { comparisonMode: "CHECKLIST_ONLY" }, referenceItems: [], policy: { allowGallery: true, gpsRequired: false, maxDurationSeconds: 900 }, requirements: [], environments: [], reviewHandoff: null, answers: [], scope: {}, componentAnswers: [], handoverRecords: [], coverage: { expected: 0, fullyAssessed: 0, partiallyAssessed: 0, notObserved: 0, notApplicable: 0, impossible: 0, unknownScope: true, pendingRecords: [], suggestions: [] }, ...overrides });
 
 function pngChunk(type: string, data: Buffer): Buffer {
   const typeBytes = Buffer.from(type);
@@ -121,7 +121,9 @@ async function configurePhotoCapture(page: import("@playwright/test").Page, init
       (external as Record<string, unknown>).answers = [...current.filter((answer) => answer.requirementKey !== key), { requirementKey: key, mediaIds: [...new Set([...(current.find((answer) => answer.requirementKey === key)?.mediaIds ?? []), id])], impossibilityReason: null, version: 1 }];
       return respond({ saveCaptureMetadata: { media: { id, status: "READY", replacesMediaId: null }, userErrors: [] } });
     }
-    if (query.includes("submitCapture")) { (external as Record<string, unknown>).status = "COMPLETED"; return respond({ submitCapture: { submission: { id: "submission", complete: true, requiresAttention: false, submittedAt: "2026-10-25T00:00:00Z" }, userErrors: [] } }); }
+    if (query.includes("recordComponentAnswer")) { const input = variables.input ?? {}; const current = external.componentAnswers as Array<Record<string, unknown>>; const saved = { requirementKey: input.requirementKey, componentKey: input.componentKey, viewKey: input.viewKey, state: input.state, reason: input.reason, evidenceIds: input.evidenceIds, version: Number(input.expectedVersion ?? 0) + 1 }; (external as Record<string, unknown>).componentAnswers = [...current.filter((item) => item.requirementKey !== saved.requirementKey || item.componentKey !== saved.componentKey || item.viewKey !== saved.viewKey), saved]; return respond({ recordComponentAnswer: { answer: saved, userErrors: [] } }); }
+    if (query.includes("upsertHandoverRecord")) { const input = variables.input ?? {}; const current = external.handoverRecords as Array<Record<string, unknown>>; const saved = { recordKey: input.recordKey, kind: input.kind, payload: input.payload, mediaIds: input.mediaIds, declarant: input.declarant, version: Number(input.expectedVersion ?? 0) + 1 }; (external as Record<string, unknown>).handoverRecords = [...current.filter((item) => item.recordKey !== saved.recordKey), saved]; return respond({ upsertHandoverRecord: { record: saved, userErrors: [] } }); }
+    if (query.includes("submitCapture")) { (external as Record<string, unknown>).status = "COMPLETED"; const incomplete = Boolean(variables.input?.confirmIncomplete); return respond({ submitCapture: { submission: { id: "submission", complete: !incomplete, requiresAttention: incomplete, submittedAt: "2026-10-25T00:00:00Z" }, userErrors: [] } }); }
     throw new Error(`Unexpected operation ${query.slice(0, 90)}`);
   });
   return qualityReports;
@@ -160,6 +162,55 @@ test("E2E-001 OTP, consent, declare environments, ignore dark warning, impossibi
   await page.getByRole("button", { name: "Revisar vistoria" }).click();
   await page.getByRole("button", { name: "Enviar vistoria completa" }).click();
   await expect(page.getByRole("heading", { name: "Recebemos sua confirmação" })).toBeVisible();
+});
+
+test("CLD E2E-002 participant captures a room, declares keys, leaves a component gap and submits", async ({ page }) => {
+  const roomRequirement = requirement("env:kitchen", "Cozinha", "KITCHEN");
+  const external = bootstrap({ requirements: [roomRequirement], environments: [environment("env:kitchen", "Cozinha", "KITCHEN", false)], scope: { schemaVersion: 3, profile: "PROPERTY_COMPONENTS", rooms: [{ key: "kitchen", name: "Cozinha", components: [{ key: "piso", typeCode: "FLOOR", label: "Piso", views: [] }] }], handoverRecords: [{ key: "chaves", kind: "KEY", required: true }] }, coverage: { expected: 1, fullyAssessed: 0, partiallyAssessed: 0, notObserved: 1, notApplicable: 0, impossible: 0, unknownScope: false, pendingRecords: ["chaves"], suggestions: [] }, componentAnswers: [], handoverRecords: [] });
+  await configurePhotoCapture(page, external);
+  await authenticateCapture(page, "descriptive-checklist");
+  await uploadPhoto(page, "Cozinha");
+  await expect(page.getByRole("heading", { name: "Componentes esperados" })).toBeVisible();
+  await expect(page.getByText("Piso", { exact: true })).toBeVisible();
+  await page.getByLabel("Tipo de chave").fill("porta principal");
+  await page.getByLabel("Quantidade").fill("2");
+  await page.getByLabel("Declarado por").fill("Ana QA");
+  const handoverRequest = page.waitForRequest((request) => request.url().endsWith("/graphql") && request.postData()?.includes("upsertHandoverRecord") === true);
+  await page.getByRole("button", { name: "Salvar declaração" }).click();
+  const handoverPayload = (await handoverRequest).postDataJSON().variables.input;
+  expect(handoverPayload).toMatchObject({ kind: "KEY", payload: { keyType: "porta principal", quantity: 2 }, declarant: "Ana QA" });
+  await expect(page.getByText("Declaração salva.")).toBeVisible();
+  await page.getByRole("button", { name: "Revisar vistoria" }).click();
+  await expect(page.getByText("0 de 1 componentes totalmente avaliados.")).toBeVisible();
+  await expect(page.getByText("Chaves: 2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar envio incompleto" }).click();
+  await expect(page.getByRole("heading", { name: "Recebemos sua confirmação" })).toBeVisible();
+});
+
+test("CLD E2E-009 Capture mobile apresenta ajuda de recaptura sem rolagem horizontal e mantém resposta offline", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const external = bootstrap({ requirements: [requirement("env:kitchen", "Cozinha", "KITCHEN")], environments: [environment("env:kitchen", "Cozinha", "KITCHEN", false)], scope: { schemaVersion: 3, profile: "PROPERTY_COMPONENTS", rooms: [{ key: "kitchen", name: "Cozinha", components: [{ key: "piso", typeCode: "FLOOR", label: "Piso", views: ["geral"] }] }], handoverRecords: [] }, coverage: { expected: 1, fullyAssessed: 0, partiallyAssessed: 0, notObserved: 1, notApplicable: 0, impossible: 0, unknownScope: false, pendingRecords: [], suggestions: [{ requirementKey: "env:kitchen", roomKey: "kitchen", roomName: "Cozinha", componentKey: "piso", componentLabel: "Piso", missingView: "geral" }] }, componentAnswers: [], handoverRecords: [] });
+  await configurePhotoCapture(page, external);
+  await authenticateCapture(page, "descriptive-checklist-mobile");
+  await expect(page.getByText(/fotografe Vista geral/i)).toBeVisible();
+  await page.getByLabel("Estado: Piso · Vista geral").selectOption("NOT_APPLICABLE");
+  await page.getByRole("button", { name: "Salvar estado" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Informe o motivo para continuar" })).toBeVisible();
+  const answerRequests: string[] = [];
+  page.on("request", (request) => { if (request.url().endsWith("/graphql") && request.postData()?.includes("mutation RecordComponentAnswer")) answerRequests.push(request.postData() ?? ""); });
+  await page.getByLabel("Estado: Piso · Vista geral").selectOption("NOT_OBSERVED");
+  await page.context().setOffline(true);
+  await page.getByRole("button", { name: "Salvar estado" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Salvo neste aparelho; será enviado quando a conexão estiver disponível" })).toBeVisible();
+  expect(answerRequests).toHaveLength(0);
+  await page.context().setOffline(false);
+  await expect.poll(() => answerRequests.length).toBe(1);
+  await expect.poll(() => (external.componentAnswers as unknown[]).length).toBe(1);
+  await page.waitForTimeout(300);
+  expect(answerRequests).toHaveLength(1);
+  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 });
 
 test("E2E-002 records Sala and Cozinha clips, re-records Cozinha and submits environment confirmation", async ({ page }) => {

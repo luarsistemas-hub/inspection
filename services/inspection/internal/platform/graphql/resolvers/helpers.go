@@ -11,6 +11,7 @@ import (
 	assetaddress "inspection/services/inspection/internal/features/assets/address"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
+	inspectionscope "inspection/services/inspection/internal/features/inspections/scope"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
@@ -63,6 +64,24 @@ func invalidID(field string) error {
 
 func graphql1Error(field string) error {
 	return apperror.New(apperror.InvalidInput, field, "Valor inválido.")
+}
+
+func validationError(field, message string) error {
+	return apperror.New(apperror.InvalidInput, field, message)
+}
+
+func parseScopeOverride(input *graphql1.ScopeOverrideInput) (*inspectionscope.Override, error) {
+	if input == nil {
+		return nil, nil
+	}
+	result := &inspectionscope.Override{Profile: input.Profile}
+	for _, selection := range input.Selections {
+		if selection == nil {
+			return nil, validationError("scopeOverride", "A seleção de componentes é inválida.")
+		}
+		result.Selections = append(result.Selections, inspectionscope.Selection{RoomKey: selection.RoomKey, ComponentKey: selection.ComponentKey})
+	}
+	return result, nil
 }
 
 func internalRole(meta requestctx.Metadata, allowed ...string) error {
@@ -813,7 +832,13 @@ func mapInspection(view inspectioncore.View) *graphql1.Inspection {
 		active := view.PromotedOriginIsActive
 		promotedOriginIsActive = &active
 	}
-	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, MediaKind: row.MediaKind, ComparisonMode: optionalString(mode), ReferenceVersionID: referenceVersionID, ReferenceVersionNumber: referenceVersionNumber, ReferenceMediaKind: referenceMediaKind, ReferenceVersionStatus: referenceVersionStatus, ReferenceIsActive: referenceIsActive, OriginPromotionStatus: optionalString(view.OriginPromotionStatus), OriginPromotionFailure: promotionFailure, PromotedOriginVersionID: promotedOriginVersionID, PromotedOriginVersionNumber: promotedOriginVersionNumber, PromotedOriginMediaKind: promotedOriginMediaKind, PromotedOriginIsActive: promotedOriginIsActive, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version), AssetName: view.AssetName, AssetAddress: view.AssetAddress, AssetExternalKey: view.AssetExternalKey, ParticipantName: view.ParticipantName, Attention: attention}
+	var scopeDigest *string
+	var scopeVersion *int
+	if view.Scope.Digest != "" {
+		digest, version := view.Scope.Digest, view.Scope.Version
+		scopeDigest, scopeVersion = &digest, &version
+	}
+	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, MediaKind: row.MediaKind, ComparisonMode: optionalString(mode), ReferenceVersionID: referenceVersionID, ReferenceVersionNumber: referenceVersionNumber, ReferenceMediaKind: referenceMediaKind, ReferenceVersionStatus: referenceVersionStatus, ReferenceIsActive: referenceIsActive, OriginPromotionStatus: optionalString(view.OriginPromotionStatus), OriginPromotionFailure: promotionFailure, PromotedOriginVersionID: promotedOriginVersionID, PromotedOriginVersionNumber: promotedOriginVersionNumber, PromotedOriginMediaKind: promotedOriginMediaKind, PromotedOriginIsActive: promotedOriginIsActive, ScopeDigest: scopeDigest, ScopeVersion: scopeVersion, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version), AssetName: view.AssetName, AssetAddress: view.AssetAddress, AssetExternalKey: view.AssetExternalKey, ParticipantName: view.ParticipantName, Attention: attention}
 }
 
 func mapAnalysisPrompt(row database.AnalysisPrompt) *graphql1.AnalysisPrompt {

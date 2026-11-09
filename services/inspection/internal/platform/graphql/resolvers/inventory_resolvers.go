@@ -183,7 +183,7 @@ func (r *mutationResolver) regenerateInventorySuggestions(ctx context.Context, i
 // inventoryItemPatch maps an edit patch. Null keeps an attribute; an empty
 // material, color or limitation and clearQuantity make the attribute unknown.
 func inventoryItemPatch(in graphql1.InventoryItemPatchInput) (inventorycore.ItemPatch, error) {
-	patch := inventorycore.ItemPatch{TypeCode: in.TypeCode, Name: in.Name, Material: in.Material, Color: in.Color, Quantity: in.Quantity, ClearQuantity: in.ClearQuantity != nil && *in.ClearQuantity, Condition: in.Condition, Observation: in.Observation, Limitation: in.Limitation}
+	patch := inventorycore.ItemPatch{TypeCode: in.TypeCode, Name: in.Name, Description: in.Description, AssessedScope: in.AssessedScope, Material: in.Material, Color: in.Color, Quantity: in.Quantity, ClearQuantity: in.ClearQuantity != nil && *in.ClearQuantity, Condition: in.Condition, Observation: in.Observation, Limitation: in.Limitation}
 	if in.EnvironmentID != nil {
 		id, err := inventoryID(*in.EnvironmentID, "environmentId")
 		if err != nil {

@@ -123,6 +123,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// Scope is the resolver for the effective inspection scope.
+func (r *inspectionResolver) Scope(ctx context.Context, obj *graphql1.Inspection) (*graphql1.InspectionScope, error) {
+	return inspectionEffectiveScope(ctx, r.Resolver, obj)
+}
+
 // RequestOnboardingOtp is the resolver for the requestOnboardingOtp field.
 func (r *mutationResolver) RequestOnboardingOtp(ctx context.Context, input graphql1.RequestOnboardingOtpInput) (*graphql1.OnboardingPayload, error) {
 	clientIP, _ := requestctx.ClientIP(ctx)
@@ -1263,11 +1268,20 @@ func (r *mutationResolver) CreateInspection(ctx context.Context, input graphql1.
 	if err != nil {
 		return nil, err
 	}
-	view, err := r.InspectionService.Create(ctx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, ReferenceVersionID: referenceID, ReviewerMembershipID: reviewerMembershipID, Source: inspectioncore.SourceManual, SourceKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Reason: input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+	scopeOverride, err := parseScopeOverride(input.ScopeOverride)
+	if err != nil {
+		return nil, err
+	}
+	view, err := r.InspectionService.Create(ctx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, ReferenceVersionID: referenceID, ReviewerMembershipID: reviewerMembershipID, Source: inspectioncore.SourceManual, SourceKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Reason: input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders, ScopeOverride: scopeOverride})
 	if err != nil {
 		return nil, err
 	}
 	return &graphql1.InspectionPayload{Inspection: mapInspection(view), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ConfirmInspectionScope delegates the mutation to the scope operation helper.
+func (r *mutationResolver) ConfirmInspectionScope(ctx context.Context, input graphql1.ConfirmInspectionScopeInput) (*graphql1.InspectionScopePayload, error) {
+	return confirmInspectionScope(ctx, r.Resolver, input)
 }
 
 // PlanInspection is the resolver for the planInspection field.
@@ -1864,8 +1878,16 @@ func (r *mutationResolver) SaveCaptureMetadata(ctx context.Context, input graphq
 		lat, lon = &a, &b
 	}
 	metadata := capturecore.MetadataInput{TenantID: tenantID, ResponsibilityID: responsibilityID, MediaID: mediaID, ReplacesMediaID: replacesMediaID, RequirementKey: input.RequirementKey, Description: input.Description, CaptureSource: input.CaptureSource, DeviceContext: input.DeviceContext, Policy: capturecore.GPSPolicy{Required: policyDoc.GPSRequired, AllowGallery: policyDoc.AllowGallery, AssetLatitude: lat, AssetLongitude: lon, GeofenceMeters: policyDoc.GeofenceMeters}}
+	capturedAt, parseErr := parseDeviceCaptureTime(input.CapturedAt)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	metadata.CapturedAt = capturedAt
 	if input.Gps != nil {
-		captured, _ := time.Parse(time.RFC3339, input.Gps.CapturedAt)
+		captured, parseErr := time.Parse(time.RFC3339, input.Gps.CapturedAt)
+		if parseErr != nil {
+			return nil, apperror.New(apperror.InvalidInput, "gps.capturedAt", "Informe uma data e hora válida no formato RFC 3339.")
+		}
 		started, _ := time.Parse(time.RFC3339, input.Gps.WindowStartedAt)
 		metadata.CapturedAt, metadata.WindowStartedAt = captured, started
 		metadata.Latitude, metadata.Longitude, metadata.AccuracyMeters = &input.Gps.Latitude, &input.Gps.Longitude, &input.Gps.AccuracyMeters
@@ -1876,6 +1898,16 @@ func (r *mutationResolver) SaveCaptureMetadata(ctx context.Context, input graphq
 	}
 	media := raw.(database.MediaObject)
 	return &graphql1.MediaPayload{Media: mapMedia(media), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// RecordComponentAnswer delegates the capture mutation to the descriptive capture helper.
+func (r *mutationResolver) RecordComponentAnswer(ctx context.Context, input graphql1.RecordComponentAnswerInput) (*graphql1.ComponentAnswerPayload, error) {
+	return r.recordComponentAnswer(ctx, input)
+}
+
+// UpsertHandoverRecord delegates the capture mutation to the descriptive capture helper.
+func (r *mutationResolver) UpsertHandoverRecord(ctx context.Context, input graphql1.UpsertHandoverRecordInput) (*graphql1.HandoverRecordPayload, error) {
+	return r.upsertHandoverRecord(ctx, input)
 }
 
 // DeclareCaptureImpossibility is the resolver for the declareCaptureImpossibility field.
@@ -2299,6 +2331,16 @@ func (r *mutationResolver) PublishReport(ctx context.Context, input graphql1.Pub
 		return nil, err
 	}
 	return &graphql1.ReportPublicationPayload{Publication: mapReportPublication(publicationRow), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ReissueReport is the resolver for the reissueReport field.
+func (r *mutationResolver) ReissueReport(ctx context.Context, input graphql1.ReissueReportInput) (*graphql1.ReissueReportPayload, error) {
+	return r.reissueReport(ctx, input)
+}
+
+// ReviseComparisonPairing is the resolver for the reviseComparisonPairing field.
+func (r *mutationResolver) ReviseComparisonPairing(ctx context.Context, input graphql1.ReviseComparisonPairingInput) (*graphql1.ReviseComparisonPairingPayload, error) {
+	return r.reviseComparisonPairing(ctx, input)
 }
 
 // InvalidateReportPublication is the resolver for the invalidateReportPublication field.
@@ -3299,6 +3341,11 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	return view, nil
 }
 
+// VerifyReport is the resolver for the verifyReport field.
+func (r *queryResolver) VerifyReport(ctx context.Context, code string, version int) (*graphql1.ReportVerification, error) {
+	return r.verifyReport(ctx, code, version)
+}
+
 // VideoPreparationEvidence is the resolver for the videoPreparationEvidence field.
 func (r *queryResolver) VideoPreparationEvidence(ctx context.Context, preparationID string, first *int, after *string) (*graphql1.VideoPreparationEvidenceConnection, error) {
 	return r.videoPreparationEvidence(ctx, preparationID, first, after)
@@ -3406,7 +3453,7 @@ func (r *queryResolver) VideoPreparations(ctx context.Context, status []string, 
 }
 
 // Reports is the resolver for the reports field.
-func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, search *string, classification *string) (*graphql1.ReportConnection, error) {
+func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, search *string, classification *string, inspectionID *string) (*graphql1.ReportConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
@@ -3441,6 +3488,13 @@ func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, 
 	}
 	if classification != nil {
 		input.Classification = *classification
+	}
+	if inspectionID != nil && *inspectionID != "" {
+		parsed, parseErr := identity.ParseID(*inspectionID)
+		if parseErr != nil {
+			return nil, invalidID("inspectionId")
+		}
+		input.InspectionID = parsed
 	}
 	var result listreports.Result
 	listOn := func(tx *gorm.DB) error {
@@ -3481,7 +3535,8 @@ func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, 
 		if value, ok := publications[item.ID]; ok {
 			released = mapReportPublication(value)
 		}
-		nodes = append(nodes, &graphql1.ReportSummary{Publication: released, ID: item.ID.String(), InspectionID: item.InspectionID.String(), AssetName: item.AssetName, AssetAddress: item.AssetAddress, AssetExternalKey: item.AssetExternalKey, ParticipantName: item.ParticipantName, GeneratedAt: item.GeneratedAt.UTC().Format(time.RFC3339Nano), Classification: item.Classification, Version: item.Version})
+		labels := reportHistoryLabelsFromJSON(item.HistoryFacts)
+		nodes = append(nodes, &graphql1.ReportSummary{Publication: released, ID: item.ID.String(), InspectionID: item.InspectionID.String(), AssetName: item.AssetName, AssetAddress: item.AssetAddress, AssetExternalKey: item.AssetExternalKey, ParticipantName: item.ParticipantName, GeneratedAt: item.GeneratedAt.UTC().Format(time.RFC3339Nano), Classification: item.Classification, Version: item.Version, ScopeLabel: labels[0], ReviewLabel: labels[1]})
 	}
 	return &graphql1.ReportConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
@@ -3502,6 +3557,9 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	}
 	isCustomer := hasRole(meta, auth.CustomerViewer)
 	if isCustomer {
+		if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.CustomerViewer); err != nil {
+			return nil, err
+		}
 		value = "PDF_CUSTOMER"
 	} else if _, err := r.authorizeOperation(ctx, meta, auth.DashboardProduct, false, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
@@ -3912,8 +3970,8 @@ func (r *queryResolver) CustomerTimeline(ctx context.Context, assetID *string, p
 }
 
 // CustomerReport is the resolver for the customerReport field.
-func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string, version *int) (*graphql1.CustomerReport, error) {
-	return r.customerReport(ctx, inspectionID, version)
+func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string, version *int, comparisonOutcome *graphql1.ComparisonOutcome) (*graphql1.CustomerReport, error) {
+	return r.customerReportWithComparison(ctx, inspectionID, version, comparisonOutcome)
 }
 
 // CustomerEvidence is the resolver for the customerEvidence field.
@@ -4522,6 +4580,9 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 		captureLayout = &value
 	}
 	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, MediaKind: view.Draft.MediaKind, TemplateVersionID: view.Draft.TemplateVersionID.String(), CaptureLayout: captureLayout, Reference: reference, ReferenceItems: []*graphql1.CaptureReferenceItem{}, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Environments: []*graphql1.CaptureEnvironment{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
+	if err := projectDescriptiveCapture(response, view); err != nil {
+		return nil, errors.New("capture descriptive result could not be projected")
+	}
 	if view.Draft.Kind == "RECAPTURE" {
 		var request database.RecaptureRequest
 		if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -4653,7 +4714,19 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 			CaptureSourcePolicy:  req.CaptureSourcePolicy,
 			ComparisonTarget:     req.ComparisonTarget,
 			ImpossibilityAllowed: req.ImpossibilityAllowed,
+			Expected:             &req.Expected,
+			AddedDuringCapture:   &req.AddedDuringCapture,
 		})
+		projected := requirements[len(requirements)-1]
+		if req.EnvironmentIdentityID != "" {
+			projected.EnvironmentIdentityID = &req.EnvironmentIdentityID
+		}
+		if req.EnvironmentTypeCode != "" {
+			projected.EnvironmentTypeCode = &req.EnvironmentTypeCode
+		}
+		if req.EnvironmentName != "" {
+			projected.EnvironmentName = &req.EnvironmentName
+		}
 	}
 	response.Environments = mapCaptureEnvironments(view)
 	answers := make([]*graphql1.CaptureAnswer, 0, len(view.Answers))
@@ -4673,6 +4746,11 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	}
 	response.Status, response.Requirements, response.Answers = status, requirements, answers
 	return response, nil
+}
+
+// InspectionCoverage delegates the coverage query to the descriptive capture helper.
+func (r *queryResolver) InspectionCoverage(ctx context.Context, inspectionID string) (*graphql1.InspectionCoverage, error) {
+	return r.inspectionCoverage(ctx, inspectionID)
 }
 
 // VideoPolicy is the resolver for the videoPolicy field.
@@ -4803,6 +4881,9 @@ func (r *reportResolver) Evidence(ctx context.Context, obj *graphql1.Report, fir
 	return &graphql1.ReportEvidenceConnection{Nodes: page, PageInfo: pageInfo(end, more)}, nil
 }
 
+// Inspection returns graphql1.InspectionResolver implementation.
+func (r *Resolver) Inspection() graphql1.InspectionResolver { return &inspectionResolver{r} }
+
 // Mutation returns graphql1.MutationResolver implementation.
 func (r *Resolver) Mutation() graphql1.MutationResolver { return &mutationResolver{r} }
 
@@ -4816,6 +4897,7 @@ func (r *Resolver) Query() graphql1.QueryResolver { return &queryResolver{r} }
 func (r *Resolver) Report() graphql1.ReportResolver { return &reportResolver{r} }
 
 type (
+	inspectionResolver    struct{ *Resolver }
 	mutationResolver      struct{ *Resolver }
 	originVersionResolver struct{ *Resolver }
 	queryResolver         struct{ *Resolver }

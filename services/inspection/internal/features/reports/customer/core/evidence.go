@@ -204,6 +204,9 @@ var blockingFlags = []string{"SENSITIVE", "SENSITIVE_DETECTION", BlockedAvailabi
 // served to a customer: it was recorded as sensitive-blocked or carries a
 // sensitive flag. Every customer media path decides through this function.
 func EvidenceBlocked(e core.Evidence) bool {
+	if !core.EvidenceAvailable(e.Availability) {
+		return true
+	}
 	if strings.EqualFold(e.Availability, BlockedAvailability) {
 		return true
 	}

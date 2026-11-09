@@ -46,7 +46,15 @@ func ResolveTask(ctx context.Context, tx *gorm.DB, analysisType, task string, no
 	if _, err := prompt.ParseTask(task, current.DefinitionJSON); err != nil {
 		return Result{}, fmt.Errorf("analysis prompt configuration is invalid: %w", err)
 	}
-	candidate := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: analysisType, Task: task, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now.UTC()}
+	definition, err := prompt.ParseTask(task, current.DefinitionJSON)
+	if err != nil {
+		return Result{}, fmt.Errorf("analysis prompt configuration is invalid: %w", err)
+	}
+	schemaVersion := definition.SchemaVersion
+	if schemaVersion == 0 {
+		schemaVersion = 1
+	}
+	candidate := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: analysisType, Task: task, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, SchemaVersion: schemaVersion, CreatedAt: now.UTC()}
 	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}, {Name: "task"}, {Name: "canonical_digest"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
 		return Result{}, err
 	}

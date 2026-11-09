@@ -237,7 +237,7 @@ func TestInventoryReferenceIncludesPendingAndExcludesRejectedEnvironments(t *tes
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	item := database.InventoryItem{ID: identity.NewID(), TenantID: query.TenantID, OriginVersionID: versionID, EnvironmentID: environments[0].ID, IdentityID: identity.NewID(), TypeCode: "FLOOR", Name: "Floor", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}
+	item := database.InventoryItem{ID: identity.NewID(), TenantID: query.TenantID, OriginVersionID: versionID, EnvironmentID: environments[0].ID, IdentityID: identity.NewID(), TypeCode: "FLOOR", Name: "Floor", NotAssessed: []byte(`[]`), Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&item).Error; err != nil {
 		t.Fatal(err)
 	}

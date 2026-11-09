@@ -600,3 +600,13 @@ hr { inline-size: 100%; border: 0; border-block-start: 1px solid var(--inspectio
 .capture-voice-summary { display: grid; gap: .5rem; padding: .8rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
 .capture-voice-summary h3 { margin: 0; font-size: .95rem; }
 .capture-voice-summary p, .capture-voice-summary li { color: var(--inspection-muted); font-size: .8rem; }
+
+.capture-component-card, .capture-component-answer { display: grid; gap: .75rem; min-inline-size: 0; }
+.capture-component-card, .capture-checklist > fieldset, .capture-handover > fieldset { padding: 1rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-bg); }
+.capture-component-card h4, .capture-component-answer p { margin: 0; overflow-wrap: anywhere; }
+.capture-component-answer { padding-block: .75rem; border-block-start: 1px solid var(--inspection-border); }
+.capture-component-card p, .capture-component-card label, .capture-component-card select, .capture-component-card textarea, .capture-handover label, .capture-handover input, .capture-handover select { font-size: 1rem; }
+.capture-component-card [role="alert"], .capture-handover [role="alert"] { color: var(--inspection-danger); overflow-wrap: anywhere; }
+.capture-component-card [role="status"], .capture-handover [role="status"] { color: var(--inspection-success); }
+.capture-scope-gap { overflow-wrap: anywhere; }
+@media (max-width: 390px) { .capture-component-card, .capture-component-answer, .capture-handover form, .capture-handover fieldset { min-inline-size: 0; max-inline-size: 100%; } .capture-component-card button, .capture-handover button { max-inline-size: 100%; white-space: normal; } }

@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -99,6 +100,88 @@ func TestTemplateSchemaV2_UT090ToUT095(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestTemplateSchemaV3_UT001_UT004_UT107(t *testing.T) {
+	refs := testRefs{}
+	doc := validDocument()
+	doc.SchemaVersion = DescriptiveSchemaVersion
+	doc.Requirements = nil
+	doc.CaptureLayout = EnvironmentsLayout
+	doc.AssetProfile = "PROPERTY_COMPONENTS"
+	doc.ExpectedRooms = []ExpectedRoom{{Key: "kitchen", TypeCode: "KITCHEN", Name: "Cozinha", Components: []ExpectedComponent{{Key: "floor", TypeCode: "FLOOR", Label: "Piso", Views: []string{"geral", "detalhe"}}}}}
+	doc.HandoverRecords = []HandoverRecord{{Key: "keys", Kind: "KEY", Required: true}, {Key: "meter", Kind: "METER", Required: true}}
+	compiled, err := Compile(encode(t, doc), refs)
+	if err != nil {
+		t.Fatalf("UT-001/UT-107: v3 template was rejected: %v", err)
+	}
+	if len(compiled.Document.ExpectedRooms) != 1 || compiled.Document.ExpectedRooms[0].Components[0].Key != "floor" || len(compiled.Document.HandoverRecords) != 2 {
+		t.Fatalf("UT-001/UT-107: compiled scope lost expected data: %+v", compiled.Document)
+	}
+
+	t.Run("UT-002 invalid component name", func(t *testing.T) {
+		invalid := doc
+		invalid.ExpectedRooms = []ExpectedRoom{{Key: "kitchen", TypeCode: "KITCHEN", Name: "Cozinha", Components: []ExpectedComponent{{Key: "floor", TypeCode: "FLOOR", Label: " "}}}}
+		if _, err := Compile(encode(t, invalid), refs); err == nil || !strings.Contains(err.Error(), "nome válidos") {
+			t.Fatalf("expected Portuguese validation error, got %v", err)
+		}
+	})
+	t.Run("UT-003 empty expected list remains valid", func(t *testing.T) {
+		empty := doc
+		empty.ExpectedRooms = nil
+		empty.HandoverRecords = nil
+		if _, err := Compile(encode(t, empty), refs); err != nil {
+			t.Fatalf("empty v3 scope should compile: %v", err)
+		}
+	})
+	t.Run("component keys are unique within each room", func(t *testing.T) {
+		multiRoom := cloneTemplateDocument(t, doc)
+		multiRoom.ExpectedRooms = append(multiRoom.ExpectedRooms, ExpectedRoom{Key: "bedroom", TypeCode: "BEDROOM", Name: "Quarto", Components: []ExpectedComponent{{Key: "floor", TypeCode: "FLOOR", Label: "Piso"}}})
+		if _, err := Compile(encode(t, multiRoom), refs); err != nil {
+			t.Fatalf("same component key in another room should be valid: %v", err)
+		}
+		duplicate := cloneTemplateDocument(t, doc)
+		duplicate.ExpectedRooms[0].Components = append(duplicate.ExpectedRooms[0].Components, ExpectedComponent{Key: "floor", TypeCode: "FLOOR", Label: "Outro piso"})
+		if _, err := Compile(encode(t, duplicate), refs); err == nil || !strings.Contains(err.Error(), "duplicada") {
+			t.Fatalf("duplicate component in one room should fail: %v", err)
+		}
+	})
+	t.Run("UT-004 component and view limits", func(t *testing.T) {
+		tooManyViews := cloneTemplateDocument(t, doc)
+		views := make([]string, MaxComponentViews+1)
+		for i := range views {
+			views[i] = fmt.Sprintf("vista-%d", i)
+		}
+		tooManyViews.ExpectedRooms[0].Components[0].Views = views
+		if _, err := Compile(encode(t, tooManyViews), refs); err == nil || !strings.Contains(err.Error(), "vistas") {
+			t.Fatalf("excess views should fail at the view limit, got %v", err)
+		}
+		tooManyComponents := cloneTemplateDocument(t, doc)
+		tooManyComponents.ExpectedRooms = nil
+		for i := 0; i < MaxExpectedRooms; i++ {
+			room := ExpectedRoom{Key: fmt.Sprintf("room-%d", i), TypeCode: "KITCHEN", Name: "Cozinha"}
+			for j := 0; j < MaxItemsPerEnvironment; j++ {
+				room.Components = append(room.Components, ExpectedComponent{Key: fmt.Sprintf("component-%d", j), TypeCode: "FLOOR", Label: "Piso"})
+			}
+			tooManyComponents.ExpectedRooms = append(tooManyComponents.ExpectedRooms, room)
+		}
+		if _, err := Compile(encode(t, tooManyComponents), refs); err == nil || !strings.Contains(err.Error(), "limite de componentes esperados") {
+			t.Fatalf("excess components should fail at the component limit, got %v", err)
+		}
+	})
+}
+
+func cloneTemplateDocument(t *testing.T, input TemplateDocument) TemplateDocument {
+	t.Helper()
+	var clone TemplateDocument
+	payload, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
 }
 
 type testRefs struct{}

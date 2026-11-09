@@ -23,7 +23,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestUT058PDFSourceAvailabilityOverlayPreservesCanonicalSnapshot(t *testing.T) {
+func TestTask04PDFSourceAvailabilityOverlayPreservesCanonicalSnapshot(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -258,6 +258,30 @@ func TestExecutorPublishesArtifactAndReadyEventOnce(t *testing.T) {
 	}
 }
 
+// UT-048: a failed renderer/storage publication attempt remains retryable and
+// never changes the canonical snapshot or creates a partial artifact.
+func TestUT048RendererFailureLeavesRetryableJobAndImmutableSnapshot(t *testing.T) {
+	env := newTestEnv(t)
+	job := env.addJob(t, "PDF", "QUEUED", 0)
+	canonical := append([]byte(nil), env.snapshot.CanonicalJSON...)
+	env.client.putErr = errors.New("object store unavailable")
+	worked, err := env.executor.RunDue(context.Background())
+	if err != nil || !worked {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	got := env.job(t, job.ID)
+	if got.Status != "QUEUED" || got.Attempts != 1 || got.ArtifactID != nil || got.PendingObjectKey != "" {
+		t.Fatalf("failed attempt is not safely retryable: %+v", got)
+	}
+	var after database.ReportSnapshot
+	if err := env.db.Where("id=?", env.snapshot.ID).Take(&after).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(canonical, after.CanonicalJSON) || after.JSONDigest != env.snapshot.JSONDigest {
+		t.Fatal("failed artifact attempt changed the immutable snapshot")
+	}
+}
+
 func TestExecutorRetriesWithBackoffThenFailsTerminally(t *testing.T) {
 	env := newTestEnv(t)
 	env.client.putErr = errors.New("storage unavailable")
@@ -288,6 +312,31 @@ func TestExecutorRetriesWithBackoffThenFailsTerminally(t *testing.T) {
 	}
 	if env.client.count() != 0 {
 		t.Fatal("failed attempts left objects behind")
+	}
+}
+
+// IT-043: a renderer timeout keeps the immutable snapshot and leaves the PDF
+// job queued with retry metadata for an independent later attempt.
+func TestIT043RendererTimeoutKeepsSnapshotAndPDFJobRetryable(t *testing.T) {
+	env := newTestEnv(t)
+	job := env.addJob(t, "PDF_CUSTOMER", "QUEUED", 0)
+	before := append([]byte(nil), env.snapshot.CanonicalJSON...)
+	env.executor.limits.Timeout = time.Nanosecond
+	env.executor.limits.LeaseDuration = time.Second
+	worked, err := env.executor.RunDue(context.Background())
+	if err != nil || !worked {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	got := env.job(t, job.ID)
+	if got.Status != "QUEUED" || got.Attempts != 1 || got.NextAttemptAt.Before(*env.clock) || got.ArtifactID != nil {
+		t.Fatalf("renderer failure was not retryable: %+v", got)
+	}
+	var after database.ReportSnapshot
+	if err := env.db.Where("id=?", env.snapshot.ID).Take(&after).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after.CanonicalJSON) || after.JSONDigest != env.snapshot.JSONDigest {
+		t.Fatal("renderer failure changed the immutable report snapshot")
 	}
 }
 

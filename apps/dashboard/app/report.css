@@ -437,6 +437,36 @@
 .report-dialog-body .report-inventory--list .report-inventory-entry-no-image { align-self: center; white-space: nowrap; }
 .report-dialog-body .report-inventory--list .report-inventory-pairs { grid-column: 1 / -1; }
 
+.report-descriptive-checklist, .report-handover, .report-processing, .report-v3-comparison, .report-version-history { margin: 1rem; padding: 1rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); }
+.report-descriptive-checklist > header, .report-v3-comparison > header, .report-v3-comparison-item > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.report-checklist-room, .report-v3-comparison-item { margin-block-start: 1rem; padding-block-start: .75rem; border-block-start: 1px solid var(--inspection-border); }
+.report-checklist-room ul, .report-handover ul, .report-version-history ol { display: grid; gap: .75rem; padding-inline-start: 1.25rem; }
+.report-checklist-room li, .report-handover li { padding: .75rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
+.report-checklist-room li > span, .report-handover li > span { display: inline-block; margin-inline-start: .75rem; color: var(--inspection-muted); }
+.report-checklist-evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .5rem; margin-block-start: .5rem; }
+.report-checklist-evidence > strong { grid-column: 1 / -1; }
+.report-checklist-evidence figure { display: grid; gap: .25rem; min-inline-size: 0; margin: 0; }
+.report-checklist-evidence img, .report-checklist-evidence .report-image-missing { display: block; inline-size: 100%; max-block-size: 13rem; aspect-ratio: 4 / 3; object-fit: contain; background: var(--inspection-surface); }
+.report-checklist-evidence span { overflow-wrap: anywhere; }
+.report-comparison-filters { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1rem; }
+.report-comparison-filters button { min-block-size: 2.75rem; padding: .45rem .7rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface); color: var(--inspection-ink); }
+.report-comparison-filters button[aria-pressed="true"] { border-color: var(--inspection-brand); outline: 2px solid color-mix(in srgb, var(--inspection-brand) 25%, transparent); }
+.report-v3-comparison-item .report-inventory-pair { margin-block: .75rem; }
+.report-customer-pair { display: grid; gap: .25rem; margin-block: .5rem; padding: .75rem; border: 1px solid var(--inspection-border); overflow-wrap: anywhere; }
+.report-pairing-revision { display: grid; gap: .5rem; margin-block: .75rem; }
+.report-pairing-revision label { display: grid; gap: .25rem; }
+.report-pairing-revision select { min-block-size: 2.75rem; max-inline-size: 100%; }
+.report-version-history ol { list-style: none; padding: 0; }
+.report-version-history li { display: grid; gap: .25rem; }
+.report-version-history li > button { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; padding: .7rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface); color: var(--inspection-ink); text-align: start; }
+.report-version-history li > button[aria-current="page"] { border-color: var(--inspection-brand); }
+.public-verification { display: grid; min-block-size: 100vh; place-items: center; padding: 1.5rem; background: var(--inspection-surface); }
+.public-verification > section { inline-size: min(100%, 42rem); padding: 1.5rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); }
+.public-verification dl { display: grid; gap: .75rem; }
+.public-verification dl > div { display: grid; grid-template-columns: minmax(9rem, .6fr) 1fr; gap: .5rem; }
+.public-verification dt { color: var(--inspection-muted); }
+.public-verification dd { margin: 0; overflow-wrap: anywhere; }
+
 @media (max-width: 48rem) {
   .inspection-dialog--wide:has(.report-dialog-body) {
     padding: max(.5rem, env(safe-area-inset-top)) 0 max(.5rem, env(safe-area-inset-bottom));

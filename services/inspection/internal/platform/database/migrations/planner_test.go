@@ -82,8 +82,8 @@ func TestInternalUserRecipientChannelBackfill107IsIdempotent(t *testing.T) {
 	if strings.Index(step.SQL, "DELETE FROM notifications.recipient_channels") > strings.Index(step.SQL, "CREATE UNIQUE INDEX") {
 		t.Fatal("migration must deduplicate recipient channels before creating the unique index")
 	}
-	if LatestVersion() != 116 {
-		t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+	if LatestVersion() != 130 {
+		t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 	}
 }
 
@@ -239,8 +239,8 @@ func TestTranscriptionContractsUT025(t *testing.T) {
 			t.Errorf("transcription migration missing %q", required)
 		}
 	}
-	if LatestVersion() != 116 {
-		t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+	if LatestVersion() != 130 {
+		t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 	}
 }
 
@@ -307,8 +307,8 @@ func TestInspectionOriginPromotionMigrationIsTenantScopedAndNonMutating(t *testi
 	if strings.Contains(step.SQL, "\nUPDATE ") || strings.Contains(step.SQL, "\nDELETE FROM ") {
 		t.Fatal("promotion migration must not mutate existing rows")
 	}
-	if LatestVersion() != 116 {
-		t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+	if LatestVersion() != 130 {
+		t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 	}
 }
 
@@ -458,8 +458,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 116 {
-			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 		}
 		return
 	}
@@ -485,8 +485,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 116 {
-			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 		}
 		return
 	}
@@ -506,8 +506,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 116 {
-			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 		}
 		return
 	}
@@ -532,8 +532,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 116 {
-			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 		}
 		return
 	}
@@ -572,8 +572,8 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 116 {
-			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 		}
 		return
 	}
@@ -597,8 +597,8 @@ func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.
 				t.Fatalf("display-name migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 116 {
-			t.Fatalf("LatestVersion()=%d, want 116", LatestVersion())
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 		}
 		return
 	}
@@ -671,6 +671,43 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 	}
 	if LatestVersion() < 40 {
 		t.Fatalf("latest version did not include ledger migration: %d", LatestVersion())
+	}
+}
+
+func TestTask03InventoryImageTruncationMigrationIsAdditive(t *testing.T) {
+	var migration *Step
+	for _, item := range Foundation() {
+		if item.Version == 125 {
+			migration = &item
+			break
+		}
+	}
+	if migration == nil || migration.Name != "inventory_image_truncation_diagnostic" || !strings.Contains(migration.SQL, "ADD COLUMN IF NOT EXISTS candidate_image_truncated") {
+		t.Fatalf("migration 125 does not add the image truncation diagnostic safely: %+v", migration)
+	}
+	if LatestVersion() != 130 {
+		t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
+	}
+}
+
+func TestTask03InventoryNotAssessedMigrationRepairsExistingRows(t *testing.T) {
+	var migration *Step
+	for _, item := range Foundation() {
+		if item.Version == 126 {
+			migration = &item
+			break
+		}
+	}
+	if migration == nil || migration.Name != "inventory_not_assessed_default_and_component_index" {
+		t.Fatalf("migration 126 missing: %+v", migration)
+	}
+	for _, required := range []string{"UPDATE origins.inventory_items SET not_assessed='[]'::jsonb WHERE not_assessed IS NULL", "ALTER COLUMN not_assessed SET DEFAULT", "ALTER COLUMN not_assessed SET NOT NULL", "DROP INDEX IF EXISTS origins.idx_inventory_items_component_key"} {
+		if !strings.Contains(migration.SQL, required) {
+			t.Errorf("migration 126 missing %q", required)
+		}
+	}
+	if LatestVersion() != 130 {
+		t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
 	}
 }
 
@@ -906,4 +943,42 @@ func TestVideoMembershipMigrationAddsTenantForeignKeys(t *testing.T) {
 		return
 	}
 	t.Fatal("video membership foreign key migration is not registered")
+}
+
+func TestTask04ExactVerificationLookupMigrationIsTenantScopedAndIndexed(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 129 {
+			continue
+		}
+		for _, required := range []string{
+			"reports.report_verification_codes",
+			"code_hash char(64) NOT NULL UNIQUE",
+			"ENABLE ROW LEVEL SECURITY",
+			"FORCE ROW LEVEL SECURITY",
+			"public_verification_lookup(p_code_hash char(64), p_version integer)",
+			"LIMIT 1",
+			"DROP INDEX IF EXISTS reports.idx_report_verification_codes_tenant_snapshot",
+		} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("verification migration missing %q", required)
+			}
+		}
+		if LatestVersion() != 130 {
+			t.Fatalf("LatestVersion()=%d, want 130", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("exact report verification lookup migration is not registered")
+}
+
+func TestTask04Migration127IsNoOpAndDoesNotExposeVerificationCodes(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version == 127 {
+			if strings.Contains(strings.ToUpper(step.SQL), "SECURITY DEFINER") || strings.Contains(step.SQL, "verificationCode") || !strings.Contains(step.SQL, "no-op") {
+				t.Fatalf("migration 127 must remain a documented no-op without cross-tenant code lookup: %s", step.SQL)
+			}
+			return
+		}
+	}
+	t.Fatal("migration 127 is not registered")
 }

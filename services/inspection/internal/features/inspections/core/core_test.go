@@ -23,6 +23,26 @@ func TestChecklistOnlyRejectsTemplateWithMandatoryFixedOrigin(t *testing.T) {
 	}
 }
 
+func TestDescriptiveEnvironmentRequirementsUseTemplateLimitsAndPreserveBaselineIdentity(t *testing.T) {
+	limits := catalog.DefaultEnvironmentCapture()
+	limits.Photo.Minimum, limits.Photo.Maximum = 2, 7
+	room := catalog.ExpectedRoom{Key: "scope-room-key", TypeCode: "BEDROOM", Name: "Quarto"}
+	baselineIdentity := identity.NewID().String()
+	baseline := capturecore.Requirement{Key: "env:baseline-room-key", Section: "BEDROOM", Label: "Quarto", EnvironmentIdentityID: baselineIdentity, EnvironmentTypeCode: "BEDROOM", EnvironmentName: "Quarto", EvidenceKind: "PHOTO", MinimumMedia: 1, MaximumMedia: 20}
+	got := descriptiveEnvironmentRequirements([]capturecore.Requirement{baseline}, []catalog.ExpectedRoom{room}, limits, catalog.ChecklistOnly, true, nil)
+	if len(got) != 1 || got[0].Key != "env:scope-room-key" || got[0].EnvironmentIdentityID != baselineIdentity || got[0].MinimumMedia != 1 || got[0].MaximumMedia != 20 {
+		t.Fatalf("matched baseline requirement lost its identity: %+v", got)
+	}
+	created := descriptiveEnvironmentRequirements(nil, []catalog.ExpectedRoom{room}, limits, catalog.ChecklistOnly, false, nil)
+	if len(created) != 1 || created[0].MinimumMedia != 2 || created[0].MaximumMedia != 7 {
+		t.Fatalf("template v3 environment limits ignored: %+v", created)
+	}
+	originFallback := descriptiveEnvironmentRequirements(nil, []catalog.ExpectedRoom{room}, limits, catalog.ChecklistOnly, true, nil)
+	if len(originFallback) != 1 || originFallback[0].MinimumMedia != 2 || originFallback[0].MaximumMedia != 7 {
+		t.Fatalf("template v3 environment limits ignored for origin scope: %+v", originFallback)
+	}
+}
+
 func TestInventoryPromptTaskUsesPinnedVersionInventoryFlagHelper(t *testing.T) {
 	if got := inventoryPromptTask(nil); got != resolvepromptTaskCatalog {
 		t.Fatalf("without reference task=%s", got)

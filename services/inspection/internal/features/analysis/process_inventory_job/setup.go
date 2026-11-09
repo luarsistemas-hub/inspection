@@ -55,6 +55,14 @@ func (p *Processor) Process(ctx context.Context, job database.InventoryJob, fenc
 	if err != nil {
 		return err
 	}
+	// Persist the capture version before any fallible media/model work. A
+	// terminal failure still needs to identify which submitted room state it
+	// attempted, so a later pairing revision can detect a newer recapture.
+	if job.Kind == "COMPARE" && in.strict {
+		if err := fenced(func(tx *gorm.DB) error { return recordAnswerRef(tx, job, in) }); err != nil {
+			return err
+		}
+	}
 	in.current, err = loadEvidenceImages(ctx, p.deps.Store, in.current)
 	if err != nil {
 		return err
@@ -63,8 +71,11 @@ func (p *Processor) Process(ctx context.Context, job database.InventoryJob, fenc
 	if err != nil {
 		return err
 	}
-	definition, err := prompt.ParseTask(in.snapshot.Task, in.snapshot.DefinitionJSON)
+	definition, err := prompt.ParsePinnedTask(in.snapshot.Task, in.snapshot.DefinitionJSON, in.snapshot.CanonicalDigest, in.snapshot.SchemaVersion)
 	if err != nil {
+		return messaging.ErrPermanent
+	}
+	if job.SchemaVersion > 0 && definition.SchemaVersion > 0 && job.SchemaVersion != definition.SchemaVersion {
 		return messaging.ErrPermanent
 	}
 	if job.Kind == "CATALOG" {
@@ -72,12 +83,29 @@ func (p *Processor) Process(ctx context.Context, job database.InventoryJob, fenc
 	}
 	if in.impossible || len(in.current) == 0 {
 		// The environment was not captured: every baseline item is NOT_OBSERVED
-		// and the model is never called.
+		// and the model is never called. A strict comparison keeps "no basis"
+		// apart from "not observed" and keeps any staff pairing on record.
+		var basis map[identity.ID]bool
+		if in.strict {
+			basis = baselineBasis(in)
+		}
 		results := make([]database.InventoryItemResult, 0, len(in.items))
 		for _, item := range in.items {
-			results = append(results, notObserved(job, item, "ENVIRONMENT_NOT_CAPTURED", p.deps.Now()))
+			reason := "ENVIRONMENT_NOT_CAPTURED"
+			if in.strict && in.unmatched {
+				reason = reasonEnvironmentUnmatched
+			}
+			if in.strict && !basis[item.IdentityID] {
+				reason = reasonNoBaselineView
+			}
+			results = append(results, notObserved(job, item, reason, p.deps.Now()))
 		}
-		return fenced(func(tx *gorm.DB) error { return replaceResults(tx, job, nil, results) })
+		return fenced(func(tx *gorm.DB) error {
+			if err := replaceResults(tx, job, in.staffPairs, results); err != nil {
+				return err
+			}
+			return recordAnswerRef(tx, job, in)
+		})
 	}
 	return p.compare(ctx, job, in, definition, fenced)
 }
@@ -118,10 +146,42 @@ func (p *Processor) Failed(ctx context.Context, tx *gorm.DB, job database.Invent
 			if err := tx.Where("tenant_id=? AND origin_version_id=? AND environment_id=? AND decision IN ('ACCEPTED','EDITED','ADDED')", job.TenantID, job.OriginVersionID, environment.ID).Find(&items).Error; err != nil {
 				return err
 			}
+			// A failed pairing revision fails only the revised items: the
+			// rest of the room keeps the previous generation's results.
+			revised, err := failedRevision(ctx, tx, job)
+			if err != nil {
+				return err
+			}
+			// A strict comparison never reports a failure for an item the
+			// baseline does not show: it had no basis to be compared.
+			basis, strict, err := failedJobBasis(ctx, tx, job, items)
+			if err != nil {
+				return err
+			}
 			for _, item := range items {
-				row := notObserved(job, item, "ANALYSIS_FAILED", p.deps.Now())
+				if revised.carry != nil && !revised.carry.rejudge[item.IdentityID] {
+					continue
+				}
+				reason := "ANALYSIS_FAILED"
+				if strict && !basis[item.IdentityID] {
+					reason = reasonNoBaselineView
+				}
+				row := notObserved(job, item, reason, p.deps.Now())
 				if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 					return err
+				}
+			}
+			if revised.carry != nil {
+				results, pairs := carriedResults(job, revised.carry, p.deps.Now().UTC())
+				for i := range pairs {
+					if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&pairs[i]).Error; err != nil {
+						return err
+					}
+				}
+				for i := range results {
+					if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&results[i]).Error; err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -223,6 +283,16 @@ func notObserved(job database.InventoryJob, item database.InventoryItem, reason 
 	rid := item.IdentityID
 	before := item.Condition
 	return database.InventoryItemResult{ID: identity.NewID(), TenantID: job.TenantID, JobID: job.ID, InspectionID: job.InspectionID, ItemIdentityID: &rid, Status: "NOT_OBSERVED", ConditionBefore: &before, ReasonCode: &reason, CreatedAt: now.UTC()}
+}
+
+// recordAnswerRef stores, on a strict COMPARE job, which submitted answer of
+// its room it read, so a later pairing revision knows whether the room's
+// capture changed since.
+func recordAnswerRef(tx *gorm.DB, job database.InventoryJob, in jobInput) error {
+	if !in.strict || in.answerRef == "" {
+		return nil
+	}
+	return tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND id=?", job.TenantID, job.ID).Update("capture_answer_ref", in.answerRef).Error
 }
 
 // replaceResults rewrites the pairs and item results of one job. A replay after

@@ -74,6 +74,12 @@ func TestSnapshotEventSchedulesBothAudiencesIdempotentlyAndSkipsLegacy(t *testin
 	}
 }
 
+func TestV3TemplateKeepsTheStoredPDFRenderVersion(t *testing.T) {
+	if got := rendererVersionForSchema(3); got != 1 {
+		t.Fatalf("v3 renderer version=%d; template-only changes keep PDFRenderVersion at 1", got)
+	}
+}
+
 func TestSetupExecutorRequiresDatabaseAndPrivateStore(t *testing.T) {
 	if _, err := SetupExecutor(nil, objectstore.Store{}, DefaultLimits(), time.Now, ""); err == nil {
 		t.Fatal("missing database accepted")

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/features/transcription/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -300,7 +301,7 @@ func environmentCaptureEligible(tx *gorm.DB, tenantID, inspectionID identity.ID)
 	if err := json.Unmarshal(version.DefinitionJSON, &definition); err != nil {
 		return false, nil
 	}
-	return version.SchemaVersion == 2 && definition.CaptureLayout == "ENVIRONMENTS", nil
+	return version.SchemaVersion >= catalog.EnvironmentSchemaVersion && definition.CaptureLayout == "ENVIRONMENTS", nil
 }
 
 func anchorKind(photoID, attemptID string) string {

@@ -13,6 +13,7 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	catalognotes "inspection/services/inspection/internal/features/analysis/catalog_notes"
 	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
+	"inspection/services/inspection/internal/features/analysis/prompt"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	inventorycore "inspection/services/inspection/internal/features/inventory/core"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -270,8 +271,11 @@ func requestCompare(tx *gorm.DB, tenantID identity.ID, inspection database.Inspe
 	}
 	for _, env := range environments {
 		identityID := env.IdentityID
-		// Comparative captures key each environment by its stable identity.
-		if err := createJob(tx, tenantID, inspection, version.ID, "COMPARE", "env:"+env.IdentityID.String(), &identityID, now); err != nil {
+		// Comparative captures key each environment by its stable identity. A
+		// descriptive (v3) capture keys a baseline room by its scope room key
+		// and records the baseline identity it was matched to: the job then
+		// reads that requirement's answer.
+		if err := createJob(tx, tenantID, inspection, version.ID, "COMPARE", baselineRequirementKey(env, requirements), &identityID, now); err != nil {
 			return err
 		}
 	}
@@ -291,6 +295,24 @@ func requestCompare(tx *gorm.DB, tenantID identity.ID, inspection database.Inspe
 		}
 	}
 	return nil
+}
+
+// baselineRequirementKey is the capture requirement key of a baseline
+// environment: the expected requirement matched to its identity, else the
+// historical "env:<identity>" key.
+func baselineRequirementKey(env database.InventoryEnvironment, requirements []capturecore.Requirement) string {
+	identityKey := "env:" + env.IdentityID.String()
+	for _, requirement := range requirements {
+		if requirement.Key == identityKey {
+			return identityKey
+		}
+	}
+	for _, requirement := range requirements {
+		if !requirement.AddedDuringCapture && strings.HasPrefix(requirement.Key, "env:") && requirement.EnvironmentIdentityID == env.IdentityID.String() {
+			return requirement.Key
+		}
+	}
+	return identityKey
 }
 
 // requestCatalog opens (or reuses) the CAPTURE draft of this inspection and one
@@ -340,6 +362,17 @@ func createCatalogJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, i
 		return 0, apperror.New(apperror.InvalidInput, "draftId", "rascunho e geração são obrigatórios")
 	}
 	tx = tx.WithContext(ctx)
+	schemaVersion, schemaDigest := 1, ""
+	if promptSnapshotID != nil {
+		var snapshot database.AnalysisPromptSnapshot
+		if err := tx.Where("id=?", *promptSnapshotID).Take(&snapshot).Error; err != nil {
+			return 0, err
+		}
+		schemaVersion, schemaDigest = snapshot.SchemaVersion, snapshot.CanonicalDigest
+		if schemaVersion == 0 {
+			schemaVersion = 1
+		}
+	}
 	jobs := 0
 	for position, requirement := range requirements {
 		mediaIDs, ok, err := CapturedMedia(requirement, captured)
@@ -374,7 +407,7 @@ func createCatalogJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, i
 			return 0, err
 		}
 		identityID := env.IdentityID
-		job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: draftID, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "PENDING", NextAttemptAt: dueAt, EnvironmentIdentityID: &identityID, PromptSnapshotID: promptSnapshotID, CreatedAt: now, UpdatedAt: now}
+		job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: draftID, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "PENDING", NextAttemptAt: dueAt, EnvironmentIdentityID: &identityID, PromptSnapshotID: promptSnapshotID, SchemaVersion: schemaVersion, SchemaDigest: &schemaDigest, CreatedAt: now, UpdatedAt: now}
 		created := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job)
 		if created.Error != nil {
 			return 0, created.Error
@@ -406,7 +439,18 @@ func captureDraft(tx *gorm.DB, tenantID identity.ID, inspection database.Inspect
 }
 
 func createJob(tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, versionID identity.ID, kind, key string, environment *identity.ID, now time.Time) error {
-	job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: versionID, Kind: kind, RequirementKey: key, EnvironmentIdentityID: environment, Generation: 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: inspection.InventoryPromptSnapshotID, CreatedAt: now, UpdatedAt: now}
+	schemaVersion, schemaDigest := 1, ""
+	if inspection.InventoryPromptSnapshotID != nil {
+		var snapshot database.AnalysisPromptSnapshot
+		if err := tx.Where("id=?", *inspection.InventoryPromptSnapshotID).Take(&snapshot).Error; err != nil {
+			return err
+		}
+		schemaVersion, schemaDigest = snapshot.SchemaVersion, snapshot.CanonicalDigest
+		if schemaVersion == 0 {
+			schemaVersion = 1
+		}
+	}
+	job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: versionID, Kind: kind, RequirementKey: key, EnvironmentIdentityID: environment, Generation: 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: inspection.InventoryPromptSnapshotID, SchemaVersion: schemaVersion, SchemaDigest: &schemaDigest, CreatedAt: now, UpdatedAt: now}
 	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job).Error
 }
 
@@ -433,14 +477,50 @@ func Reanalyze(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity
 	latest := inventoryexecutor.LatestGeneration(jobs)
 	for _, job := range latest {
 		if job.Status != "SUCCEEDED" && job.Status != "FAILED" && job.Status != "CANCELED" {
-			return 0, apperror.New(apperror.InvalidState, "inspectionId", "inventory analysis is already in progress")
+			return 0, apperror.New(apperror.InvalidState, "inspectionId", "A análise do inventário já está em andamento.")
 		}
 	}
 	for _, job := range latest {
-		next := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, OriginVersionID: job.OriginVersionID, Kind: job.Kind, RequirementKey: job.RequirementKey, EnvironmentIdentityID: job.EnvironmentIdentityID, Generation: job.Generation + 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: job.PromptSnapshotID, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Create(&next).Error; err != nil {
+		if _, err := nextGeneration(tx, job, now); err != nil {
 			return 0, err
 		}
 	}
 	return len(latest), nil
+}
+
+// ReanalyzeRequirement appends the next generation of the COMPARE job of one
+// room (requirementKey) only, leaving every other room on its current
+// generation. It is used when a correction concerns a single room, such as a
+// staff pairing revision; Reanalyze keeps re-analysing the whole inspection.
+func ReanalyzeRequirement(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, requirementKey string, now time.Time) (database.InventoryJob, error) {
+	tx = tx.WithContext(ctx)
+	var jobs []database.InventoryJob
+	if err := tx.Where("tenant_id=? AND inspection_id=? AND kind='COMPARE' AND requirement_key=?", tenantID, inspectionID, requirementKey).Find(&jobs).Error; err != nil {
+		return database.InventoryJob{}, err
+	}
+	latest := inventoryexecutor.LatestGeneration(jobs)
+	if len(latest) != 1 {
+		return database.InventoryJob{}, apperror.New(apperror.InvalidState, "itemIdentityId", "O ambiente deste item não tem uma comparação que possa ser refeita.")
+	}
+	if job := latest[0]; job.Status != "SUCCEEDED" && job.Status != "FAILED" && job.Status != "CANCELED" {
+		return database.InventoryJob{}, apperror.New(apperror.InvalidState, "inspectionId", "A análise do inventário já está em andamento.")
+	}
+	return nextGeneration(tx, latest[0], now)
+}
+
+// nextGeneration creates the PENDING next generation of one COMPARE job with
+// the job's pinned prompt and schema.
+func nextGeneration(tx *gorm.DB, job database.InventoryJob, now time.Time) (database.InventoryJob, error) {
+	next := database.InventoryJob{ID: identity.NewID(), TenantID: job.TenantID, InspectionID: job.InspectionID, OriginVersionID: job.OriginVersionID, Kind: job.Kind, RequirementKey: job.RequirementKey, EnvironmentIdentityID: job.EnvironmentIdentityID, Generation: job.Generation + 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: job.PromptSnapshotID, SchemaVersion: job.SchemaVersion, SchemaDigest: job.SchemaDigest, CreatedAt: now, UpdatedAt: now}
+	if job.PromptSnapshotID != nil {
+		var snapshot database.AnalysisPromptSnapshot
+		if err := tx.Where("id=?", *job.PromptSnapshotID).Take(&snapshot).Error; err != nil {
+			return database.InventoryJob{}, err
+		}
+		next.SchemaVersion, next.SchemaDigest = prompt.SchemaPin(snapshot.SchemaVersion, snapshot.CanonicalDigest)
+	}
+	if err := tx.Create(&next).Error; err != nil {
+		return database.InventoryJob{}, err
+	}
+	return next, nil
 }

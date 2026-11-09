@@ -302,8 +302,8 @@ func TestSubmitV2WithoutEnvironmentsReturnsNoEnvironmentsUT113(t *testing.T) {
 	}
 	_, err := service.Submit(context.Background(), tenant, responsibility, false)
 	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || appErr.Field != "requirements" || appErr.Safe != "NO_ENVIRONMENTS" {
-		t.Fatalf("v2 submit without environments = %v; want INVALID_STATE requirements/NO_ENVIRONMENTS", err)
+	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || appErr.Field != "requirements" || appErr.Safe != "Nenhum cômodo foi selecionado para a captura." {
+		t.Fatalf("v2 submit without environments = %v; want INVALID_STATE requirements with a safe Portuguese message", err)
 	}
 }
 

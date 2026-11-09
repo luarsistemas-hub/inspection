@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "reportId": "report-v2-fixture",
+  "inspectionId": "inspection-v2-fixture",
+  "templateVersionId": "template-v2-fixture",
+  "referenceVersionId": "reference-v2-fixture",
+  "promptDigest": "prompt-v2-fixture",
+  "mode": "CONSOLIDATED",
+  "classification": "NORMAL",
+  "advisory": "Relatório de referência",
+  "context": {
+    "asset": {"id": "asset", "name": "Imóvel", "address": "Endereço"},
+    "participant": {"id": "participant", "name": "Participante"},
+    "template": {"id": "template", "name": "Modelo", "version": 1},
+    "inspection": {"generatedAt": "2026-01-01T00:00:00Z"}
+  },
+  "inventory": {
+    "reference": {"versionId": "baseline-v2-fixture", "versionNumber": 1, "purpose": "MOVE_IN", "activatedAt": "2026-01-01T00:00:00Z"},
+    "coverage": {"expectedItems": 1, "assessedItems": 1, "notObserved": 0, "environmentsNotCaptured": [], "environmentsAddedDuringCapture": []},
+    "problems": [],
+    "informational": []
+  }
+}

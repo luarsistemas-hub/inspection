@@ -162,7 +162,7 @@ func TestService_AssignedActivationCases(t *testing.T) {
 		})
 	}
 
-	t.Run("UT-065 activation excludes pending items and records notReviewed", func(t *testing.T) {
+	t.Run("UT-114 activation excludes pending items and records notReviewed", func(t *testing.T) {
 		db := inventoryTestDB(t)
 		tenant, version, env, actor := seedReadyDraft(t, db)
 		seedActivationAsset(t, db, tenant, version)

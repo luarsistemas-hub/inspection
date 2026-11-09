@@ -3,7 +3,9 @@ package generate_snapshot
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,6 +36,13 @@ type Input struct {
 	Findings                                            []report.Finding
 	Evidence                                            []report.Evidence
 	Inventory                                           *report.InventorySection
+	Checklist                                           *report.ChecklistSection
+	Processing                                          *report.ProcessingState
+	Scope                                               *report.ScopeSnapshot
+	Handover                                            *report.HandoverSection
+	Provenance                                          *report.Provenance
+	Comparison                                          *report.ComparisonSection
+	VerificationCode                                    string
 	PublicationPolicyVersion                            int64
 	PublicationMode                                     string
 	ActorID                                             identity.ID
@@ -64,6 +73,8 @@ func Setup(deps Dependencies) (func(context.Context, Input) (Result, error), err
 // sealed plan, or whose provenance differs from the stored frame. The snapshot
 // fails instead of substituting another image.
 var ErrFrameIntegrity = errors.New("FRAME_INTEGRITY_FAILED")
+
+const verificationPlaceholder = "verification-pending-code-placeholder-32chars"
 
 // Create increments versions only by append. A repeated terminal event with
 // identical report input returns the already-stored immutable snapshot.
@@ -122,6 +133,15 @@ func lockInspectionSnapshots(tx *gorm.DB, tenantID, inspectionID identity.ID) er
 	return tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "report-snapshot:"+tenantID.String()+":"+inspectionID.String()).Error
 }
 
+// snapshotValidationError marks a v3 validation failure as permanent. v1/v2
+// keep returning the validation error unchanged, as they always did.
+func snapshotValidationError(schemaVersion int, err error) error {
+	if schemaVersion >= 3 {
+		return fmt.Errorf("%w: %v", report.ErrInvalidSnapshot, err)
+	}
+	return err
+}
+
 // createLocked runs inside the transaction opened by Create, after the tenant is
 // set and the inspection's snapshot lock is held.
 func createLocked(ctx context.Context, tx *gorm.DB, input Input, now time.Time) (Result, error) {
@@ -133,20 +153,39 @@ func createLocked(ctx context.Context, tx *gorm.DB, input Input, now time.Time) 
 	} else if err != gorm.ErrRecordNotFound {
 		return Result{}, err
 	}
+	schemaVersion := 1
+	if input.Inventory != nil {
+		schemaVersion = 2
+	}
+	if input.Checklist != nil {
+		schemaVersion = 3
+	}
+	// Only v3 reads the previous canonical document: its report number is
+	// stable across versions and its dedupe ignores the per-version
+	// verification code. v1/v2 keep the historical rules byte for byte.
+	var latestSnapshot report.Snapshot
+	if schemaVersion >= 3 && latest.ID != (identity.ID{}) {
+		if err := json.Unmarshal(latest.CanonicalJSON, &latestSnapshot); err != nil {
+			return Result{}, err
+		}
+	}
 	id := identity.NewID()
 	reportID := id.String()
 	if latest.ID != (identity.ID{}) {
+		// Historical v1/v2 rule: version N carries the snapshot ID of N-1.
 		reportID = latest.ID.String()
+		if schemaVersion >= 3 && latestSnapshot.SchemaVersion >= 3 && latestSnapshot.ReportID != "" {
+			reportID = latestSnapshot.ReportID
+		}
 	}
 	findings := input.Findings
 	if hasVideoEvidence(input.Evidence) {
 		findings = consolidateFindings(findings, componentLabels(input.Evidence, input.Requirements))
 	}
-	schemaVersion := 1
-	if input.Inventory != nil {
-		schemaVersion = 2
+	snapshot := report.Snapshot{SchemaVersion: schemaVersion, ReportID: reportID, InspectionID: input.InspectionID.String(), Mode: input.Mode, Classification: input.Classification, TemplateVersionID: input.TemplateVersionID, ReferenceVersionID: input.ReferenceVersionID, PromptDigest: input.PromptDigest, ReasonCodes: input.ReasonCodes, Timeline: input.Timeline, Coverage: input.Coverage, Context: input.Context, Requirements: input.Requirements, Findings: findings, Evidence: input.Evidence, Inventory: input.Inventory, Checklist: input.Checklist, Processing: input.Processing, Scope: input.Scope, Handover: input.Handover, Provenance: input.Provenance, Comparison: input.Comparison, VerificationCode: input.VerificationCode, Advisory: "Esta triagem interna descreve alterações observadas e não atribui culpa, custo, responsabilidade ou consequência automática."}
+	if schemaVersion >= 3 && snapshot.VerificationCode == "" {
+		snapshot.VerificationCode = verificationPlaceholder
 	}
-	snapshot := report.Snapshot{SchemaVersion: schemaVersion, ReportID: reportID, InspectionID: input.InspectionID.String(), Mode: input.Mode, Classification: input.Classification, TemplateVersionID: input.TemplateVersionID, ReferenceVersionID: input.ReferenceVersionID, PromptDigest: input.PromptDigest, ReasonCodes: input.ReasonCodes, Timeline: input.Timeline, Coverage: input.Coverage, Context: input.Context, Requirements: input.Requirements, Findings: findings, Evidence: input.Evidence, Inventory: input.Inventory, Advisory: "Esta triagem interna descreve alterações observadas e não atribui culpa, custo, responsabilidade ou consequência automática."}
 	if input.VideoPlanID != nil {
 		snapshot.VideoPlanID = input.VideoPlanID.String()
 		snapshot.ScopeStatements = VideoScopeStatements(hasReference(input.ReferenceVersionID), input.Requirements)
@@ -154,9 +193,21 @@ func createLocked(ctx context.Context, tx *gorm.DB, input Input, now time.Time) 
 	if input.ProjectID != nil {
 		snapshot.ProjectID = input.ProjectID.String()
 	}
-	canonical, jsonDigest, err := report.CanonicalJSON(snapshot)
+	if schemaVersion >= 3 {
+		snapshot = report.SanitizeURLs(snapshot)
+	}
+	// Compare only report facts for deduplication. A fresh verification code is
+	// generated after this check so replayed events retain the original code.
+	comparable := snapshot
+	if schemaVersion >= 3 {
+		comparable.VerificationCode = ""
+	}
+	if schemaVersion >= 3 {
+		comparable.Context.Inspection.GeneratedAt = "report-generation"
+	}
+	canonical, jsonDigest, err := report.CanonicalJSON(comparable)
 	if err != nil {
-		return Result{}, err
+		return Result{}, snapshotValidationError(schemaVersion, err)
 	}
 	html, err := report.HTML(snapshot)
 	if err != nil {
@@ -168,13 +219,43 @@ func createLocked(ctx context.Context, tx *gorm.DB, input Input, now time.Time) 
 	if err != nil {
 		return Result{}, err
 	}
-	if latest.ID != (identity.ID{}) && latest.JSONDigest == jsonDigest {
+	// v1/v2 compare the stored digest exactly as before; a v3 candidate is
+	// compared with the previous v3 facts without the verification code and
+	// the generation time, so a replayed event never mints a new version.
+	latestComparableDigest := latest.JSONDigest
+	if schemaVersion >= 3 && latestSnapshot.SchemaVersion >= 3 {
+		latestSnapshot.VerificationCode = ""
+		latestSnapshot.Context.Inspection.GeneratedAt = "report-generation"
+		_, latestComparableDigest, err = report.CanonicalJSON(latestSnapshot)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	if latest.ID != (identity.ID{}) && latestComparableDigest == jsonDigest {
 		if err := persistSnapshotEvidenceReferences(ctx, tx, input.TenantID, latest.ID, snapshot.Evidence, now.UTC()); err != nil {
 			return Result{}, err
 		}
 		return Result{SnapshotID: latest.ID, Version: latest.VersionNumber, JSONDigest: latest.JSONDigest, HTMLDigest: latest.HTMLDigest}, nil
 	}
-	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, VideoPlanID: input.VideoPlanID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, SchemaVersion: schemaVersion, VersionNumber: version, PDFRenderVersion: 1, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
+	if schemaVersion >= 3 {
+		code := make([]byte, 24)
+		if _, err := rand.Read(code); err != nil {
+			return Result{}, err
+		}
+		snapshot.VerificationCode = base64.RawURLEncoding.EncodeToString(code)
+	}
+	storedSnapshot := snapshot
+	if schemaVersion >= 3 {
+		storedSnapshot.VerificationCode = ""
+	}
+	canonical, jsonDigest, err = report.CanonicalJSON(storedSnapshot)
+	if err != nil {
+		return Result{}, snapshotValidationError(schemaVersion, err)
+	}
+	// Keep the renderer artifact version stable. Stored PDFs are served as
+	// issued; changing the v3 template does not invalidate existing artifacts.
+	pdfRenderVersion := 1
+	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, VideoPlanID: input.VideoPlanID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, SchemaVersion: schemaVersion, VersionNumber: version, PDFRenderVersion: pdfRenderVersion, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
 	if input.VideoPlanID != nil {
 		if err := verifyPlanFrameEvidence(ctx, tx, input.TenantID, *input.VideoPlanID, input.ReferenceVersionID, snapshot.Evidence); err != nil {
 			return Result{}, err
@@ -182,6 +263,15 @@ func createLocked(ctx context.Context, tx *gorm.DB, input Input, now time.Time) 
 	}
 	if err := tx.Create(&row).Error; err != nil {
 		return Result{}, err
+	}
+	if schemaVersion >= 3 && tx.Dialector.Name() == "postgres" {
+		codeHash := sha256.Sum256([]byte(snapshot.VerificationCode))
+		if err := tx.Exec(
+			"INSERT INTO reports.report_verification_codes(tenant_id,snapshot_id,inspection_id,code_hash,verification_code) VALUES (?,?,?,?,?)",
+			input.TenantID, id, input.InspectionID, hex.EncodeToString(codeHash[:]), snapshot.VerificationCode,
+		).Error; err != nil {
+			return Result{}, err
+		}
 	}
 	if err := persistSnapshotEvidenceReferences(ctx, tx, input.TenantID, id, snapshot.Evidence, now.UTC()); err != nil {
 		return Result{}, err

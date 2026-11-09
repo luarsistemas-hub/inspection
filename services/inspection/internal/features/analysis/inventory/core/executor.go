@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -273,7 +274,7 @@ func retryDelay(attempts int) time.Duration {
 }
 
 func successfulErrorCode(existing *string) any {
-	if existing != nil && *existing == "TRUNCATED_ITEMS" {
+	if existing != nil && strings.HasPrefix(*existing, "TRUNCATED_") {
 		return *existing
 	}
 	return nil

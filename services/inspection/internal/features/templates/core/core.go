@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"inspection/libs/identity"
 	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	segmentresolve "inspection/services/inspection/internal/features/segments/resolve_definition"
@@ -19,6 +19,8 @@ import (
 	"inspection/services/inspection/internal/platform/pagination"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
+
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -45,6 +47,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 	var raw struct {
 		SegmentVersionID string `json:"segmentVersionId"`
 		AnalysisType     string `json:"analysisType"`
+		SchemaVersion    int    `json:"schemaVersion"`
 	}
 	if err := json.Unmarshal(payload, &raw); err != nil {
 		return View{}, apperror.New(apperror.InvalidInput, "definition", "invalid template")
@@ -64,7 +67,11 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 	}
 	compiled, err := catalog.Compile(payload, refs{segment: raw.SegmentVersionID, analysisType: raw.AnalysisType})
 	if err != nil {
-		return View{}, apperror.New(apperror.InvalidInput, "definition", err.Error())
+		message := err.Error()
+		if raw.SchemaVersion >= catalog.DescriptiveSchemaVersion {
+			message = descriptiveCompileError(err)
+		}
+		return View{}, apperror.New(apperror.InvalidInput, "definition", message)
 	}
 	var out View
 	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -99,6 +106,27 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 		return nil
 	})
 	return out, err
+}
+
+func descriptiveCompileError(err error) string {
+	var validation catalog.DescriptiveCompileError
+	if errors.As(err, &validation) {
+		message := validation.Message
+		if len(message) > 0 {
+			message = strings.ToUpper(message[:1]) + message[1:]
+		}
+		return message
+	}
+	switch err.Error() {
+	case "at least one participant role is required":
+		return "Informe ao menos um perfil de participante para o modelo."
+	case "invalid comparison mode":
+		return "O modo de comparação do modelo é inválido."
+	case "geofence out of range":
+		return "A distância de localização do modelo está fora do limite permitido."
+	default:
+		return "A definição do modelo contém dados inválidos."
+	}
 }
 
 func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, expectedVersion int64) (View, error) {

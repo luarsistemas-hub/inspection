@@ -20,7 +20,7 @@ describe("Dashboard origin controls", () => {
     const versions = [origin(), origin({ id: "pending", selectable: false }), origin({ id: "photo", mediaKind: "PHOTO" })];
 
     expect(selectableOriginVersions(versions, "VIDEO").map(({ id }) => id)).toEqual(["origin-a"]);
-    expect(selectableOriginVersions(versions, "PHOTO").map(({ id }) => id)).toEqual(["photo"]);
+    expect(selectableOriginVersions(versions, "PHOTO").map(({ id }) => id)).toEqual([]);
     expect(selectableOriginVersions(versions, undefined)).toEqual([]);
   });
 
@@ -29,6 +29,21 @@ describe("Dashboard origin controls", () => {
 
     expect(selectableOriginVersions([inventory], "VIDEO").map(({ id }) => id)).toEqual(["inventory"]);
     expect(selectableOriginVersions([inventory], "PHOTO").map(({ id }) => id)).toEqual(["inventory"]);
+  });
+
+  it("does not offer a video inventory to a photo inspection", () => {
+    const videoInventory = origin({ id: "video-inventory", mediaKind: "VIDEO", hasInventory: true, preparationStatus: null });
+    expect(selectableOriginVersions([videoInventory], "PHOTO")).toEqual([]);
+  });
+
+  it("keeps only active or explicitly selected superseded approved inventories for photo move-out", () => {
+    const versions = [
+      origin({ id: "media-only-active", mediaKind: "PHOTO", hasInventory: false }),
+      origin({ id: "active-inventory", mediaKind: "PHOTO", hasInventory: true }),
+      origin({ id: "superseded-inventory", mediaKind: "PHOTO", hasInventory: true, status: "SUPERSEDED", selectable: false }),
+      origin({ id: "draft-inventory", mediaKind: "PHOTO", hasInventory: true, status: "DRAFT", selectable: false }),
+    ];
+    expect(selectableOriginVersions(versions, "PHOTO").map(({ id }) => id)).toEqual(["active-inventory", "superseded-inventory"]);
   });
 
   it("labels inventory drafts by source and draft state", () => {

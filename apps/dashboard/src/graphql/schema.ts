@@ -97,6 +97,8 @@ export type AnalysisPromptPayload = {
 
 export type AnalysisPromptTask =
   | 'FINDINGS'
+  | 'FINDINGS_COMPARE'
+  | 'FINDINGS_CURRENT'
   | 'INVENTORY_CATALOG'
   | 'INVENTORY_COMPARE';
 
@@ -500,6 +502,30 @@ export type CloseOriginInvitationInput = {
   versionId: Scalars['ID']['input'];
 };
 
+export type ComparisonCounts = {
+  __typename?: 'ComparisonCounts';
+  changed: Scalars['Int']['output'];
+  improved: Scalars['Int']['output'];
+  missing: Scalars['Int']['output'];
+  noBasis: Scalars['Int']['output'];
+  notObserved: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+  unchanged: Scalars['Int']['output'];
+};
+
+export type ComparisonOutcome =
+  | 'CHANGED'
+  | 'IMPROVED'
+  | 'MISSING'
+  | 'NOT_OBSERVED'
+  | 'NO_BASIS'
+  | 'UNCHANGED';
+
+export type ComparisonPairInput = {
+  baselineEvidenceId: Scalars['ID']['input'];
+  currentEvidenceId: Scalars['ID']['input'];
+};
+
 export type CompleteAudioNoteUploadInput = {
   clientMutationId: Scalars['String']['input'];
   noteId: Scalars['ID']['input'];
@@ -524,6 +550,24 @@ export type CompleteOnboardingInput = {
 export type CompletedPartInput = {
   etag: Scalars['String']['input'];
   partNumber: Scalars['Int']['input'];
+};
+
+export type ComponentAnswerPayload = {
+  __typename?: 'ComponentAnswerPayload';
+  answer: Maybe<ComponentCaptureAnswer>;
+  clientMutationId: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type ComponentCaptureAnswer = {
+  __typename?: 'ComponentCaptureAnswer';
+  componentKey: Scalars['String']['output'];
+  evidenceIds: Array<Scalars['ID']['output']>;
+  reason: Scalars['String']['output'];
+  requirementKey: Scalars['String']['output'];
+  state: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+  viewKey: Maybe<Scalars['String']['output']>;
 };
 
 export type ConfigureNotificationPreferencesInput = {
@@ -568,6 +612,13 @@ export type ConfirmAudioNoteTextInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: Scalars['Int']['input'];
   noteId: Scalars['ID']['input'];
+};
+
+export type ConfirmInspectionScopeInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+  scopeOverride: ScopeOverrideInput;
 };
 
 export type ContactInput = {
@@ -712,6 +763,7 @@ export type CreateInspectionInput = {
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: Array<Scalars['String']['input']>;
   reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
+  scopeOverride: InputMaybe<ScopeOverrideInput>;
   stageId: InputMaybe<Scalars['ID']['input']>;
   templateId: InputMaybe<Scalars['ID']['input']>;
 };
@@ -765,6 +817,70 @@ export type CreateTenantPayload = {
   userErrors: Array<UserError>;
 };
 
+export type CustomerChecklist = {
+  __typename?: 'CustomerChecklist';
+  coverage: ReportChecklistCoverage;
+  rooms: Array<CustomerChecklistRoom>;
+};
+
+export type CustomerChecklistComponent = {
+  __typename?: 'CustomerChecklistComponent';
+  condition: Maybe<Scalars['String']['output']>;
+  description: Maybe<Scalars['String']['output']>;
+  evidenceIds: Array<Scalars['ID']['output']>;
+  label: Scalars['String']['output'];
+  limitations: Array<Scalars['String']['output']>;
+  reviewLabel: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+};
+
+export type CustomerChecklistRoom = {
+  __typename?: 'CustomerChecklistRoom';
+  components: Array<CustomerChecklistComponent>;
+  name: Scalars['String']['output'];
+};
+
+export type CustomerComparison = {
+  __typename?: 'CustomerComparison';
+  activatedAt: Scalars['String']['output'];
+  baselineVersionNumber: Scalars['Int']['output'];
+  counts: ComparisonCounts;
+  disclaimer: Scalars['String']['output'];
+  displayed: Scalars['Int']['output'];
+  items: Array<CustomerComparisonItem>;
+  outsideBaseline: Array<CustomerComparisonObservation>;
+  purpose: Scalars['String']['output'];
+  purposeLabel: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  statusLabel: Scalars['String']['output'];
+};
+
+export type CustomerComparisonItem = {
+  __typename?: 'CustomerComparisonItem';
+  baselineCondition: Maybe<Scalars['String']['output']>;
+  currentCondition: Maybe<Scalars['String']['output']>;
+  limitations: Array<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  outcome: ComparisonOutcome;
+  outcomeLabel: Scalars['String']['output'];
+  pairs: Array<CustomerComparisonPair>;
+  room: Scalars['String']['output'];
+};
+
+export type CustomerComparisonObservation = {
+  __typename?: 'CustomerComparisonObservation';
+  name: Scalars['String']['output'];
+  room: Scalars['String']['output'];
+};
+
+export type CustomerComparisonPair = {
+  __typename?: 'CustomerComparisonPair';
+  baselineAvailability: Scalars['String']['output'];
+  baselineEvidence: Scalars['String']['output'];
+  currentAvailability: Scalars['String']['output'];
+  currentEvidence: Scalars['String']['output'];
+};
+
 export type CustomerEvidenceConnection = {
   __typename?: 'CustomerEvidenceConnection';
   nodes: Array<CustomerEvidenceItem>;
@@ -787,6 +903,7 @@ export type CustomerEvidenceItem = {
   planId: Maybe<Scalars['ID']['output']>;
   preparationId: Maybe<Scalars['ID']['output']>;
   ptsMicros: Maybe<Scalars['String']['output']>;
+  reference: Scalars['String']['output'];
   replacedBy: Maybe<Scalars['ID']['output']>;
   requirementKey: Scalars['String']['output'];
   role: Scalars['String']['output'];
@@ -796,6 +913,24 @@ export type CustomerEvidenceItem = {
   state: Scalars['String']['output'];
   timestampMs: Maybe<Scalars['Int']['output']>;
   url: Maybe<Scalars['String']['output']>;
+};
+
+export type CustomerHandover = {
+  __typename?: 'CustomerHandover';
+  entries: Array<CustomerHandoverEntry>;
+};
+
+export type CustomerHandoverEntry = {
+  __typename?: 'CustomerHandoverEntry';
+  date: Maybe<Scalars['String']['output']>;
+  declarant: Maybe<Scalars['String']['output']>;
+  evidenceIds: Array<Scalars['ID']['output']>;
+  kind: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  type: Maybe<Scalars['String']['output']>;
+  unit: Maybe<Scalars['String']['output']>;
+  value: Maybe<Scalars['String']['output']>;
 };
 
 export type CustomerInventory = {
@@ -813,6 +948,7 @@ export type CustomerInventoryCoverage = {
   environmentsAddedDuringCapture: Array<Scalars['String']['output']>;
   environmentsNotCaptured: Array<Scalars['String']['output']>;
   expectedItems: Scalars['Int']['output'];
+  noBasis: Scalars['Int']['output'];
   notObserved: Scalars['Int']['output'];
 };
 
@@ -825,6 +961,7 @@ export type CustomerInventoryEntry = {
   pairs: Array<CustomerInventoryPair>;
   reason: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
+  statusLabel: Maybe<Scalars['String']['output']>;
   type: Scalars['String']['output'];
 };
 
@@ -865,12 +1002,21 @@ export type CustomerPortfolioItem = {
 export type CustomerReport = {
   __typename?: 'CustomerReport';
   advisory: Scalars['String']['output'];
+  checklist: Maybe<CustomerChecklist>;
   classification: Scalars['String']['output'];
+  classificationLabel: Scalars['String']['output'];
+  comparison: Maybe<CustomerComparison>;
   context: ReportContext;
+  evidenceNotice: Scalars['String']['output'];
+  handover: Maybe<CustomerHandover>;
   historical: Scalars['Boolean']['output'];
   inspectionId: Scalars['ID']['output'];
   inventory: Maybe<CustomerInventory>;
+  limited: Scalars['Boolean']['output'];
+  processing: Maybe<ReportProcessing>;
+  reasonLabels: Array<Scalars['String']['output']>;
   requirements: Array<ReportRequirement>;
+  scopeStatements: Array<Scalars['String']['output']>;
   snapshotId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
   version: Scalars['Int']['output'];
@@ -978,9 +1124,12 @@ export type ExternalCapture = {
   __typename?: 'ExternalCapture';
   answers: Array<CaptureAnswer>;
   captureLayout: Maybe<Scalars['String']['output']>;
+  componentAnswers: Array<ComponentCaptureAnswer>;
   confirmationOnly: Scalars['Boolean']['output'];
+  coverage: InspectionCoverage;
   disclosureVersion: Scalars['String']['output'];
   environments: Array<CaptureEnvironment>;
+  handoverRecords: Array<HandoverCaptureRecord>;
   kind: Scalars['String']['output'];
   mediaKind: Scalars['String']['output'];
   policy: Scalars['JSON']['output'];
@@ -992,6 +1141,7 @@ export type ExternalCapture = {
   requirements: Array<CaptureRequirement>;
   responsibilityId: Scalars['ID']['output'];
   reviewHandoff: Maybe<CaptureReviewHandoff>;
+  scope: Scalars['JSON']['output'];
   status: Scalars['String']['output'];
   templateVersionId: Scalars['ID']['output'];
 };
@@ -1047,6 +1197,23 @@ export type GlobalLlmCallUsage = {
   transportDelivered: Maybe<Scalars['Boolean']['output']>;
 };
 
+export type HandoverCaptureRecord = {
+  __typename?: 'HandoverCaptureRecord';
+  declarant: Scalars['String']['output'];
+  kind: Scalars['String']['output'];
+  mediaIds: Array<Scalars['ID']['output']>;
+  payload: Scalars['JSON']['output'];
+  recordKey: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type HandoverRecordPayload = {
+  __typename?: 'HandoverRecordPayload';
+  clientMutationId: Scalars['String']['output'];
+  record: Maybe<HandoverCaptureRecord>;
+  userErrors: Array<UserError>;
+};
+
 export type Inspection = {
   __typename?: 'Inspection';
   analysisPromptSnapshotId: Scalars['ID']['output'];
@@ -1077,6 +1244,9 @@ export type Inspection = {
   referenceVersionNumber: Maybe<Scalars['Int']['output']>;
   referenceVersionStatus: Maybe<Scalars['String']['output']>;
   reminderInstants: Array<Scalars['String']['output']>;
+  scope: InspectionScope;
+  scopeDigest: Maybe<Scalars['String']['output']>;
+  scopeVersion: Maybe<Scalars['Int']['output']>;
   source: Scalars['String']['output'];
   sourceReason: Maybe<Scalars['String']['output']>;
   stageId: Maybe<Scalars['ID']['output']>;
@@ -1104,6 +1274,19 @@ export type InspectionConnection = {
   __typename?: 'InspectionConnection';
   nodes: Array<Inspection>;
   pageInfo: PageInfo;
+};
+
+export type InspectionCoverage = {
+  __typename?: 'InspectionCoverage';
+  expected: Scalars['Int']['output'];
+  fullyAssessed: Scalars['Int']['output'];
+  impossible: Scalars['Int']['output'];
+  notApplicable: Scalars['Int']['output'];
+  notObserved: Scalars['Int']['output'];
+  partiallyAssessed: Scalars['Int']['output'];
+  pendingRecords: Array<Scalars['String']['output']>;
+  suggestions: Array<RecaptureSuggestion>;
+  unknownScope: Scalars['Boolean']['output'];
 };
 
 export type InspectionLlmUsage = {
@@ -1197,6 +1380,45 @@ export type InspectionPayload = {
   clientMutationId: Scalars['String']['output'];
   inspection: Maybe<Inspection>;
   userErrors: Array<UserError>;
+};
+
+export type InspectionScope = {
+  __typename?: 'InspectionScope';
+  digest: Scalars['String']['output'];
+  handoverRecords: Array<InspectionScopeHandoverRecord>;
+  profile: Scalars['String']['output'];
+  rooms: Array<InspectionScopeRoom>;
+  version: Scalars['Int']['output'];
+};
+
+export type InspectionScopeComponent = {
+  __typename?: 'InspectionScopeComponent';
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
+  views: Array<Scalars['String']['output']>;
+};
+
+export type InspectionScopeHandoverRecord = {
+  __typename?: 'InspectionScopeHandoverRecord';
+  key: Scalars['String']['output'];
+  kind: Scalars['String']['output'];
+  required: Scalars['Boolean']['output'];
+};
+
+export type InspectionScopePayload = {
+  __typename?: 'InspectionScopePayload';
+  clientMutationId: Scalars['String']['output'];
+  scope: Scalars['JSON']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type InspectionScopeRoom = {
+  __typename?: 'InspectionScopeRoom';
+  components: Array<InspectionScopeComponent>;
+  key: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
 };
 
 export type InspectionStatusGroup =
@@ -1330,12 +1552,15 @@ export type InventoryEvidenceInput = {
 
 export type InventoryItem = {
   __typename?: 'InventoryItem';
+  assessedScope: Scalars['String']['output'];
   attributeSources: Array<InventoryAttributeSource>;
   color: Maybe<Scalars['String']['output']>;
+  componentKey: Maybe<Scalars['String']['output']>;
   condition: Scalars['String']['output'];
   confidenceBps: Maybe<Scalars['Int']['output']>;
   decision: Scalars['String']['output'];
   declared: Scalars['Boolean']['output'];
+  description: Scalars['String']['output'];
   environmentId: Scalars['ID']['output'];
   evidence: Array<InventoryEvidence>;
   id: Scalars['ID']['output'];
@@ -1343,6 +1568,7 @@ export type InventoryItem = {
   limitation: Maybe<Scalars['String']['output']>;
   material: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
+  notAssessed: Array<Scalars['String']['output']>;
   observation: Scalars['String']['output'];
   origin: Scalars['String']['output'];
   quantity: Maybe<Scalars['Int']['output']>;
@@ -1355,9 +1581,11 @@ export type InventoryItem = {
 };
 
 export type InventoryItemPatchInput = {
+  assessedScope: InputMaybe<Scalars['String']['input']>;
   clearQuantity: InputMaybe<Scalars['Boolean']['input']>;
   color: InputMaybe<Scalars['String']['input']>;
   condition: InputMaybe<Scalars['String']['input']>;
+  description: InputMaybe<Scalars['String']['input']>;
   environmentId: InputMaybe<Scalars['ID']['input']>;
   limitation: InputMaybe<Scalars['String']['input']>;
   material: InputMaybe<Scalars['String']['input']>;
@@ -1772,6 +2000,7 @@ export type Mutation = {
   configureVideoPolicy: VideoPolicyPayload;
   configureVoicePolicy: VoicePolicyPayload;
   confirmAudioNoteText: AudioNotePayload;
+  confirmInspectionScope: InspectionScopePayload;
   contestBaseline: CounterpartyResponsePayload;
   correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
   correctOnboardingResponsibleEmail: OnboardingPayload;
@@ -1809,9 +2038,11 @@ export type Mutation = {
   publishTemplateVersion: TemplatePayload;
   reanalyzeVideoInspection: ReanalyzeVideoInspectionPayload;
   recordCaptureQualityWarning: CaptureQualityWarningPayload;
+  recordComponentAnswer: ComponentAnswerPayload;
   recordDeletionRequest: RetentionMutationPayload;
   regenerateInventorySuggestions: InventoryRegenerationPayload;
   registerAsset: AssetPayload;
+  reissueReport: ReissueReportPayload;
   releaseLegalHold: RetentionMutationPayload;
   removeInventoryEnvironment: InventoryEnvironmentPayload;
   reopenProject: ProjectPayload;
@@ -1832,6 +2063,7 @@ export type Mutation = {
   retryInventoryDraft: OriginVersionPayload;
   retryVideoPreparation: VideoPreparationPayload;
   reviseAudioNote: AudioNotePayload;
+  reviseComparisonPairing: ReviseComparisonPairingPayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
   saveOnboardingStep: OnboardingPayload;
@@ -1851,6 +2083,7 @@ export type Mutation = {
   updateTenant: TenantPayload;
   updateTriageCase: TriageCasePayload;
   upsertBusinessUnit: BusinessUnitPayload;
+  upsertHandoverRecord: HandoverRecordPayload;
   upsertInventoryEnvironment: InventoryEnvironmentPayload;
   upsertParticipant: ParticipantPayload;
   verifyAdminActivationOtp: OnboardingPayload;
@@ -2004,6 +2237,11 @@ export type MutationConfigureVoicePolicyArgs = {
 
 export type MutationConfirmAudioNoteTextArgs = {
   input: ConfirmAudioNoteTextInput;
+};
+
+
+export type MutationConfirmInspectionScopeArgs = {
+  input: ConfirmInspectionScopeInput;
 };
 
 
@@ -2182,6 +2420,11 @@ export type MutationRecordCaptureQualityWarningArgs = {
 };
 
 
+export type MutationRecordComponentAnswerArgs = {
+  input: RecordComponentAnswerInput;
+};
+
+
 export type MutationRecordDeletionRequestArgs = {
   input: RecordDeletionRequestInput;
 };
@@ -2194,6 +2437,11 @@ export type MutationRegenerateInventorySuggestionsArgs = {
 
 export type MutationRegisterAssetArgs = {
   input: RegisterAssetInput;
+};
+
+
+export type MutationReissueReportArgs = {
+  input: ReissueReportInput;
 };
 
 
@@ -2297,6 +2545,11 @@ export type MutationReviseAudioNoteArgs = {
 };
 
 
+export type MutationReviseComparisonPairingArgs = {
+  input: ReviseComparisonPairingInput;
+};
+
+
 export type MutationRevokeInvitationArgs = {
   input: RevokeInvitationInput;
 };
@@ -2389,6 +2642,11 @@ export type MutationUpdateTriageCaseArgs = {
 
 export type MutationUpsertBusinessUnitArgs = {
   input: UpsertBusinessUnitInput;
+};
+
+
+export type MutationUpsertHandoverRecordArgs = {
+  input: UpsertHandoverRecordInput;
 };
 
 
@@ -2977,6 +3235,7 @@ export type Query = {
   effectiveAccess: EffectiveAccess;
   externalCapture: ExternalCapture;
   inspection: Maybe<Inspection>;
+  inspectionCoverage: InspectionCoverage;
   inspectionLLMUsage: InspectionLlmUsage;
   inspectionOriginPromotion: InspectionOriginPromotionStatusView;
   inspections: InspectionConnection;
@@ -3005,6 +3264,7 @@ export type Query = {
   publicationPolicy: PublicationPolicy;
   report: Maybe<Report>;
   reportDownload: Maybe<ReportDownload>;
+  /** Lista os laudos mais recentes ou o histórico completo de versões da vistoria indicada, com rótulos seguros de escopo e revisão. */
   reports: ReportConnection;
   retentionPolicies: RetentionPolicyConnection;
   schedules: ScheduleConnection;
@@ -3022,6 +3282,7 @@ export type Query = {
   triageInspections: TriageInspectionConnection;
   triageWorkspace: TriageWorkspace;
   usageSummary: UsageSummary;
+  verifyReport: ReportVerification;
   videoPolicy: VideoPolicy;
   videoPreparation: VideoPreparationStatus;
   videoPreparationEvidence: VideoPreparationEvidenceConnection;
@@ -3104,6 +3365,7 @@ export type QueryCustomerPortfolioArgs = {
 
 
 export type QueryCustomerReportArgs = {
+  comparisonOutcome: InputMaybe<ComparisonOutcome>;
   inspectionId: Scalars['ID']['input'];
   version: InputMaybe<Scalars['Int']['input']>;
 };
@@ -3132,6 +3394,11 @@ export type QueryEffectiveAccessArgs = {
 
 export type QueryInspectionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryInspectionCoverageArgs = {
+  inspectionId: Scalars['ID']['input'];
 };
 
 
@@ -3284,6 +3551,7 @@ export type QueryReportsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   classification: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+  inspectionId: InputMaybe<Scalars['ID']['input']>;
   search: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -3372,6 +3640,12 @@ export type QueryUsageSummaryArgs = {
 };
 
 
+export type QueryVerifyReportArgs = {
+  code: Scalars['String']['input'];
+  version: Scalars['Int']['input'];
+};
+
+
 export type QueryVideoPreparationArgs = {
   mediaId: Scalars['ID']['input'];
 };
@@ -3430,6 +3704,16 @@ export type RecapturePayload = {
   userErrors: Array<UserError>;
 };
 
+export type RecaptureSuggestion = {
+  __typename?: 'RecaptureSuggestion';
+  componentKey: Scalars['String']['output'];
+  componentLabel: Scalars['String']['output'];
+  missingView: Scalars['String']['output'];
+  requirementKey: Scalars['String']['output'];
+  roomKey: Scalars['String']['output'];
+  roomName: Scalars['String']['output'];
+};
+
 export type RecipientNotification = {
   __typename?: 'RecipientNotification';
   action: Scalars['String']['output'];
@@ -3469,6 +3753,17 @@ export type RecordCaptureQualityWarningInput = {
   requirementKey: Scalars['String']['input'];
 };
 
+export type RecordComponentAnswerInput = {
+  clientMutationId: Scalars['String']['input'];
+  componentKey: Scalars['String']['input'];
+  evidenceIds: Array<Scalars['ID']['input']>;
+  expectedVersion: Scalars['Int']['input'];
+  reason: InputMaybe<Scalars['String']['input']>;
+  requirementKey: Scalars['String']['input'];
+  state: Scalars['String']['input'];
+  viewKey: InputMaybe<Scalars['String']['input']>;
+};
+
 export type RecordDeletionRequestInput = {
   clientMutationId: Scalars['String']['input'];
   inspectionId: InputMaybe<Scalars['ID']['input']>;
@@ -3490,6 +3785,19 @@ export type RegisterAssetInput = {
   clientMutationId: Scalars['String']['input'];
 };
 
+export type ReissueReportInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+};
+
+export type ReissueReportPayload = {
+  __typename?: 'ReissueReportPayload';
+  clientMutationId: Scalars['String']['output'];
+  report: Maybe<Report>;
+  userErrors: Array<UserError>;
+};
+
 export type RemoveInventoryEnvironmentInput = {
   clientMutationId: Scalars['String']['input'];
   confirmItemExclusion: Scalars['Boolean']['input'];
@@ -3508,22 +3816,31 @@ export type Report = {
   __typename?: 'Report';
   advisory: Scalars['String']['output'];
   canonicalJSON: Scalars['JSON']['output'];
+  checklist: Maybe<ReportChecklist>;
   classification: Scalars['String']['output'];
+  classificationLabel: Scalars['String']['output'];
+  comparison: Maybe<ReportComparison>;
   context: ReportContext;
   createdAt: Scalars['String']['output'];
   evidence: ReportEvidenceConnection;
+  evidenceNotice: Scalars['String']['output'];
   findings: Array<ReportFinding>;
+  handover: Maybe<ReportHandover>;
   html: Scalars['String']['output'];
   htmlDigest: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   inspectionId: Scalars['ID']['output'];
   inventory: Maybe<CustomerInventory>;
   jsonDigest: Scalars['String']['output'];
+  limited: Scalars['Boolean']['output'];
   mode: Scalars['String']['output'];
   pdfStatus: Scalars['String']['output'];
+  processing: Maybe<ReportProcessing>;
   projectId: Maybe<Scalars['ID']['output']>;
   publication: Maybe<ReportPublication>;
+  reasonLabels: Array<Scalars['String']['output']>;
   requirements: Array<ReportRequirement>;
+  scopeStatements: Array<Scalars['String']['output']>;
   timeline: Array<ReportTimelineEntry>;
   version: Scalars['Int']['output'];
 };
@@ -3540,6 +3857,99 @@ export type ReportAssetContext = {
   externalKey: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+};
+
+export type ReportChecklist = {
+  __typename?: 'ReportChecklist';
+  coverage: ReportChecklistCoverage;
+  rooms: Array<ReportChecklistRoom>;
+};
+
+export type ReportChecklistComponent = {
+  __typename?: 'ReportChecklistComponent';
+  assessedScope: Maybe<Scalars['String']['output']>;
+  attributeSources: Array<Scalars['String']['output']>;
+  condition: Maybe<Scalars['String']['output']>;
+  conflict: Scalars['Boolean']['output'];
+  description: Maybe<Scalars['String']['output']>;
+  evidenceIds: Array<Scalars['ID']['output']>;
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  limitations: Array<Scalars['String']['output']>;
+  notAssessed: Array<Scalars['String']['output']>;
+  outsideScope: Scalars['Boolean']['output'];
+  reviewLabel: Maybe<Scalars['String']['output']>;
+  reviewStatus: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+  typeCode: Maybe<Scalars['String']['output']>;
+};
+
+export type ReportChecklistCoverage = {
+  __typename?: 'ReportChecklistCoverage';
+  expected: Scalars['Int']['output'];
+  fullyAssessed: Scalars['Int']['output'];
+  impossible: Scalars['Int']['output'];
+  notApplicable: Scalars['Int']['output'];
+  notObserved: Scalars['Int']['output'];
+  partiallyAssessed: Scalars['Int']['output'];
+  unknownScope: Scalars['Boolean']['output'];
+};
+
+export type ReportChecklistRoom = {
+  __typename?: 'ReportChecklistRoom';
+  components: Array<ReportChecklistComponent>;
+  key: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
+};
+
+export type ReportComparison = {
+  __typename?: 'ReportComparison';
+  baseline: ReportComparisonBaseline;
+  counts: ComparisonCounts;
+  items: Array<ReportComparisonItem>;
+  outsideBaseline: Array<ReportComparisonObservation>;
+  status: Scalars['String']['output'];
+  statusLabel: Scalars['String']['output'];
+};
+
+export type ReportComparisonBaseline = {
+  __typename?: 'ReportComparisonBaseline';
+  activatedAt: Scalars['String']['output'];
+  purpose: Scalars['String']['output'];
+  purposeLabel: Scalars['String']['output'];
+  versionId: Scalars['ID']['output'];
+  versionNumber: Scalars['Int']['output'];
+};
+
+export type ReportComparisonItem = {
+  __typename?: 'ReportComparisonItem';
+  baselineCondition: Maybe<Scalars['String']['output']>;
+  currentCondition: Maybe<Scalars['String']['output']>;
+  description: Maybe<Scalars['String']['output']>;
+  itemIdentityId: Maybe<Scalars['ID']['output']>;
+  limitations: Array<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  outcome: ComparisonOutcome;
+  outcomeLabel: Scalars['String']['output'];
+  pairingRevised: Scalars['Boolean']['output'];
+  pairs: Array<ReportComparisonPair>;
+  room: Scalars['String']['output'];
+  typeCode: Maybe<Scalars['String']['output']>;
+};
+
+export type ReportComparisonObservation = {
+  __typename?: 'ReportComparisonObservation';
+  description: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  room: Scalars['String']['output'];
+  typeCode: Maybe<Scalars['String']['output']>;
+};
+
+export type ReportComparisonPair = {
+  __typename?: 'ReportComparisonPair';
+  baselineEvidenceId: Scalars['ID']['output'];
+  currentEvidenceId: Scalars['ID']['output'];
 };
 
 export type ReportConnection = {
@@ -3582,6 +3992,7 @@ export type ReportEvidence = {
   planId: Maybe<Scalars['ID']['output']>;
   preparationId: Maybe<Scalars['ID']['output']>;
   ptsMicros: Maybe<Scalars['String']['output']>;
+  reference: Maybe<Scalars['String']['output']>;
   requirementKey: Scalars['String']['output'];
   role: Scalars['String']['output'];
   sourceAvailability: Maybe<Scalars['String']['output']>;
@@ -3609,6 +4020,21 @@ export type ReportFinding = {
   title: Scalars['String']['output'];
 };
 
+export type ReportHandover = {
+  __typename?: 'ReportHandover';
+  entries: Array<ReportHandoverEntry>;
+};
+
+export type ReportHandoverEntry = {
+  __typename?: 'ReportHandoverEntry';
+  declarant: Maybe<Scalars['String']['output']>;
+  evidenceIds: Array<Scalars['ID']['output']>;
+  key: Scalars['String']['output'];
+  kind: Scalars['String']['output'];
+  payload: Maybe<Scalars['JSON']['output']>;
+  status: Scalars['String']['output'];
+};
+
 export type ReportInspectionContext = {
   __typename?: 'ReportInspectionContext';
   dueAt: Maybe<Scalars['String']['output']>;
@@ -3623,6 +4049,12 @@ export type ReportParticipantContext = {
   __typename?: 'ReportParticipantContext';
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+};
+
+export type ReportProcessing = {
+  __typename?: 'ReportProcessing';
+  message: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
 };
 
 export type ReportPublication = {
@@ -3667,6 +4099,8 @@ export type ReportSummary = {
   inspectionId: Scalars['ID']['output'];
   participantName: Scalars['String']['output'];
   publication: Maybe<ReportPublication>;
+  reviewLabel: Scalars['String']['output'];
+  scopeLabel: Scalars['String']['output'];
   version: Scalars['Int']['output'];
 };
 
@@ -3683,6 +4117,15 @@ export type ReportTimelineEntry = {
   position: Scalars['Int']['output'];
   stageId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
+};
+
+export type ReportVerification = {
+  __typename?: 'ReportVerification';
+  digest: Maybe<Scalars['String']['output']>;
+  issuedAt: Maybe<Scalars['String']['output']>;
+  reportNumber: Maybe<Scalars['String']['output']>;
+  status: Maybe<Scalars['String']['output']>;
+  version: Maybe<Scalars['Int']['output']>;
 };
 
 export type ReprocessVideoPreparationInput = {
@@ -3847,6 +4290,21 @@ export type ReviseAudioNoteInput = {
   text: Scalars['String']['input'];
 };
 
+export type ReviseComparisonPairingInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+  itemIdentityId: Scalars['ID']['input'];
+  pairs: Array<ComparisonPairInput>;
+};
+
+export type ReviseComparisonPairingPayload = {
+  __typename?: 'ReviseComparisonPairingPayload';
+  clientMutationId: Scalars['String']['output'];
+  report: Maybe<Report>;
+  userErrors: Array<UserError>;
+};
+
 export type RevokeInvitationInput = {
   clientMutationId: Scalars['String']['input'];
   linkToken: Scalars['String']['input'];
@@ -3854,6 +4312,7 @@ export type RevokeInvitationInput = {
 
 export type SaveCaptureMetadataInput = {
   captureSource: Scalars['String']['input'];
+  capturedAt: InputMaybe<Scalars['String']['input']>;
   clientMutationId: Scalars['String']['input'];
   description: Scalars['String']['input'];
   deviceContext: InputMaybe<Scalars['JSON']['input']>;
@@ -3910,10 +4369,20 @@ export type ScopeAssignmentInput = {
   resourceId: Scalars['ID']['input'];
 };
 
+export type ScopeOverrideInput = {
+  profile: Scalars['String']['input'];
+  selections: Array<ScopeSelectionInput>;
+};
+
 export type ScopePreview = {
   __typename?: 'ScopePreview';
   descendants: EffectiveAccessEntryConnection;
   target: AccessResource;
+};
+
+export type ScopeSelectionInput = {
+  componentKey: Scalars['String']['input'];
+  roomKey: Scalars['String']['input'];
 };
 
 export type SegmentDefinition = {
@@ -4302,6 +4771,16 @@ export type UpsertBusinessUnitInput = {
   expectedTenantVersion: InputMaybe<Scalars['Int']['input']>;
   expectedVersion: InputMaybe<Scalars['Int']['input']>;
   name: Scalars['String']['input'];
+};
+
+export type UpsertHandoverRecordInput = {
+  clientMutationId: Scalars['String']['input'];
+  declarant: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  kind: Scalars['String']['input'];
+  mediaIds: Array<Scalars['ID']['input']>;
+  payload: Scalars['JSON']['input'];
+  recordKey: Scalars['String']['input'];
 };
 
 export type UpsertInventoryEnvironmentInput = {

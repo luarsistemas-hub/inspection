@@ -227,7 +227,7 @@ func TestMarotoRendererIncludesVideoFrameCaptionAndAuthenticatedLinkAcrossPages(
 }
 
 func TestUniqueImageCountIgnoresMissingAndDuplicates(t *testing.T) {
-	items := []core.Evidence{{ID: "a"}, {ID: "a"}, {ID: "b", Availability: "MISSING"}, {ID: "c"}}
+	items := []core.Evidence{{ID: "a", Availability: "AVAILABLE"}, {ID: "a", Availability: "AVAILABLE"}, {ID: "b", Availability: "MISSING"}, {ID: "c", Availability: "UNAVAILABLE"}, {ID: "d", Availability: "AVAILABLE"}}
 	if got := UniqueImageCount(items); got != 2 {
 		t.Fatalf("unique images = %d, want 2", got)
 	}

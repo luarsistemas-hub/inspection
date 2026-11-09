@@ -1,0 +1,13 @@
+{
+  "counts": 6,
+  "outcomes": [
+    "Sem alteração",
+    "Alterado",
+    "Melhorou",
+    "Ausência comprovada",
+    "Não observado",
+    "Sem base para comparar"
+  ],
+  "pair": "Referência E001 ↔ vistoria atual E002",
+  "disclaimer": "Esta comparação descreve diferenças visuais entre as evidências e não atribui responsabilidade, desgaste natural ou custo de reparo."
+}

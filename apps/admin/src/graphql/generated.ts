@@ -13,6 +13,8 @@ export type ActivateTemplateVersionInput = {
 
 export type AnalysisPromptTask =
   | 'FINDINGS'
+  | 'FINDINGS_COMPARE'
+  | 'FINDINGS_CURRENT'
   | 'INVENTORY_CATALOG'
   | 'INVENTORY_COMPARE';
 

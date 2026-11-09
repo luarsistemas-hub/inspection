@@ -177,6 +177,7 @@ services:
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
+      INSPECTION_TRUSTED_PROXY_CIDRS: ${INSPECTION_TRUSTED_PROXY_CIDRS:-}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs

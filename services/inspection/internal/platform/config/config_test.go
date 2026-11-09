@@ -87,7 +87,7 @@ func TestStrictSensitiveContentBypassBoolean(t *testing.T) {
 	}
 }
 
-func TestConfigContractsUT058UT059(t *testing.T) {
+func TestTask06ConfigContracts(t *testing.T) {
 	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
@@ -101,6 +101,21 @@ func TestConfigContractsUT058UT059(t *testing.T) {
 		if err := c.Validate(); err == nil {
 			t.Fatalf("case %d accepted", i)
 		}
+	}
+}
+
+func TestTrustedProxyCIDRsRequireValidCIDRAndAreOptional(t *testing.T) {
+	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", AllowedOrigins: []string{"https://app.example"}, AdminOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudiences: []string{"inspection"}, SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("unset trusted proxies should be safe and valid: %v", err)
+	}
+	valid.TrustedProxyCIDRs = []string{"10.0.0.0/8", "2001:db8::/32"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid proxy CIDRs rejected: %v", err)
+	}
+	valid.TrustedProxyCIDRs = []string{"10.1.2.3"}
+	if err := valid.Validate(); err == nil || !strings.Contains(err.Error(), "INSPECTION_TRUSTED_PROXY_CIDRS") {
+		t.Fatalf("invalid proxy CIDR should name the setting, got %v", err)
 	}
 }
 

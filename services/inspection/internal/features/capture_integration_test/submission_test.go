@@ -49,7 +49,10 @@ func submissionFixtureWithDB(t *testing.T, db *gorm.DB) submissionFixture {
 
 func (f submissionFixture) addMedia(t *testing.T, status, key, description string, associate bool) database.MediaObject {
 	t.Helper()
-	media := database.MediaObject{ID: identity.NewID(), TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, ObjectKey: identity.NewID().String(), ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 100, Status: status, RequirementKey: key, Description: description, CaptureSource: "CAMERA", Flags: json.RawMessage(`[]`), CreatedAt: f.now}
+	media := database.MediaObject{ID: identity.NewID(), TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, ObjectKey: identity.NewID().String(), ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 100, Status: status, RequirementKey: key, Description: description, Flags: json.RawMessage(`[]`), CreatedAt: f.now}
+	if associate {
+		media.CaptureSource = "CAMERA"
+	}
 	media.IdempotencyKey = media.ID.String()
 	if err := f.db.Create(&media).Error; err != nil {
 		t.Fatal(err)
@@ -84,7 +87,7 @@ func TestIT188IT198UnresolvedMediaCannotUseIncompleteConfirmation(t *testing.T) 
 			media := f.addMedia(t, status, "room", "room overview", false)
 			for _, incomplete := range []bool{false, true} {
 				_, err := f.submit(incomplete)
-				if code(err) != apperror.InvalidState || !strings.Contains(fmt.Sprint(err), "media verification") {
+				if code(err) != apperror.InvalidState || !strings.Contains(fmt.Sprint(err), "A verificação das mídias precisa terminar") {
 					t.Fatalf("unchecked %s accepted (incomplete=%t): %v", media.ID, incomplete, err)
 				}
 			}

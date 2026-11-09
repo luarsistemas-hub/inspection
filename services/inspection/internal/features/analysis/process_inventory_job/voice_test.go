@@ -452,7 +452,7 @@ func TestSelectCatalogImagesPrioritizesNoteIntervalsAndKeepsRoomOverview(t *test
 	}
 	start, end := int64(20_000), int64(24_000)
 	notes := []CatalogNote{{NoteID: identity.NewID(), RevisionID: identity.NewID(), TargetKind: "VIDEO_INTERVAL", SourceMediaID: media, SourceGeneration: 1, StartMS: &start, EndMS: &end, Text: "cinco pratos"}}
-	selected := selectCatalogImages(frames, notes, maxRequestImages)
+	selected, _ := selectCatalogImages(frames, notes, maxRequestImages)
 	if len(selected) > maxRequestImages {
 		t.Fatalf("selected %d images, want at most %d", len(selected), maxRequestImages)
 	}
@@ -483,7 +483,7 @@ func TestSelectCatalogImagesPrioritizesNoteIntervalsAndKeepsRoomOverview(t *test
 		}
 	}
 	// Without notes the existing selection is unchanged.
-	plain := selectCatalogImages(frames, nil, maxRequestImages)
+	plain, _ := selectCatalogImages(frames, nil, maxRequestImages)
 	legacy := representativeImages(frames, maxRequestImages)
 	if len(plain) != len(legacy) {
 		t.Fatalf("no-note selection = %d images, want the existing %d", len(plain), len(legacy))
@@ -542,7 +542,7 @@ func TestSelectCatalogImagesKeepsOverviewForASingleLongClip(t *testing.T) {
 	}
 	start, end := int64(0), int64(19_000)
 	notes := []CatalogNote{{NoteID: identity.NewID(), RevisionID: identity.NewID(), TargetKind: "VIDEO_INTERVAL", SourceMediaID: media, SourceGeneration: 1, StartMS: &start, EndMS: &end, Text: "pratos"}}
-	selected := selectCatalogImages(frames, notes, maxRequestImages)
+	selected, _ := selectCatalogImages(frames, notes, maxRequestImages)
 	inInterval, overview := 0, 0
 	for _, image := range selected {
 		if *image.TimestampMS <= end+intervalToleranceMS {

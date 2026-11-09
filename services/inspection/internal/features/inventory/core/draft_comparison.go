@@ -63,7 +63,7 @@ func (s Service) importComparison(tx *gorm.DB, tenantID, inspectionID, draftID i
 			if !ok {
 				continue
 			}
-			created := database.InventoryItem{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: draftID, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: *itemResult.OutsideTypeCode, Name: *itemResult.OutsideName, Condition: "NOT_ASSESSABLE", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Version: 1, Suggested: marshal(map[string]any{"status": "OUTSIDE_INVENTORY"}), CreatedAt: s.now(), UpdatedAt: s.now()}
+			created := database.InventoryItem{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: draftID, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: *itemResult.OutsideTypeCode, Name: *itemResult.OutsideName, NotAssessed: []byte(`[]`), Condition: "NOT_ASSESSABLE", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Version: 1, Suggested: marshal(map[string]any{"status": "OUTSIDE_INVENTORY"}), CreatedAt: s.now(), UpdatedAt: s.now()}
 			if err := tx.Create(&created).Error; err != nil {
 				return err
 			}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	projectcore "inspection/services/inspection/internal/features/projects/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -76,8 +78,50 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				return err
 			}
 		}
+		// rejectWithoutJobs ends an event that can never be classified. A forced
+		// event comes from reissueReport, whose pending request must not stay
+		// QUEUED forever: it is closed as FAILED in this transaction and the
+		// event is acknowledged. Other events keep the dead-letter behavior.
+		rejectWithoutJobs := func() error {
+			if !payload.Force {
+				return messaging.ErrPermanent
+			}
+			slog.WarnContext(ctx, "classification_reissue_without_jobs", "tenantId", envelope.TenantID.String(), "inspectionId", payload.InspectionID.String(), "mediaKind", inspection.MediaKind)
+			if err := tx.WithContext(ctx).Model(&database.AuditEvent{}).
+				Where("tenant_id=? AND action='report.reissue_requested' AND target_id=? AND outcome='QUEUED'", envelope.TenantID, payload.InspectionID.String()).
+				Update("outcome", "FAILED").Error; err != nil {
+				return err
+			}
+			if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+				recorder.Set("failed")
+			}
+			return nil
+		}
 		if len(jobs) == 0 && len(videoGapFacts) == 0 {
-			return messaging.ErrPermanent
+			if inspection.MediaKind == "VIDEO" {
+				return rejectWithoutJobs()
+			}
+			var submitted int64
+			if err := tx.WithContext(ctx).Table("capture.capture_drafts AS d").Joins("JOIN inspections.responsibilities AS r ON r.tenant_id=d.tenant_id AND r.id=d.responsibility_id").Where("d.tenant_id=? AND r.inspection_id=? AND d.status='SUBMITTED'", envelope.TenantID, payload.InspectionID).Count(&submitted).Error; err != nil {
+				return err
+			}
+			if submitted == 0 {
+				return rejectWithoutJobs()
+			}
+			// Only a photo inspection with a pinned descriptive scope can use the
+			// limited-report fallback. Legacy photo and video behavior stays intact.
+			var scopes int64
+			if inspection.MediaKind == "PHOTO" {
+				if err := tx.WithContext(ctx).Model(&database.InspectionScopeSnapshot{}).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Count(&scopes).Error; err != nil {
+					return err
+				}
+			}
+			if scopes == 0 {
+				return rejectWithoutJobs()
+			}
+			// Consent remains required upstream; this does not create a
+			// NOT_AUTHORIZED producer.
+			videoGapFacts = append(videoGapFacts, analysis.TerminalFallback())
 		}
 		for _, job := range jobs {
 			if job.Status != "COMPLETED" && job.Status != "INCONCLUSIVE" && job.Status != "FAILED" {
@@ -151,7 +195,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				fact.Inconclusive = fact.Inconclusive || unresolvedRequirement > 0
 			} else {
 				var answer database.RequirementAnswer
-				answerErr := tx.Where("tenant_id=? AND requirement_key=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?))", envelope.TenantID, job.RequirementKey, envelope.TenantID, envelope.TenantID, payload.InspectionID).Order("updated_at DESC").First(&answer).Error
+				answerErr := latestSubmittedAnswer(ctx, tx, envelope.TenantID, payload.InspectionID, job.RequirementKey, &answer)
 				if answerErr == gorm.ErrRecordNotFound {
 					fact.Missing = true
 				} else if answerErr != nil {
@@ -229,7 +273,14 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		}
 		reasons, _ := json.Marshal(decision.ReasonCodes)
 		now := deps.Now().UTC()
-		row := database.ClassificationRun{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, PromptSnapshotID: inspection.AnalysisPromptSnapshotID, VideoPlanID: nil, Classification: decision.Classification, ReasonCodes: reasons, CreatedAt: now}
+		promptSnapshotID := inspection.AnalysisPromptSnapshotID
+		if inspection.MediaKind == "VIDEO" && inspection.FindingsCompareSnapshotID != nil {
+			promptSnapshotID = *inspection.FindingsCompareSnapshotID
+		}
+		if len(jobs) > 0 && jobs[0].PromptSnapshotID != (identity.ID{}) {
+			promptSnapshotID = jobs[0].PromptSnapshotID
+		}
+		row := database.ClassificationRun{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, PromptSnapshotID: promptSnapshotID, VideoPlanID: nil, Classification: decision.Classification, ReasonCodes: reasons, CreatedAt: now}
 		if inspection.MediaKind == "VIDEO" {
 			row.VideoPlanID = &activeVideoPlan
 		}
@@ -319,7 +370,12 @@ func classifyInventoryJobs(ctx context.Context, tx *gorm.DB, tenantID identity.I
 		case "CONDITION_CHANGED":
 			result.Facts.Worsened++
 		case "NOT_OBSERVED":
-			result.Facts.NotObserved++
+			// "No basis to compare" (strict comparisons) is a limit of the
+			// baseline, not an item this capture failed to observe; the v3
+			// report labels it apart and marks the result as limited.
+			if row.ReasonCode == nil || (*row.ReasonCode != "NO_BASELINE_VIEW" && *row.ReasonCode != "BASELINE_CONDITION_UNASSESSED") {
+				result.Facts.NotObserved++
+			}
 		}
 	}
 	assessedIDs := make(map[identity.ID]struct{}, len(rows))
@@ -335,7 +391,7 @@ func classifyInventoryJobs(ctx context.Context, tx *gorm.DB, tenantID identity.I
 	result.Facts.BaselineItems = int(baselineCount)
 	result.Facts.NotObserved += max(0, int(baselineCount)-len(assessedIDs))
 	var impossibleCount int64
-	if err := tx.WithContext(ctx).Table("capture.requirement_answers AS a").Joins("JOIN capture.capture_drafts AS d ON d.tenant_id=a.tenant_id AND d.id=a.draft_id").Joins("JOIN inspections.responsibilities AS r ON r.tenant_id=d.tenant_id AND r.id=d.responsibility_id").Where("a.tenant_id=? AND r.inspection_id=? AND a.impossibility_reason<>'' AND a.requirement_key LIKE 'env:%'", tenantID, inspection.ID).Count(&impossibleCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Table("capture.requirement_answers AS a").Joins("JOIN capture.capture_drafts AS d ON d.tenant_id=a.tenant_id AND d.id=a.draft_id").Joins("JOIN inspections.responsibilities AS r ON r.tenant_id=d.tenant_id AND r.id=d.responsibility_id").Where("a.tenant_id=? AND r.inspection_id=? AND d.status='SUBMITTED' AND a.impossibility_reason<>'' AND a.requirement_key LIKE 'env:%'", tenantID, inspection.ID).Count(&impossibleCount).Error; err != nil {
 		return result, true, err
 	}
 	result.Facts.EnvironmentsNotCaptured = int(impossibleCount)
@@ -425,4 +481,10 @@ func identityIDs(ids map[identity.ID]struct{}) []identity.ID {
 		result = append(result, id)
 	}
 	return result
+}
+
+// latestSubmittedAnswer loads the newest answer to one requirement among the
+// inspection's SUBMITTED capture drafts; an OPEN recapture does not count.
+func latestSubmittedAnswer(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, requirementKey string, answer *database.RequirementAnswer) error {
+	return tx.WithContext(ctx).Where("tenant_id=? AND requirement_key=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND status='SUBMITTED' AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?))", tenantID, requirementKey, tenantID, tenantID, inspectionID).Order("updated_at DESC").First(answer).Error
 }

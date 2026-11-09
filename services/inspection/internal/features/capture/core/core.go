@@ -42,6 +42,7 @@ type Requirement struct {
 	EnvironmentName       string `json:"environmentName,omitempty"`
 	AddedDuringCapture    bool   `json:"addedDuringCapture,omitempty"`
 	Expected              bool   `json:"expected,omitempty"`
+	AllowConfirmedGap     bool   `json:"allowConfirmedGap,omitempty"`
 	Deleted               bool   `json:"deleted,omitempty"`
 }
 
@@ -84,6 +85,14 @@ type Completeness struct {
 	PendingKeys                 []string
 }
 
+// ValidateMediaLimit rejects only new media beyond a requirement's limit.
+func ValidateMediaLimit(current, adding, maximum int) error {
+	if current < 0 || adding < 0 || maximum < 0 || (maximum > 0 && current+adding > maximum) {
+		return apperror.New(apperror.InvalidState, "media", "O limite de mídias deste cômodo foi atingido.")
+	}
+	return nil
+}
+
 // PendingRequirementError carries the v2 environment keys through GraphQL
 // error presentation without putting them in client-facing prose.
 type PendingRequirementError struct {
@@ -99,7 +108,7 @@ func (e PendingRequirementError) PendingRequirementKeys() []string {
 
 func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bool) (Completeness, error) {
 	if len(requirements) == 0 {
-		return Completeness{}, apperror.New(apperror.InvalidState, "requirements", "capture has no applicable requirements")
+		return Completeness{}, apperror.New(apperror.InvalidState, "requirements", "A captura não tem requisitos aplicáveis.")
 	}
 	byKey := make(map[string]Answer, len(answers))
 	for _, answer := range answers {
@@ -130,11 +139,11 @@ func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bo
 	result.Complete = result.Satisfied == result.Total && len(result.Blocked) == 0
 	result.RequiresAttention = !result.Complete
 	if len(result.Blocked) > 0 {
-		return result, apperror.New(apperror.InvalidState, result.Blocked[0], "media checks must complete before submission")
+		return result, apperror.New(apperror.InvalidState, result.Blocked[0], "A verificação das mídias precisa ser concluída antes do envio.")
 	}
 	v2ExpectedPending := false
 	for _, requirement := range requirements {
-		if requirement.Expected && strings.HasPrefix(requirement.Key, "env:") && slices.Contains(result.PendingKeys, requirement.Key) {
+		if requirement.Expected && !requirement.AllowConfirmedGap && strings.HasPrefix(requirement.Key, "env:") && slices.Contains(result.PendingKeys, requirement.Key) {
 			v2ExpectedPending = true
 			break
 		}
@@ -146,7 +155,7 @@ func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bo
 		} else if len(result.Missing) > 0 {
 			field = result.Missing[0]
 		}
-		base := apperror.New(apperror.InvalidState, field, "explicit incomplete submission confirmation is required")
+		base := apperror.New(apperror.InvalidState, field, "Confirme o envio incompleto para continuar.")
 		if v2ExpectedPending {
 			return result, PendingRequirementError{Keys: append([]string(nil), result.PendingKeys...), Err: base}
 		}
@@ -158,17 +167,17 @@ func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bo
 func ValidateDescription(value string, required bool) error {
 	value = strings.TrimSpace(value)
 	if required && value == "" {
-		return apperror.New(apperror.InvalidInput, "description", "description is required")
+		return apperror.New(apperror.InvalidInput, "description", "Informe uma descrição.")
 	}
 	if utf8.RuneCountInString(value) > MaxTextRunes {
-		return apperror.New(apperror.InvalidInput, "description", "description is too long")
+		return apperror.New(apperror.InvalidInput, "description", "A descrição é muito longa.")
 	}
 	if strings.Contains(strings.ToLower(value), "<script") {
-		return apperror.New(apperror.InvalidInput, "description", "description contains unsafe text")
+		return apperror.New(apperror.InvalidInput, "description", "A descrição contém texto inválido.")
 	}
 	for _, r := range value {
 		if unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t' {
-			return apperror.New(apperror.InvalidInput, "description", "description contains unsafe text")
+			return apperror.New(apperror.InvalidInput, "description", "A descrição contém texto inválido.")
 		}
 	}
 	return nil

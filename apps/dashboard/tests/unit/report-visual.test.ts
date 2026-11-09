@@ -1,9 +1,15 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ReportVisual, seekVideoToEvidence, unmatchedReportEvidence, videoContentUrl } from "@/features/dashboard/report-visual";
+import { CustomerChecklistView, CustomerReportVisual, ReportVisual, seekVideoToEvidence, unmatchedReportEvidence, videoContentUrl } from "@/features/dashboard/report-visual";
 import { buildReportRooms } from "@/features/dashboard/report-room-model";
+import { ReportVersionHistory } from "@/features/dashboard/reports-journey";
+
+const customerChecklistGolden = JSON.parse(readFileSync(resolve(__dirname, "../../../../services/inspection/internal/features/reports/customer/core/testdata/customer_report_v3.golden.json"), "utf8")) as { coverage: unknown; rooms: Array<unknown> };
+const internalChecklistGolden = JSON.parse(readFileSync(resolve(__dirname, "../../../../services/inspection/internal/platform/graphql/resolvers/testdata/internal_report_v3.golden.json"), "utf8")) as { coverage: unknown; rooms: Array<unknown> };
 
 describe("Report evidence presentation", () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -62,10 +68,10 @@ describe("Report evidence presentation", () => {
       inventory: {
         referenceVersionNumber: 4,
         purpose: "INVENTORY_UPDATE",
-        coverage: { expectedItems: 2, assessedItems: 1, notObserved: 1, environmentsNotCaptured: [], environmentsAddedDuringCapture: [] },
+        coverage: { expectedItems: 2, assessedItems: 1, notObserved: 1, noBasis: 0, environmentsNotCaptured: [], environmentsAddedDuringCapture: [] },
         problems: [
-          { environment: "Cozinha", type: "CABINET", name: "Armários planejados", status: "NOT_OBSERVED", conditionBefore: "GOOD", conditionAfter: null, reason: "Não foi encontrada uma vista correspondente.", pairs: [] },
-          { environment: "Cozinha", type: "SINK", name: "Pia", status: "MISSING", conditionBefore: "GOOD", conditionAfter: null, reason: "Item não encontrado.", pairs: [] },
+          { environment: "Cozinha", type: "CABINET", name: "Armários planejados", status: "NOT_OBSERVED", statusLabel: null, conditionBefore: "GOOD", conditionAfter: null, reason: "Não foi encontrada uma vista correspondente.", pairs: [] },
+          { environment: "Cozinha", type: "SINK", name: "Pia", status: "MISSING", statusLabel: null, conditionBefore: "GOOD", conditionAfter: null, reason: "Item não encontrado.", pairs: [] },
         ],
         informational: [],
       },
@@ -94,7 +100,7 @@ describe("Report evidence presentation", () => {
   });
 
   it("UT-354 and UT-356 render a NORMAL v2 summary and separate added environments", () => {
-    const report = { ...reportWith([], [], []), classification: "NORMAL", inventory: { referenceVersionNumber: 2, purpose: "MOVE_IN", coverage: { expectedItems: 24, assessedItems: 18, notObserved: 0, environmentsNotCaptured: [], environmentsAddedDuringCapture: ["Depósito"] }, problems: [], informational: [] } } as ComponentProps<typeof ReportVisual>["report"];
+    const report = { ...reportWith([], [], []), classification: "NORMAL", inventory: { referenceVersionNumber: 2, purpose: "MOVE_IN", coverage: { expectedItems: 24, assessedItems: 18, notObserved: 0, noBasis: 0, environmentsNotCaptured: [], environmentsAddedDuringCapture: ["Depósito"] }, problems: [], informational: [] } } as ComponentProps<typeof ReportVisual>["report"];
     const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
     expect(markup).toContain("Sem alertas no inventário");
     expect(markup).toContain("18 de 24 itens avaliados");
@@ -119,7 +125,7 @@ describe("Report evidence presentation", () => {
         referenceVersionNumber: 2,
         purpose: "MOVE_IN",
         coverage: null,
-        problems: [{ environment: "Sala", type: "SOFA", name: "Sofá", status: "CONDITION_CHANGED", conditionBefore: "GOOD", conditionAfter: "POOR", reason: "Rasgo visível", pairs: [{ originEvidenceId: "origin-frame", currentEvidenceId: "current-frame", originSourceAvailability: "EXPIRED", currentSourceAvailability: "AVAILABLE", timestampMs: 17_500 }] }],
+        problems: [{ environment: "Sala", type: "SOFA", name: "Sofá", status: "CONDITION_CHANGED", statusLabel: null, conditionBefore: "GOOD", conditionAfter: "POOR", reason: "Rasgo visível", pairs: [{ originEvidenceId: "origin-frame", currentEvidenceId: "current-frame", originSourceAvailability: "EXPIRED", currentSourceAvailability: "AVAILABLE", timestampMs: 17_500 }] }],
         informational: [],
       },
     } as ComponentProps<typeof ReportVisual>["report"];
@@ -227,6 +233,166 @@ describe("Report evidence presentation", () => {
     expect(host.querySelectorAll(".report-evidence-pair")).toHaveLength(2);
     expect(host.querySelectorAll(".report-pair-play")).toHaveLength(2);
     await act(async () => { root.unmount(); });
+  });
+
+  it("UT-100 shows a sound catalog item and its evidence for a NORMAL report with no findings", () => {
+    const report = {
+      ...reportWith([], [evidence("current-photo", "room:cabinets", "CURRENT", "/cabinet.jpg")], []),
+      classification: "NORMAL", findings: [],
+      checklist: internalChecklistGolden,
+    } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Armários");
+    expect(markup).toContain('src="/cabinet.jpg"');
+    expect(markup).toContain('alt="Imagem da evidência"');
+    expect(markup).toContain("Avaliação completa: 1 de 1");
+    expect(markup).not.toContain("Todos os itens esperados foram verificados");
+  });
+
+  it("UT-101 marks analysis failure and never calls an empty result alert-free", () => {
+    const report = { ...reportWith([], [], []), classification: "NORMAL", findings: [], processing: { status: "FAILED", message: "A análise não pôde ser concluída." } } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Falha na análise");
+    expect(markup).toContain("A análise não pôde ser concluída.");
+    expect(markup).not.toContain("Sem alertas no inventário");
+    expect(markup).not.toContain("Sem alertas identificados");
+  });
+
+  it("UT-102 keeps customer checklist allowlisted and excludes confidence and rejected suggestions", () => {
+    const report = {
+      inspectionId: "inspection", snapshotId: "snapshot", version: 3, classification: "NORMAL", classificationLabel: "Sem alertas identificados", limited: false, advisory: "Relatório descritivo.", status: "PUBLISHED", historical: false,
+      context: { asset: { id: "asset", name: "Imóvel QA", externalKey: "QA", address: "Rua QA" }, participant: { name: "Pessoa QA" }, template: { id: "template", name: "Modelo", version: 3 }, inspection: { projectId: null, stageId: null, stageLabel: null, dueAt: null, submittedAt: null, generatedAt: "2026-10-01T00:00:00Z" } },
+      requirements: [], inventory: null, processing: null, handover: null, comparison: null,
+      checklist: { ...customerChecklistGolden, rooms: customerChecklistGolden.rooms.map((room) => ({ ...(room as object), components: [{ ...((room as { components: Array<object> }).components[0]), confidence: 0.99, rejectedSuggestion: "INTERNAL REJECTED TEXT" }] })) },
+    } as unknown as Parameters<typeof CustomerReportVisual>[0]["report"];
+    const markup = renderToStaticMarkup(createElement(CustomerReportVisual, { report, evidence: [] }));
+    expect(markup).toContain("Armários íntegros nas vistas disponíveis.");
+    expect(markup).toContain("Observado");
+    expect(markup).toContain("Condição observada: Bom");
+    expect(markup).toContain("<figcaption>E001</figcaption>");
+    expect(markup).not.toContain("Sugestão rejeitada pela equipe");
+    expect(markup).not.toContain("confidence");
+    expect(markup).not.toContain("0.99");
+    expect(markup).not.toContain("INTERNAL REJECTED TEXT");
+  });
+
+  it("renders backend golden scope, reasons, notice, assessment extent and attribute provenance", () => {
+    const report = {
+      ...reportWith([], [evidence("current-photo", "room:kitchen", "CURRENT", "/cabinet.jpg")], []),
+      checklist: internalChecklistGolden,
+      scopeStatements: ["Cozinha e armários"], reasonLabels: ["Vistoria de saída"],
+      evidenceNotice: "As evidências disponíveis são limitadas.",
+    } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Escopo da análise");
+    expect(markup).toContain("Cozinha e armários");
+    expect(markup).toContain("Motivos");
+    expect(markup).toContain("Vistoria de saída");
+    expect(markup).toContain("As evidências disponíveis são limitadas.");
+    expect(markup).toContain("Extensão avaliada: Frentes e laterais");
+    expect(markup).toContain("Fonte visual · descrição · evidência E001");
+  });
+
+  it("shows the backend formatted handover values without raw enums", () => {
+    const report = { ...reportWith([], [], []), handover: { entries: [{ kind: "METER", status: "DECLARED", payload: { presentation: "Medidor · Declarado · Água · 42 · m³" }, evidenceIds: [], declarant: null }] } } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Medidor · Declarado · Água · 42 · m³");
+    expect(markup).not.toContain("WATER");
+    expect(markup).not.toContain("Registrado");
+    expect(markup).not.toContain("Declarado por:");
+  });
+
+  it("UT-103 says scope is undefined without inventing a coverage percentage", () => {
+    const report = { ...reportWith([], [], []), checklist: { coverage: { expected: 0, fullyAssessed: 0, partiallyAssessed: 0, notObserved: 0, notApplicable: 0, impossible: 0, unknownScope: true }, rooms: [] } } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Escopo não definido; não há percentual de cobertura.");
+    expect(markup).not.toContain("0%");
+  });
+
+  it("renders the concise condition wording shared with the v3 report PDF", () => {
+    const report = { ...reportWith([], [], []), checklist: internalChecklistGolden } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Condição observada: Bom");
+    expect(markup).not.toContain("Condição: Bom");
+  });
+
+  it("never requests or renders customer checklist media unless availability is AVAILABLE", () => {
+    const checklist = JSON.parse(JSON.stringify(customerChecklistGolden)) as NonNullable<NonNullable<Parameters<typeof CustomerReportVisual>[0]["report"]["checklist"]>>;
+    checklist.rooms[0].components[0].evidenceIds = ["E001", "E002", "E003", "E004"];
+    const evidence = [
+      { id: "available", reference: "E001", mediaAvailability: "AVAILABLE", state: "AVAILABLE", url: "/private/available.jpg" },
+      { id: "withheld", reference: "E002", mediaAvailability: "WITHHELD", state: "WITHHELD", url: null },
+      { id: "unavailable", reference: "E003", mediaAvailability: "UNAVAILABLE", state: "UNAVAILABLE", url: "/private/unavailable.jpg" },
+      { id: "revoked", reference: "E004", mediaAvailability: "REVOKED", state: "REVOKED", url: "/private/revoked.jpg" },
+    ] as unknown as Parameters<typeof CustomerChecklistView>[0]["evidence"];
+    const markup = renderToStaticMarkup(createElement(CustomerChecklistView, { checklist, evidence, snapshotId: "snapshot" }));
+    expect(markup.match(/<img\b/g)).toHaveLength(1);
+    expect(markup).toContain("/private/available.jpg");
+    expect(markup).not.toContain("/private/unavailable.jpg");
+    expect(markup).not.toContain("/private/revoked.jpg");
+    for (const reference of ["E001", "E002", "E003", "E004"]) expect(markup).toContain(`<figcaption>${reference}</figcaption>`);
+  });
+
+  it("UT-104 filters comparison items while retaining the baseline denominator", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => ({ itemIdentityId: `item-${index}`, room: "Sala", typeCode: "SOFA", name: `Sofá ${index + 1}`, outcome: index < 6 ? "CHANGED" : "UNCHANGED", outcomeLabel: index < 6 ? "Alterado" : "Sem alteração", baselineCondition: "GOOD", currentCondition: "FAIR", description: null, limitations: [], pairs: [], pairingRevised: false }));
+    const report = { ...reportWith([], [], []), comparison: { baseline: { versionId: "baseline", versionNumber: 4, purpose: "MOVE_IN", purposeLabel: "Entrada no imóvel", activatedAt: "2026-10-01T00:00:00Z" }, status: "COMPLETED", statusLabel: "Comparação concluída", counts: { total: 20, unchanged: 14, changed: 6, improved: 0, missing: 0, notObserved: 0, noBasis: 0 }, items, outsideBaseline: [] } } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const host = document.createElement("div"); const root = createRoot(host);
+    await act(async () => { root.render(createElement(ReportVisual, { report, onDownload: () => {} })); });
+    const changed = [...host.querySelectorAll<HTMLButtonElement>(".report-comparison-filters button")].find((button) => button.textContent?.startsWith("Alterado"));
+    await act(async () => { changed?.click(); });
+    expect(host.querySelectorAll(".report-v3-comparison-item")).toHaveLength(6);
+    expect(host.querySelector(".report-v3-comparison > header")?.textContent).toContain("6 de 20 itens");
+    expect(host.textContent).toContain("Referência · versão 4");
+    await act(async () => { root.unmount(); });
+  });
+
+  it("disables reissue and pairing controls while another report version is pending", () => {
+    const report = {
+      ...reportWith([], [evidence("reference", "inventory", "REFERENCE", "/reference.jpg"), evidence("current", "inventory", "CURRENT", "/current.jpg")], []),
+      comparison: { baseline: { versionId: "baseline", versionNumber: 4, purpose: "MOVE_IN", purposeLabel: "Entrada no imóvel", activatedAt: "2026-10-01T00:00:00Z" }, status: "COMPLETED", statusLabel: "Comparação concluída", counts: { total: 1, unchanged: 0, changed: 1, improved: 0, missing: 0, notObserved: 0, noBasis: 0 }, items: [{ itemIdentityId: "item", room: "Sala", typeCode: "SOFA", name: "Sofá", outcome: "CHANGED", outcomeLabel: "Alterado", baselineCondition: "GOOD", currentCondition: "FAIR", description: null, limitations: [], pairs: [{ baselineEvidenceId: "reference", currentEvidenceId: "current" }], pairingRevised: false }], outsideBaseline: [],
+    },
+    } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {}, onReissue: () => {}, canRevisePairing: true, onRevisePairing: async () => {}, actionsDisabled: true }));
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Emitir nova versão<\/button>/);
+    expect(markup).toMatch(/<select[^>]*disabled=""/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Salvar revisão<\/button>/);
+  });
+
+  it("UT-105 labels a missing baseline view as no basis without rendering a null baseline condition", () => {
+    const comparison = { baseline: { versionId: "baseline", versionNumber: 2, purpose: "MOVE_IN", purposeLabel: "Entrada", activatedAt: "2026-10-01T00:00:00Z" }, status: "COMPLETED", statusLabel: "Comparação concluída", counts: { total: 1, unchanged: 0, changed: 0, improved: 0, missing: 0, notObserved: 0, noBasis: 1 }, items: [{ itemIdentityId: "item", room: "Cozinha", typeCode: "CABINET", name: "Armário", outcome: "NO_BASIS", outcomeLabel: "Sem base para comparar", baselineCondition: null, currentCondition: "GOOD", description: null, limitations: [], pairs: [], pairingRevised: false }], outsideBaseline: [] };
+    const report = { ...reportWith([], [], []), comparison } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Sem base para comparar");
+    expect(markup).toContain("Não há uma vista avaliável do item na referência aprovada");
+    expect(markup).not.toContain("Condição da referência: —");
+  });
+
+  it("UT-106 shows unavailable customer evidence without exposing media URLs", () => {
+    const report = {
+      inspectionId: "inspection", snapshotId: "snapshot", version: 3, classification: "ATTENTION", classificationLabel: "Requer atenção", limited: true, advisory: "Comparação limitada.", status: "PUBLISHED", historical: false,
+      context: { asset: { id: "asset", name: "Imóvel QA", externalKey: "QA", address: "Rua QA" }, participant: { name: "Pessoa QA" }, template: { id: "template", name: "Modelo", version: 3 }, inspection: { projectId: null, stageId: null, stageLabel: null, dueAt: null, submittedAt: null, generatedAt: "2026-10-01T00:00:00Z" } },
+      requirements: [], inventory: null, checklist: null, processing: null, handover: null,
+      comparison: { baselineVersionNumber: 1, purpose: "Entrada no imóvel", purposeLabel: "Entrada no imóvel", activatedAt: "2026-09-01T00:00:00Z", status: "COMPLETED", statusLabel: "Comparação concluída", counts: { total: 1, unchanged: 0, changed: 0, improved: 0, missing: 0, notObserved: 1, noBasis: 0 }, displayed: 1, disclaimer: "A comparação descreve evidências disponíveis e não atribui responsabilidades nem custos.", items: [{ room: "Sala", name: "Sofá", outcome: "NOT_OBSERVED", outcomeLabel: "Não observado", baselineCondition: "Bom", currentCondition: null, limitations: ["Evidência atual indisponível."], pairs: [{ baselineEvidence: "E001", currentEvidence: "E002", baselineAvailability: "UNAVAILABLE", currentAvailability: "UNAVAILABLE" }] }], outsideBaseline: [] },
+    } as unknown as Parameters<typeof CustomerReportVisual>[0]["report"];
+    const markup = renderToStaticMarkup(createElement(CustomerReportVisual, { report, evidence: [] }));
+    expect(markup).toContain("Evidência da referência indisponível");
+    expect(markup).toContain("Não observado");
+    expect(markup).not.toContain("https://");
+    expect(markup).not.toContain("<img");
+    expect(markup).toContain("Referência E001 ↔ vistoria atual E002");
+    expect(markup).not.toContain("S3");
+  });
+
+  it("UT-116 renders version history from backend scope and review labels", () => {
+    const history = [
+      { id: "snapshot-2", inspectionId: "inspection", assetName: "Imóvel QA", assetAddress: "Rua QA", assetExternalKey: "QA", participantName: "Pessoa QA", generatedAt: "2026-10-02T12:00:00Z", classification: "ATTENTION", version: 2, scopeLabel: "4 componentes no escopo", reviewLabel: "Não revisado", publication: { id: "publication-2", snapshotId: "snapshot-2", inspectionId: "inspection", status: "PUBLISHED", version: 2, publishedAt: "2026-10-02T12:00:00Z", invalidatedAt: null } },
+      { id: "snapshot-1", inspectionId: "inspection", assetName: "Imóvel QA", assetAddress: "Rua QA", assetExternalKey: "QA", participantName: "Pessoa QA", generatedAt: "2026-10-01T12:00:00Z", classification: "NORMAL", version: 1, scopeLabel: "Escopo não definido", reviewLabel: "Falha na análise", publication: null },
+    ] as unknown as ComponentProps<typeof ReportVersionHistory>["history"];
+    const markup = renderToStaticMarkup(createElement(ReportVersionHistory, { history, currentVersion: 2, onSelect: () => {}, message: "", canPublish: true }));
+    expect(markup).toContain("4 componentes no escopo · Não revisado");
+    expect(markup).toContain("Escopo não definido · Falha na análise");
+    expect(markup).toContain("02/10/2026");
+    expect(markup).toContain("Versão anterior");
   });
 });
 

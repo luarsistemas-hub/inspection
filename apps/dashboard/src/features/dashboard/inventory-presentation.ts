@@ -7,11 +7,11 @@ const purposes: Record<string, string> = {
 };
 
 const conditions: Record<string, string> = {
-  NEW: "Novo — Sem sinais de uso",
-  GOOD: "Bom — Uso leve, sem danos visíveis",
-  FAIR: "Regular — Desgaste ou danos pequenos visíveis que não comprometem o uso",
-  POOR: "Ruim — Danos visíveis relevantes ou comprometimento aparente do uso",
-  NOT_ASSESSABLE: "Não avaliável — Evidência insuficiente para avaliar",
+	NEW: "Novo — Sem sinais de uso",
+	GOOD: "Bom — Uso leve, sem danos visíveis",
+	FAIR: "Regular — Desgaste ou danos pequenos visíveis que não comprometem o uso",
+	POOR: "Ruim — Danos visíveis relevantes ou comprometimento aparente do uso",
+	NOT_ASSESSABLE: "Não avaliável — Evidência insuficiente para avaliar",
 };
 
 const itemTypes: Record<string, string> = {
@@ -44,11 +44,54 @@ export function conditionLabel(value?: string | null) {
   return value ? conditions[value] ?? "Condição sem definição disponível." : "—";
 }
 
+/** reportConditionLabel matches the concise condition vocabulary in v3 HTML/PDF. */
+export function reportConditionLabel(value?: string | null) {
+  return value ? ({ NEW: "Novo", GOOD: "Bom", FAIR: "Regular", POOR: "Ruim", NOT_ASSESSABLE: "Não avaliável", Novo: "Novo", Bom: "Bom", Regular: "Regular", Ruim: "Ruim", "Não avaliável": "Não avaliável" } as Record<string, string>)[value] ?? "Condição sem definição disponível." : "—";
+}
+
 export function itemTypeLabel(value: string) { return itemTypes[value] ?? "Outro"; }
 export function environmentTypeLabel(value: string) { return environmentTypes[value] ?? "Outro"; }
 export const conditionOptions = Object.entries(conditions);
 export const itemTypeOptions = Object.entries(itemTypes);
 export const environmentTypeOptions = Object.entries(environmentTypes);
+
+const inventoryStatuses: Record<string, string> = {
+  MISSING: "Não encontrado",
+  CONDITION_CHANGED: "Condição alterada",
+  PRESENT_UNCHANGED: "Presente sem alteração relevante",
+  IMPROVED: "Condição melhorada",
+  NOT_OBSERVED: "Não observado",
+  NO_BASIS: "Sem base para comparar",
+  OUTSIDE_INVENTORY: "Fora do inventário",
+  ENVIRONMENT_NOT_CAPTURED: "Ambiente não capturado",
+  DAMAGE: "Dano identificado",
+};
+
+/** inventoryStatusLabel names an inventory report entry status; an unknown status is never presented as a change. */
+export function inventoryStatusLabel(value: string) {
+  return inventoryStatuses[value] ?? "Situação não reconhecida";
+}
+
+/**
+ * inventoryEntryStatusLabel names one inventory report entry. A report v3 entry
+ * carries the server label (`statusLabel`), the comparison vocabulary shared
+ * with the comparison section, HTML and PDF; v1/v2 entries keep the historical
+ * labels of inventoryStatusLabel.
+ */
+export function inventoryEntryStatusLabel(entry: { status: string; statusLabel?: string | null }) {
+  return entry.statusLabel || inventoryStatusLabel(entry.status);
+}
+
+/** comparisonOutcomeLabel keeps the six comparison outcomes aligned with the PDF vocabulary. */
+export function comparisonOutcomeLabel(value: string) {
+  return ({ UNCHANGED: "Sem alteração", CHANGED: "Alterado", IMPROVED: "Melhorou", MISSING: "Ausência comprovada", NOT_OBSERVED: "Não observado", NO_BASIS: "Sem base para comparar" } as Record<string, string>)[value] ?? "Situação não informada";
+}
+
+/** noBasisLabel counts the baseline items without basis to compare, apart from the not observed ones. */
+export function noBasisLabel(count?: number | null) {
+  if (!count) return null;
+  return `${count} ${count === 1 ? "item sem base para comparar" : "itens sem base para comparar"}`;
+}
 
 export function buildCoverageSummary(coverage?: { expectedItems: number; assessedItems: number; environmentsAddedDuringCapture: string[] } | null) {
   if (!coverage) return null;

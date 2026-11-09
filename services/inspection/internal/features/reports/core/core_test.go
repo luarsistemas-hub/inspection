@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -18,6 +20,38 @@ func TestSnapshotRejectsMutableURLs(t *testing.T) {
 	}
 }
 
+func TestSanitizeURLsPreservesJSONEscapingInDecodedStringValues(t *testing.T) {
+	notes := []string{
+		`veja https://x.com/"abc"`,
+		`fim https://x.com/foto`,
+		`aspas https://x.com/"café" e unicode: vistoria 🏠`,
+		`barras \\ antes de https://x.com/"item"`,
+		"linha https://x.com/\"a\"\ncontinua",
+	}
+	for _, note := range notes {
+		t.Run(note, func(t *testing.T) {
+			snapshot := validV3Snapshot()
+			payload, err := json.Marshal(map[string]string{"note": note})
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot.Handover.Entries = []HandoverEntry{{Key: "note", Kind: "NOTE", Status: "DECLARED", Payload: payload}}
+			snapshot.Checklist.Rooms[0].Components[0].Description = note
+			cleaned := SanitizeURLs(snapshot)
+			var decoded map[string]string
+			if err := json.Unmarshal(cleaned.Handover.Entries[0].Payload, &decoded); err != nil {
+				t.Fatalf("sanitized JSON is invalid: %v (%s)", err, cleaned.Handover.Entries[0].Payload)
+			}
+			if decoded["note"] != mutableURL.ReplaceAllString(note, "[endereço removido]") {
+				t.Fatalf("note=%q, want URL-sanitized original text", decoded["note"])
+			}
+			if err := Validate(cleaned); err != nil {
+				t.Fatalf("sanitized snapshot failed validation: %v", err)
+			}
+		})
+	}
+}
+
 func TestHTMLForPDFIncludesLocalImagesAndMissingMarker(t *testing.T) {
 	snapshot := validSnapshot()
 	unchanged := true
@@ -32,6 +66,41 @@ func TestHTMLForPDFIncludesLocalImagesAndMissingMarker(t *testing.T) {
 	}
 	if !strings.Contains(string(html), "Sem alteração relevante identificada") || !strings.Contains(string(html), "não confirma a ausência de problemas") {
 		t.Fatalf("expected neutral analysis summary: %s", html)
+	}
+}
+
+func TestTask05R5HTMLForPDFLocalizesEvidenceAltOnlyInV3(t *testing.T) {
+	for _, version := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			var snapshot Snapshot
+			requirementKey := "overview"
+			switch version {
+			case 1:
+				snapshot = validSnapshot()
+			case 2:
+				snapshot = v2Snapshot()
+			case 3:
+				snapshot = validV3Snapshot()
+				requirementKey = "env:kitchen"
+			}
+			snapshot.Requirements = []Requirement{{Key: requirementKey, Section: "imóvel", Label: "Visão geral", AnalysisMode: "COMPARE_ORIGIN_CURRENT", AnalysisStatus: "COMPLETED"}}
+			if version < 3 {
+				snapshot.Evidence = []Evidence{{ID: "evidence-1", RequirementKey: requirementKey, Role: "CURRENT", Description: "Sala"}}
+			} else {
+				snapshot.Evidence[0].Description = "Sala"
+			}
+			html, err := HTMLForPDF(snapshot, map[string]bool{"evidence-1": true}, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := `alt="CURRENT · Sala"`
+			if version >= 3 {
+				want = `alt="Vistoria atual · Sala"`
+			}
+			if !strings.Contains(string(html), want) {
+				t.Fatalf("HTML v%d missing %q: %s", version, want, html)
+			}
+		})
 	}
 }
 
@@ -132,6 +201,29 @@ func TestLegacySnapshotHTMLRemainsDeterministic(t *testing.T) {
 	}
 }
 
+func TestDescriptiveHTMLUsesSharedPortugueseVocabularyAndNumberedEvidence(t *testing.T) {
+	snapshot := validSnapshot()
+	snapshot.SchemaVersion = 3
+	snapshot.Checklist = &ChecklistSection{Coverage: ChecklistCoverage{Expected: 1, FullyAssessed: 1}, Rooms: []ChecklistRoom{{Key: "kitchen", Name: "Cozinha", Components: []ChecklistComponent{{Label: "Piso", Status: "OBSERVED", Condition: "GOOD", ReviewStatus: "NOT_REVIEWED", EvidenceIDs: []string{"photo-id"}}}}}}
+	snapshot.Processing = &ProcessingState{Status: "NOT_AUTHORIZED"}
+	snapshot.Scope = &ScopeSnapshot{Digest: "scope", Version: 1, Profile: "PROPERTY_COMPONENTS"}
+	snapshot.Handover = &HandoverSection{}
+	snapshot.Provenance = &Provenance{PromptRevision: "prompt-v1", ScopeDigest: "scope"}
+	snapshot.Evidence = []Evidence{{ID: "photo-id", RequirementKey: "room", Role: "CURRENT", Availability: "AVAILABLE"}}
+	html, err := HTML(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Observado", "Bom", "Não revisado", "Não autorizada", "Evidência: E001", "E001 · Vistoria atual"} {
+		if !strings.Contains(string(html), want) {
+			t.Errorf("HTML missing shared label/reference %q: %s", want, html)
+		}
+	}
+	if strings.Contains(string(html), "Evidência: photo-id") || strings.Contains(string(html), " · GOOD") {
+		t.Fatalf("HTML exposed raw evidence reference or condition code: %s", html)
+	}
+}
+
 func v2Snapshot() Snapshot {
 	snapshot := validSnapshot()
 	snapshot.SchemaVersion = 2
@@ -192,5 +284,184 @@ func TestCatalogingSectionValidatesWithoutCoverageOrPurpose(t *testing.T) {
 	html, err := HTML(snapshot)
 	if err != nil || !strings.Contains(string(html), "Inventário catalogado nesta vistoria") {
 		t.Fatalf("cataloging summary missing: %v %s", err, html)
+	}
+}
+
+func TestCaptureProvenanceFlagsHaveNeutralPortugueseLabels(t *testing.T) {
+	for code, want := range map[string]string{
+		"CAPTURE_TIME_CONFLICT":     "Horário da captura divergente",
+		"CAPTURE_TIME_DEVICE_LOCAL": "Horário local do dispositivo",
+		"GALLERY_SOURCE":            "Imagem da galeria",
+	} {
+		if got := FlagLabel(code); got != want {
+			t.Errorf("FlagLabel(%q)=%q, want %q", code, got, want)
+		}
+	}
+}
+
+func validV3Snapshot() Snapshot {
+	snapshot := validSnapshot()
+	snapshot.SchemaVersion = 3
+	snapshot.Evidence = []Evidence{{ID: "evidence-1", RequirementKey: "env:kitchen", Role: "CURRENT"}}
+	snapshot.Checklist = &ChecklistSection{Rooms: []ChecklistRoom{{Key: "kitchen", TypeCode: "KITCHEN", Name: "Cozinha", Components: []ChecklistComponent{{Key: "floor", Label: "Piso", Status: "NOT_OBSERVED", ReviewStatus: "NOT_REVIEWED", EvidenceIDs: []string{}}}}}, Coverage: ChecklistCoverage{Expected: 1, NotObserved: 1}}
+	snapshot.Processing = &ProcessingState{Status: "COMPLETED"}
+	snapshot.Scope = &ScopeSnapshot{Digest: "scope-digest", Version: 1, Profile: "PROPERTY_COMPONENTS"}
+	snapshot.Handover = &HandoverSection{Entries: []HandoverEntry{{Key: "meter", Kind: "METER", Status: "PENDING"}}}
+	snapshot.Provenance = &Provenance{PromptRevision: "prompt-v1", ModelRevision: "unknown", ScopeDigest: "scope-digest"}
+	snapshot.VerificationCode = "random-verification-code-at-least-128-bits"
+	return snapshot
+}
+
+// TestUT043UT044UT049UT110UT113UT115BuildChecklistContracts validates descriptive facts, explicit limits and conflicts.
+func TestUT043UT044UT049UT110UT113UT115BuildChecklistContracts(t *testing.T) {
+	snapshot := validV3Snapshot()
+	if err := Validate(snapshot); err != nil {
+		t.Fatalf("v3 snapshot rejected: %v", err)
+	}
+	html, err := HTML(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Checklist descritivo", "1 componentes esperados", "Piso", "Não observado", "Chaves, controles e medidores", "Pendente", "Falha na análise"} {
+		if strings.Contains(string(html), want) == (want == "Falha na análise") {
+			t.Errorf("HTML presence for %q incorrect", want)
+		}
+	}
+	unknown := validV3Snapshot()
+	unknown.Checklist.Coverage.UnknownScope = true
+	unknown.Checklist.Coverage.Expected = 0
+	unknown.Checklist.Coverage.NotObserved = 0
+	html, err = HTML(unknown)
+	if err != nil || !strings.Contains(string(html), "Escopo não definido") {
+		t.Fatalf("unknown scope must avoid a percentage: %v", err)
+	}
+	unsafe := validV3Snapshot()
+	unsafe.Checklist.Rooms[0].Components[0].EvidenceIDs = []string{"foreign"}
+	if err := Validate(unsafe); err == nil {
+		t.Fatal("foreign checklist evidence accepted")
+	}
+}
+
+func TestV1AndV2SnapshotsRemainDecodableAlongsideV3(t *testing.T) {
+	for _, snapshot := range []Snapshot{validSnapshot(), v2Snapshot(), validV3Snapshot()} {
+		data, _, err := CanonicalJSON(snapshot)
+		if err != nil {
+			t.Fatalf("schema %d encode: %v", snapshot.SchemaVersion, err)
+		}
+		var decoded Snapshot
+		if err := json.Unmarshal(data, &decoded); err != nil || decoded.SchemaVersion != snapshot.SchemaVersion {
+			t.Fatalf("schema %d decode=%d err=%v", snapshot.SchemaVersion, decoded.SchemaVersion, err)
+		}
+	}
+}
+
+func TestUT110HTMLRendersTypedHandoverFieldsAndPendingDoesNotInventAReading(t *testing.T) {
+	snapshot := validV3Snapshot()
+	snapshot.Handover = &HandoverSection{Entries: []HandoverEntry{
+		{Key: "private-meter-key", Kind: "METER", Status: "DECLARED", Payload: json.RawMessage(`{"meterType":"ENERGY","identifier":"A-1","reading":123.4,"unit":"kWh","date":"2026-11-04"}`), Declarant: "Participante", EvidenceIDs: []string{"evidence-1"}},
+		{Key: "required-meter", Kind: "METER", Status: "PENDING"},
+	}}
+	html, err := HTML(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Medidor", "Energia", "123.4", "kWh", "2026-11-04", "Declarante: Participante", "Evidência: E001", "Pendente"} {
+		if !strings.Contains(string(html), expected) {
+			t.Errorf("handover HTML missing %q", expected)
+		}
+	}
+	if strings.Contains(string(html), "private-meter-key") || strings.Contains(string(html), "required-meter") || strings.Contains(string(html), "Pendente · ·") {
+		t.Fatalf("handover HTML leaked internal keys or invented a pending reading: %s", html)
+	}
+}
+
+func TestHandoverNoteRendersOnlyForInternalAudience(t *testing.T) {
+	snapshot := validSnapshot()
+	snapshot.SchemaVersion = 3
+	snapshot.Checklist = &ChecklistSection{Rooms: []ChecklistRoom{}, Coverage: ChecklistCoverage{UnknownScope: true}}
+	snapshot.Processing = &ProcessingState{Status: "COMPLETED"}
+	snapshot.Scope = &ScopeSnapshot{Digest: "scope", Version: 1, Profile: "PROPERTY_COMPONENTS"}
+	snapshot.Handover = &HandoverSection{Entries: []HandoverEntry{{Key: "observation", Kind: "NOTE", Status: "DECLARED", Payload: []byte(`{"note":"Pintura retocada na parede."}`)}}}
+	snapshot.Provenance = &Provenance{PromptRevision: "prompt-v1", ScopeDigest: "scope"}
+	internal, err := HTMLForPDF(snapshot, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	customer, err := HTMLForPDF(snapshot, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(internal), "Observação: Pintura retocada na parede.") || strings.Contains(string(customer), "Pintura retocada na parede") {
+		t.Fatalf("NOTE audience allowlist mismatch: internal=%s customer=%s", internal, customer)
+	}
+}
+
+// TestSanitizeURLsDecodesRawPayloadsBeforeReplacing feeds raw JSON with the
+// escapes that broke the text-level replacement (escaped quotes right after a
+// URL, backslashes, \n, \u escapes) and checks that only decoded string values
+// change, numbers keep their literal form and URL-free payloads stay intact.
+func TestSanitizeURLsDecodesRawPayloadsBeforeReplacing(t *testing.T) {
+	cases := map[string]struct {
+		raw, want string
+	}{
+		"escaped quotes after url": {`{"note":"veja https://x.com/\"abc\""}`, "veja [endereço removido]\"abc\""},
+		"url at end":               {`{"note":"fim https://x.com/foto"}`, "fim [endereço removido]"},
+		"backslashes":              {`{"note":"barra \\ e https://x.com/a\\b fim"}`, `barra \ e [endereço removido] fim`},
+		"newline and unicode":      {`{"note":"linha https://x.com/a\nproxima café 🏠"}`, "linha [endereço removido]\nproxima café 🏠"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			snapshot := validV3Snapshot()
+			snapshot.Handover.Entries = []HandoverEntry{{Key: "note", Kind: "NOTE", Status: "DECLARED", Payload: json.RawMessage(tc.raw)}}
+			cleaned := SanitizeURLs(snapshot)
+			var decoded map[string]string
+			if err := json.Unmarshal(cleaned.Handover.Entries[0].Payload, &decoded); err != nil {
+				t.Fatalf("sanitized payload is invalid JSON: %v (%s)", err, cleaned.Handover.Entries[0].Payload)
+			}
+			if decoded["note"] != tc.want {
+				t.Fatalf("note=%q want %q", decoded["note"], tc.want)
+			}
+			if err := Validate(cleaned); err != nil {
+				t.Fatalf("sanitized snapshot failed validation: %v", err)
+			}
+			if _, _, err := CanonicalJSON(cleaned); err != nil {
+				t.Fatalf("sanitized snapshot cannot be serialized: %v", err)
+			}
+		})
+	}
+	snapshot := validV3Snapshot()
+	untouched := json.RawMessage(`{"keyType":"FRONT_DOOR","quantity":2,"reading":123.40,"big":12345678901234567890}`)
+	withURL := json.RawMessage(`{"meterType":"ENERGY","reading":123.40,"note":"https://x.com/"}`)
+	snapshot.Handover.Entries = []HandoverEntry{{Key: "keys", Kind: "KEY", Status: "DECLARED", Payload: untouched}, {Key: "meter", Kind: "METER", Status: "DECLARED", Payload: withURL}}
+	cleaned := SanitizeURLs(snapshot)
+	if string(cleaned.Handover.Entries[0].Payload) != string(untouched) {
+		t.Fatalf("URL-free payload was re-encoded: %s", cleaned.Handover.Entries[0].Payload)
+	}
+	if got := string(cleaned.Handover.Entries[1].Payload); !strings.Contains(got, `"reading":123.40`) || strings.Contains(got, "https://") {
+		t.Fatalf("payload numbers or URL handling changed: %s", got)
+	}
+}
+
+func TestTask07ChecklistHTMLShowsAssessmentExtentAndOutOfScopeOnlyInternally(t *testing.T) {
+	snapshot := validV3Snapshot()
+	component := &snapshot.Checklist.Rooms[0].Components[0]
+	component.AssessedScope = "Frentes visíveis"
+	component.NotAssessed = []string{"Parte superior"}
+	component.OutsideScope = true
+	internalHTML, err := HTMLForPDF(snapshot, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Extensão avaliada: Frentes visíveis", "Partes não avaliadas: Parte superior", "Observado fora do escopo"} {
+		if !strings.Contains(string(internalHTML), want) {
+			t.Errorf("internal HTML missing %q", want)
+		}
+	}
+	customerHTML, err := HTMLForPDF(snapshot, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(customerHTML), "Observado fora do escopo") {
+		t.Fatal("customer HTML exposed an internal outside-scope observation")
 	}
 }

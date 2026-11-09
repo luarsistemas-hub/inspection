@@ -8,6 +8,7 @@ import (
 
 	"inspection/libs/identity"
 	catalognotes "inspection/services/inspection/internal/features/analysis/catalog_notes"
+	"inspection/services/inspection/internal/features/analysis/prompt"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -122,7 +123,18 @@ func (s Service) RegenerateSuggestions(ctx context.Context, in RegenerateInput) 
 		}
 		now := s.now()
 		identityID := env.IdentityID
-		job := database.InventoryJob{ID: jobID, TenantID: in.TenantID, InspectionID: *version.SourceInspectionID, OriginVersionID: version.ID, Kind: "CATALOG", RequirementKey: *env.RequirementKey, Generation: latest.Generation + 1, Status: "PENDING", NextAttemptAt: now, EnvironmentIdentityID: &identityID, PromptSnapshotID: latest.PromptSnapshotID, CreatedAt: now, UpdatedAt: now}
+		var snapshot database.AnalysisPromptSnapshot
+		if latest.PromptSnapshotID == nil {
+			return apperror.New(apperror.InvalidState, "environmentId", "Não foi possível localizar a definição da análise para regenerar este ambiente.")
+		}
+		if err := tx.Where("id=?", *latest.PromptSnapshotID).Take(&snapshot).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.InvalidState, "environmentId", "Não foi possível localizar a definição da análise para regenerar este ambiente.")
+			}
+			return err
+		}
+		schemaVersion, schemaDigest := prompt.SchemaPin(snapshot.SchemaVersion, snapshot.CanonicalDigest)
+		job := database.InventoryJob{ID: jobID, TenantID: in.TenantID, InspectionID: *version.SourceInspectionID, OriginVersionID: version.ID, Kind: "CATALOG", RequirementKey: *env.RequirementKey, Generation: latest.Generation + 1, Status: "PENDING", NextAttemptAt: now, EnvironmentIdentityID: &identityID, PromptSnapshotID: latest.PromptSnapshotID, SchemaVersion: schemaVersion, SchemaDigest: schemaDigest, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&job).Error; err != nil {
 			return err
 		}

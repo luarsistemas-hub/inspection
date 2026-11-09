@@ -159,6 +159,87 @@ func TestInventoryIT017ConcurrentActivationChecksOriginVersion(t *testing.T) {
 	}
 }
 
+func TestTask03IT010ActivationIncludesOnlyHumanApprovedDecisions(t *testing.T) {
+	fx := newInventoryITFixture(t, auth.TenantAdmin)
+	seed := seedInventoryDraft(t, fx, false)
+	now := time.Now().UTC()
+	decisions := []string{"ACCEPTED", "EDITED", "ADDED", "PENDING", "REJECTED"}
+	itemIDs := append([]identity.ID(nil), seed.items...)
+	for i := len(itemIDs); i < len(decisions); i++ {
+		itemIDs = append(itemIDs, identity.NewID())
+	}
+	if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+		for i, id := range itemIDs {
+			if i < len(seed.items) {
+				if err := tx.Model(&database.InventoryItem{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, id).Update("decision", decisions[i]).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			item := database.InventoryItem{ID: id, TenantID: fx.seed.TenantID, OriginVersionID: seed.version, EnvironmentID: seed.environments[0], IdentityID: identity.NewID(), TypeCode: "OTHER", Name: "Item " + decisions[i], Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: decisions[i], Version: 1, CreatedAt: now, UpdatedAt: now}
+			if decisions[i] == "REJECTED" {
+				reason, actor, decidedAt := "DUPLICATE", fx.seed.MembershipID, now
+				item.RejectionReason, item.DecidedBy, item.DecidedAt = &reason, &actor, &decidedAt
+			}
+			if err := tx.Create(&item).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`mutation { activateBaselineVersion(input:{originVersionId:"%s",purpose:"MOVE_IN",expectedOriginVersion:1,counterpartyParticipantIds:[],clientMutationId:"task03-it010"}) { version { status } userErrors { code field } } }`, seed.version), fx.ctx, "", "")
+	if strings.Contains(response, `"errors"`) || strings.Contains(response, `"userErrors":[{"code":`) || !strings.Contains(response, `"status":"ACTIVE"`) {
+		t.Fatalf("IT-010 activation failed: %s", response)
+	}
+	var activation database.InventoryDecision
+	if err := fx.h.AdminDB.Where("tenant_id=? AND origin_version_id=? AND action='ACTIVATE'", fx.seed.TenantID, seed.version).Take(&activation).Error; err != nil {
+		t.Fatal(err)
+	}
+	var counts core.ItemCounts
+	if err := json.Unmarshal(activation.After, &counts); err != nil {
+		t.Fatal(err)
+	}
+	if counts.Included != 3 || counts.Rejected != 1 || counts.NotReviewed != 1 {
+		t.Fatalf("IT-010 activation counts=%+v, want included=3 rejected=1 notReviewed=1", counts)
+	}
+	var activeItems int64
+	if err := fx.h.AdminDB.Model(&database.InventoryItem{}).Where("tenant_id=? AND origin_version_id=? AND decision IN ('ACCEPTED','EDITED','ADDED')", fx.seed.TenantID, seed.version).Count(&activeItems).Error; err != nil || activeItems != 3 {
+		t.Fatalf("IT-010 active inventory count=%d err=%v", activeItems, err)
+	}
+}
+
+func TestTask03IT040EmptyActivationReturnsUserErrorAndKeepsDraft(t *testing.T) {
+	fx := newInventoryITFixture(t, auth.TenantAdmin)
+	seed := seedInventoryDraft(t, fx, false)
+	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`mutation { activateBaselineVersion(input:{originVersionId:"%s",purpose:"MOVE_IN",expectedOriginVersion:1,counterpartyParticipantIds:[],clientMutationId:"task03-it040"}) { version { status } userErrors { code field } } }`, seed.version), fx.ctx, "", "")
+	if !strings.Contains(response, `"userErrors":[{"code":"INVALID_STATE"`) || strings.Contains(response, `"status":"ACTIVE"`) {
+		t.Fatalf("IT-040 empty activation response=%s", response)
+	}
+	assertInventoryVersionStatus(t, fx, seed.version, "DRAFT")
+	var activeCount int64
+	if err := fx.h.AdminDB.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", fx.seed.TenantID, seed.version).Count(&activeCount).Error; err != nil || activeCount != 0 {
+		t.Fatalf("IT-040 active version count=%d err=%v", activeCount, err)
+	}
+}
+
+func TestTask03UT039CustomerCannotActivateBaseline(t *testing.T) {
+	fx := newInventoryITFixture(t, auth.TenantAdmin)
+	seed := seedInventoryDraft(t, fx, true)
+	customerContext := inventoryITContext(fx, auth.CustomerViewer)
+	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`mutation { activateBaselineVersion(input:{originVersionId:"%s",purpose:"MOVE_IN",expectedOriginVersion:1,counterpartyParticipantIds:[],clientMutationId:"task03-ut039"}) { version { status } userErrors { code field } } }`, seed.version), customerContext, "", "")
+	if !strings.Contains(response, `"userErrors":[{"code":"FORBIDDEN"`) || strings.Contains(response, `"status":"ACTIVE"`) {
+		t.Fatalf("UT-039 customer activation response=%s", response)
+	}
+	participantContext := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.ParticipantID, TenantID: fx.seed.TenantID, Roles: []string{"PARTICIPANT"}, ProductEntitlements: []string{auth.AdminProduct}}, CorrelationID: "task03-ut039-participant"})
+	participantResponse := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`mutation { activateBaselineVersion(input:{originVersionId:"%s",purpose:"MOVE_IN",expectedOriginVersion:1,counterpartyParticipantIds:[],clientMutationId:"task03-ut039-participant"}) { version { status } userErrors { code field } } }`, seed.version), participantContext, "", "")
+	if !strings.Contains(participantResponse, `"userErrors":[{"code":"FORBIDDEN"`) || strings.Contains(participantResponse, `"status":"ACTIVE"`) {
+		t.Fatalf("UT-039 participant activation response=%s", participantResponse)
+	}
+	assertInventoryVersionStatus(t, fx, seed.version, "DRAFT")
+}
+
 func TestInventoryIT018CustomerProjectionAndForeignVersionNotFound(t *testing.T) {
 	fx := newInventoryITFixture(t, auth.TenantAdmin)
 	seed := seedInventoryDraft(t, fx, true)

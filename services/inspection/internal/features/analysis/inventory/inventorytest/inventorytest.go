@@ -44,7 +44,7 @@ func Open(t testing.TB) *gorm.DB {
 			t.Fatal(err)
 		}
 	}
-	models := []any{&database.Inspection{}, &database.TemplateVersion{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.Responsibility{}, &database.ReferenceSnapshot{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}, &database.InventoryJob{}, &database.InventoryEvidencePair{}, &database.InventoryItemResult{}, &database.AnalysisPromptSnapshot{}, &database.MediaObject{}, &database.MediaDerivative{}, &database.VideoPreparationJob{}, &database.VideoFrame{}, &database.VideoSource{}, &database.OutboxIntent{}, &database.AnalysisRun{}, &database.FindingRecord{}, &database.ComparisonJob{}, &database.ClassificationRun{}, &database.AuditEvent{}, &database.CatalogNoteManifest{}, &database.TranscriptRevision{}, &database.InventoryItemAttributeSource{}}
+	models := []any{&database.Inspection{}, &database.InspectionScopeSnapshot{}, &database.TemplateVersion{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.Responsibility{}, &database.ReferenceSnapshot{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}, &database.InventoryJob{}, &database.InventoryEvidencePair{}, &database.InventoryItemResult{}, &database.AnalysisPromptSnapshot{}, &database.MediaObject{}, &database.MediaDerivative{}, &database.VideoPreparationJob{}, &database.VideoFrame{}, &database.VideoSource{}, &database.OutboxIntent{}, &database.AnalysisRun{}, &database.FindingRecord{}, &database.ComparisonJob{}, &database.ClassificationRun{}, &database.AuditEvent{}, &database.CatalogNoteManifest{}, &database.TranscriptRevision{}, &database.InventoryItemAttributeSource{}, &database.ComponentAnswer{}}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatalf("migrate %T: %v", model, err)
@@ -121,12 +121,14 @@ func New(t testing.TB, options InspectionOptions) *Seed {
 
 func (s *Seed) prompt(t testing.TB, task string) identity.ID {
 	t.Helper()
-	payload, digest, err := prompt.CanonicalizeTask(task, prompt.DefaultDefinitionForTask(task))
+	definition := prompt.DefaultDefinitionForTask(task)
+	payload, digest, err := prompt.CanonicalizeTask(task, definition)
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := identity.NewID()
-	s.create(t, &database.AnalysisPromptSnapshot{ID: id, AnalysisType: "REAL_ESTATE", Task: task, DefinitionJSON: payload, CanonicalDigest: digest, CreatedAt: s.Now})
+	version := 1
+	s.create(t, &database.AnalysisPromptSnapshot{ID: id, AnalysisType: "REAL_ESTATE", Task: task, DefinitionJSON: payload, CanonicalDigest: digest, SchemaVersion: version, CreatedAt: s.Now})
 	return id
 }
 
@@ -233,7 +235,7 @@ func (s *Seed) PinBaseline(t testing.TB, environments ...BaselineEnvironment) Ba
 			if typeCode == "" {
 				typeCode = "OTHER"
 			}
-			item := database.InventoryItem{ID: identity.NewID(), TenantID: s.Tenant, OriginVersionID: baseline.Version, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: typeCode, Name: itemSpec.Name, Condition: itemSpec.Condition, Observation: "OBSERVED", Origin: "AI", Declared: itemSpec.Declared, Decision: decision, Version: 1, CreatedAt: s.Now, UpdatedAt: s.Now}
+			item := database.InventoryItem{ID: identity.NewID(), TenantID: s.Tenant, OriginVersionID: baseline.Version, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: typeCode, Name: itemSpec.Name, NotAssessed: []byte(`[]`), Condition: itemSpec.Condition, Observation: "OBSERVED", Origin: "AI", Declared: itemSpec.Declared, Decision: decision, Version: 1, CreatedAt: s.Now, UpdatedAt: s.Now}
 			s.create(t, &item)
 			baseline.Items = append(baseline.Items, item)
 			for i := 0; i < itemSpec.Evidence; i++ {
@@ -251,6 +253,54 @@ func (s *Seed) PinBaseline(t testing.TB, environments ...BaselineEnvironment) Ba
 		t.Fatal(err)
 	}
 	return baseline
+}
+
+// ScopeRoom is one room of a pinned descriptive scope used by strict
+// (report v3) comparisons: its key and its expected components with views.
+type ScopeRoom struct {
+	Key, Name, TypeCode string
+	Components          map[string][]string
+}
+
+// PinScope stores the inspection's descriptive scope, which makes its
+// photo comparisons strict.
+func (s *Seed) PinScope(t testing.TB, rooms ...ScopeRoom) {
+	t.Helper()
+	type component struct {
+		Key      string   `json:"key"`
+		TypeCode string   `json:"typeCode"`
+		Label    string   `json:"label"`
+		Views    []string `json:"views"`
+	}
+	type room struct {
+		Key        string      `json:"key"`
+		TypeCode   string      `json:"typeCode"`
+		Name       string      `json:"name"`
+		Components []component `json:"components"`
+	}
+	out := make([]room, 0, len(rooms))
+	for _, spec := range rooms {
+		r := room{Key: spec.Key, TypeCode: spec.TypeCode, Name: spec.Name, Components: []component{}}
+		for key, views := range spec.Components {
+			r.Components = append(r.Components, component{Key: key, TypeCode: "OTHER", Label: key, Views: views})
+		}
+		out = append(out, r)
+	}
+	document, err := json.Marshal(map[string]any{"rooms": out, "handoverRecords": []any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.create(t, &database.InspectionScopeSnapshot{ID: identity.NewID(), TenantID: s.Tenant, InspectionID: s.Inspection, TemplateVersionID: s.Template, Profile: "PROPERTY_COMPONENTS", Document: document, Digest: "scope-" + s.Inspection.String(), Version: 1, CreatedAt: s.Now, UpdatedAt: s.Now})
+}
+
+// ComponentAnswer records a participant's answer for one component view.
+func (s *Seed) ComponentAnswer(t testing.TB, requirementKey, componentKey, viewKey, state string, evidence []identity.ID) {
+	t.Helper()
+	if evidence == nil {
+		evidence = []identity.ID{}
+	}
+	ids, _ := json.Marshal(evidence)
+	s.create(t, &database.ComponentAnswer{ID: identity.NewID(), TenantID: s.Tenant, DraftID: s.CaptureDraft, RequirementKey: requirementKey, ComponentKey: componentKey, ViewKey: viewKey, State: state, EvidenceIDs: ids, Version: 1, CreatedAt: s.Now, UpdatedAt: s.Now})
 }
 
 // EnvironmentKey is the capture key of a pinned environment.

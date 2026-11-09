@@ -158,4 +158,19 @@ func TestListReturnsLatestSnapshotsWithSearchScopeAndCursor(t *testing.T) {
 			}
 		})
 	}
+	history, err := operation(context.Background(), Input{TenantID: tenant, TenantAdmin: true, InspectionID: inspectionA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history.Items) != 2 || history.Items[0].Version != 2 || history.Items[1].Version != 1 {
+		t.Fatalf("inspection history should include both versions in descending order: %#v", history.Items)
+	}
+	if len(history.Items[0].HistoryFacts) == 0 || string(history.Items[0].HistoryFacts) == "null" {
+		t.Fatalf("history labels must be projected from lightweight JSON facts: %s", history.Items[0].HistoryFacts)
+	}
+	for _, item := range history.Items {
+		if item.InspectionID != inspectionA {
+			t.Fatalf("history escaped requested inspection: %#v", item)
+		}
+	}
 }

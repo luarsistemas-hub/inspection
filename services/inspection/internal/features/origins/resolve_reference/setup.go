@@ -30,6 +30,11 @@ type Result struct {
 	Evidence     []Evidence
 	VideoScope   []VideoEvidence
 	Requirements []capturecore.Requirement
+	// EnvironmentRequirementKeys maps the identity of each baseline
+	// environment to the capture requirement key it was captured with
+	// ("env:<scope room key>" for a descriptive capture). It is never
+	// serialized; environments without a recorded key are absent.
+	EnvironmentRequirementKeys map[string]string
 }
 
 // Evidence is the public, immutable origin projection used by capture.
@@ -119,6 +124,12 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 			key := "env:" + environment.IdentityID.String()
 			requirement := capturecore.Requirement{Key: key, Section: environment.TypeCode, Label: environment.Name, EnvironmentIdentityID: environment.IdentityID.String(), EnvironmentTypeCode: environment.TypeCode, EnvironmentName: environment.Name, Expected: true, EvidenceKind: kind, Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: maximum, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: "FIXED_ORIGIN"}
 			result.Requirements = append(result.Requirements, requirement)
+			if environment.RequirementKey != nil && *environment.RequirementKey != "" {
+				if result.EnvironmentRequirementKeys == nil {
+					result.EnvironmentRequirementKeys = map[string]string{}
+				}
+				result.EnvironmentRequirementKeys[environment.IdentityID.String()] = *environment.RequirementKey
+			}
 		}
 		// Inventory environments are the complete cross-modality reference.
 		// Do not mix legacy origin:* requirements or video-scope evidence in.

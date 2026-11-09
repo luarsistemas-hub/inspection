@@ -26,7 +26,7 @@ const catalogs = (templates: unknown[] = []) => ({ templates: { nodes: templates
 describe("TemplateEditorPage", () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, React });
 
-  it("UT-362 creates a v2 environment-capture definition from the real editor", async () => {
+  it("UT-092 creates a v3 environment and scope definition from the real editor", async () => {
     const calls: Array<{ operation: string; variables: unknown }> = [];
     vi.mocked(graphql).mockImplementation(async (document, variables) => {
       const operation = operationName(document) ?? ""; calls.push({ operation, variables });
@@ -39,18 +39,69 @@ describe("TemplateEditorPage", () => {
     const host = document.createElement("div"); const root = createRoot(host);
     await act(async () => { root.render(createElement(TemplateEditorPage)); await new Promise((resolve) => setTimeout(resolve, 0)); });
     await act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === "Novo modelo")?.click(); });
-    expect([...host.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain("Captura por ambiente · schema v2");
+    expect([...host.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain("Captura por ambiente · schema v3");
     const fields = [...host.querySelectorAll("input")];
-    await act(async () => { fields[0].value = "qa-template"; fields[0].dispatchEvent(new Event("input", { bubbles: true })); fields[1].value = "Modelo QA"; fields[1].dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(fields[0], "qa-template"); fields[0].dispatchEvent(new Event("input", { bubbles: true })); setter?.call(fields[1], "Modelo QA"); fields[1].dispatchEvent(new Event("input", { bubbles: true })); });
     const segment = host.querySelector<HTMLSelectElement>("select:not([aria-label])");
     await act(async () => { if (segment) { segment.value = "segment-version-a"; segment.dispatchEvent(new Event("change", { bubbles: true })); } });
     await act(async () => { host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
     const published = calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables as { input: { definition: Record<string, unknown> } };
-    expect(published.input.definition).toMatchObject({ schemaVersion: 2, captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 20 }, video: { maximumClips: 3 } } });
+    expect(published.input.definition).toMatchObject({ schemaVersion: 3, assetProfile: "PROPERTY_COMPONENTS", expectedRooms: [], handoverRecords: [], captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 20 }, video: { maximumClips: 3 } } });
     const activation = calls.find((call) => call.operation === "AdminActivateTemplateVersion")?.variables as { input: { versionId: string; expectedVersion: number } } | undefined;
     expect(activation?.input).toMatchObject({ versionId: "v2", expectedVersion: 1 });
     expect(host.querySelector('[role="status"]')?.textContent).toContain("Modelo publicado e ativado na versão 2.");
     expect(host.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { root.unmount(); });
+  });
+
+  it("UT-093 duplicate scope keys keep the draft and leave publish available", async () => {
+    vi.mocked(graphql).mockImplementation(async (document) => {
+      if (operationName(document) === "AdminCatalogs") return catalogs() as never;
+      throw new Error("The invalid draft must not publish");
+    });
+    const host = document.createElement("div"); const root = createRoot(host);
+    await act(async () => { root.render(createElement(TemplateEditorPage)); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const click = async (label: string) => act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === label || button.getAttribute("aria-label")?.startsWith(label))?.click(); });
+    await click("Novo modelo");
+    const basics = [...host.querySelectorAll("input")];
+    await act(async () => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(basics[0], "qa-template"); basics[0].dispatchEvent(new Event("input", { bubbles: true })); setter?.call(basics[1], "Modelo QA"); basics[1].dispatchEvent(new Event("input", { bubbles: true })); });
+    const segment = host.querySelector<HTMLSelectElement>("select:not([aria-label])");
+    await act(async () => { if (segment) { segment.value = "segment-version-a"; segment.dispatchEvent(new Event("change", { bubbles: true })); } });
+    await click("Adicionar ambiente esperado");
+    const setField = async (label: string, value: string) => act(async () => { const input = [...host.querySelectorAll("input")].find((item) => item.getAttribute("aria-label") === label || item.labels?.[0]?.textContent === label); if (!input) throw new Error(`Missing field ${label}`); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    await setField("Chave do ambiente · ambiente 1", "kitchen"); await setField("Nome do ambiente · ambiente 1", "Cozinha");
+    await click("Adicionar componente"); await click("Adicionar componente");
+    await setField("Chave do componente · Cozinha · componente 1", "piso"); await setField("Componente esperado · Cozinha · componente 1", "Piso");
+    await setField("Chave do componente · Cozinha · componente 2", "piso"); await setField("Componente esperado · Cozinha · componente 2", "Outro piso");
+    await act(async () => { host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("duplicada");
+    expect(host.textContent).toContain("Outro piso");
+    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "Publicar nova versão do modelo")).toBe(true);
+    await act(async () => { root.unmount(); });
+  });
+
+  it("publishes video templates as schema v2 without descriptive scope", async () => {
+    const calls: Array<{ operation: string; variables: unknown }> = [];
+    vi.mocked(graphql).mockImplementation(async (document, variables) => {
+      const operation = operationName(document) ?? ""; calls.push({ operation, variables });
+      if (operation === "AdminCatalogs") return catalogs() as never;
+      if (operation === "AdminPublishTemplateVersion") return { publishTemplateVersion: { template: { id: "video-template", version: 1 }, version: { id: "video-v2", versionNumber: 2 }, userErrors: [] } } as never;
+      if (operation === "AdminActivateTemplateVersion") return { activateTemplateVersion: { template: { id: "video-template" }, version: { id: "video-v2", versionNumber: 2 }, userErrors: [] } } as never;
+      if (operation === "AdminTemplateVersion") return { templateVersion: null } as never;
+      throw new Error(`Unexpected operation ${operation}`);
+    });
+    const host = document.createElement("div"); const root = createRoot(host);
+    await act(async () => { root.render(createElement(TemplateEditorPage)); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { host.querySelector<HTMLButtonElement>("button")?.click(); });
+    const fields = host.querySelectorAll<HTMLInputElement>("input");
+    await act(async () => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(fields[0], "qa-video"); fields[0].dispatchEvent(new Event("input", { bubbles: true })); setter?.call(fields[1], "Modelo de vídeo"); fields[1].dispatchEvent(new Event("input", { bubbles: true })); });
+    const videoCheckbox = [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((input) => input.parentElement?.textContent?.includes("Inspeção por vídeo"));
+    await act(async () => { videoCheckbox?.click(); });
+    expect(host.textContent).not.toContain("Escopo esperado · schema v3");
+    await act(async () => { host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const published = calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables as { input: { definition: Record<string, unknown> } };
+    expect(published.input.definition).toMatchObject({ schemaVersion: 2, isVideo: true });
+    expect(published.input.definition).not.toHaveProperty("expectedRooms");
     await act(async () => { root.unmount(); });
   });
 
@@ -66,11 +117,11 @@ describe("TemplateEditorPage", () => {
     const host = document.createElement("div"); const root = createRoot(host);
     await act(async () => { root.render(createElement(TemplateEditorPage)); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(host.querySelector('[role="status"]')?.textContent).toContain("ainda não tem versão ativa");
-    await act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === "Editar v2")?.click(); });
+    await act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === "Editar escopo v3")?.click(); });
     expect(host.querySelector<HTMLInputElement>("input")?.value).toBe("video-3");
     await act(async () => { host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
     const published = calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables as { input: { key: string; definition: Record<string, unknown> } };
-    expect(published.input).toMatchObject({ key: "video-3", definition: { schemaVersion: 2, segmentVersionId: "segment-version-a", captureLayout: "ENVIRONMENTS" } });
+    expect(published.input).toMatchObject({ key: "video-3", definition: { schemaVersion: 3, segmentVersionId: "segment-version-a", assetProfile: "PROPERTY_COMPONENTS", expectedRooms: [], handoverRecords: [], captureLayout: "ENVIRONMENTS" } });
     expect(calls.find((call) => call.operation === "AdminActivateTemplateVersion")?.variables).toMatchObject({ input: { versionId: "v2", expectedVersion: 1 } });
     await act(async () => { root.unmount(); });
   });

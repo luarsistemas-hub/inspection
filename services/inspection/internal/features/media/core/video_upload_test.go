@@ -168,6 +168,33 @@ func TestPhotoUploadReplayAfterDraftSubmittedReturnsExistingUpload(t *testing.T)
 	}
 }
 
+func TestUT020PhotoUploadReplayAfterReceivedReturnsExistingEvidence(t *testing.T) {
+	db, within := videoUploadDB(t)
+	tenant, responsibility := identity.NewID(), identity.NewID()
+	draftID, mediaID, multipartID := identity.NewID(), identity.NewID(), identity.NewID()
+	hash := strings.Repeat("a", 64)
+	expiresAt := time.Now().UTC().Add(time.Hour)
+	if err := db.Create(&database.CaptureDraft{ID: draftID, TenantID: tenant, ResponsibilityID: responsibility, Kind: "INSPECTION", MediaKind: "PHOTO", ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&database.MediaObject{ID: mediaID, TenantID: tenant, ResponsibilityID: responsibility, ObjectKey: "private/received-photo", ContentType: "image/jpeg", SHA256: hash, SizeBytes: 12, Status: "RECEIVED", IdempotencyKey: "received-photo-key"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&database.MultipartUpload{ID: multipartID, TenantID: tenant, MediaID: mediaID, UploadID: "received-multipart", ObjectKey: "private/received-photo", Status: "COMPLETED", ExpiresAt: expiresAt}).Error; err != nil {
+		t.Fatal(err)
+	}
+	client := &uploadAdmissionClient{}
+	service := Service{DB: db, Store: objectstore.Store{Bucket: "private", Client: client}, Within: within}
+	retry, err := service.CreateWithKey(context.Background(), tenant, responsibility, "image/jpeg", hash, 12, "received-photo-key")
+	if err != nil || retry.MediaID != mediaID || retry.UploadID != "received-multipart" || client.creates != 0 {
+		t.Fatalf("received photo retry=%+v creates=%d err=%v", retry, client.creates, err)
+	}
+	var count int64
+	if err := db.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("received evidence count=%d err=%v", count, err)
+	}
+}
+
 func TestVideoUploadRejectsPhotoDraft(t *testing.T) {
 	db, within := videoUploadDB(t)
 	tenant, responsibility, attemptID := identity.NewID(), identity.NewID(), identity.NewID()

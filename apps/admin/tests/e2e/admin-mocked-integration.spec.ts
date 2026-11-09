@@ -1039,7 +1039,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     expect(mocks.calls.find((call) => call.operation === "AdminRetryVideoPreparation")?.variables.input).toMatchObject({ mediaId: "media-a", expectedPreparationVersion: 2 });
   });
 
-  test("E2E-016 Admin saves policy limits, edits a v2 template and shows preparation metrics", async ({ page }) => {
+  test("E2E-016 Admin saves policy limits, edits a v3 template and shows preparation metrics", async ({ page }) => {
     const mocks = await installMocks(page);
     await loginAsMockAdmin(page, "/baseline-policy");
     await expect(page.getByRole("heading", { name: "Prazo para contestação" })).toBeVisible();
@@ -1055,11 +1055,11 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
     await navigateAdmin(page, "Modelos de vistoria");
     await expect(page.locator("#admin-content section").getByRole("heading", { name: "Padrão" })).toBeVisible();
-    await page.getByRole("button", { name: "Editar v2" }).click();
+    await page.getByRole("button", { name: "Editar escopo v3" }).click();
     await page.getByLabel("Máximo de fotos por ambiente").fill("12");
     await page.getByRole("button", { name: "Publicar nova versão do modelo" }).click();
     await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminPublishTemplateVersion").length).toBe(1);
-    expect(mocks.calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables.input).toMatchObject({ definition: { schemaVersion: 2, captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 12 } } } });
+    expect(mocks.calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables.input).toMatchObject({ definition: { schemaVersion: 3, captureLayout: "ENVIRONMENTS", assetProfile: "PROPERTY_COMPONENTS", expectedRooms: [], environmentCapture: { photo: { minimum: 1, maximum: 12 } } } });
 
     await navigateAdmin(page, "Operações de vídeo");
     await expect(page.getByText(/80 amostrados · 24 mantidos · 6 enviados à análise/)).toBeVisible();

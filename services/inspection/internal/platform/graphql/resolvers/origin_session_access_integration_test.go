@@ -41,11 +41,11 @@ func TestOriginExternalCaptureRejectsExpiredRevokedAndWrongParticipantSessionsIT
 		t.Run(scenario.name, func(t *testing.T) {
 			fixture := newOriginSessionAccessFixture(t, scenario.name)
 			w := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(`{"query":"query { externalCapture { kind mediaKind } }"}`))
+			req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(`{"query":"query { externalCapture { kind mediaKind scope componentAnswers { componentKey } } }"}`))
 			req.Header.Set("Content-Type", "application/json")
 			req = req.WithContext(requestctx.WithExternalCredentials(req.Context(), fixture.credentials))
 			fixture.server.ServeHTTP(w, req)
-			if !strings.Contains(w.Body.String(), scenario.want) || strings.Contains(w.Body.String(), `"externalCapture":{`) {
+			if !strings.Contains(w.Body.String(), scenario.want) || strings.Contains(w.Body.String(), `"externalCapture":{`) || strings.Contains(w.Body.String(), `"scope":`) || strings.Contains(w.Body.String(), `"componentAnswers":`) {
 				t.Fatalf("session boundary returned unexpected response: %s", w.Body.String())
 			}
 		})

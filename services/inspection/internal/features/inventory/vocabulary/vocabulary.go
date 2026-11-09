@@ -192,6 +192,18 @@ func IsEnvironmentType(code string) bool { _, ok := EnvironmentLabel(code); retu
 // IsItemType reports whether code belongs to the item vocabulary.
 func IsItemType(code string) bool { _, ok := ItemLabel(code); return ok }
 
+// builtInItemTypes are the item codes that are part of the building itself.
+// Every other code, including unknown ones, is treated as movable.
+var builtInItemTypes = map[ItemType]bool{
+	Floor: true, Wall: true, Ceiling: true, Door: true, Window: true, Lighting: true, SocketSwitch: true,
+	Countertop: true, Sink: true, Faucet: true, ToiletFixture: true, ShowerBox: true, Bathtub: true, FixtureOther: true,
+}
+
+// IsMovableItem reports whether an item of this code may change place inside a
+// room. Proving the absence of a movable item needs coverage of the whole room,
+// not only of its former location; unknown codes are conservatively movable.
+func IsMovableItem(code string) bool { return !builtInItemTypes[ItemType(code)] }
+
 // IsCondition reports whether code is a level of the fixed scale.
 func IsCondition(code string) bool {
 	return conditionRank(code) >= 0 || code == string(ConditionNotAssessable)
@@ -212,6 +224,8 @@ type ItemPatch struct {
 	EnvironmentID *identity.ID
 	TypeCode      *string
 	Name          *string
+	Description   *string
+	AssessedScope *string
 	Material      *string
 	Color         *string
 	Quantity      *int
@@ -267,6 +281,12 @@ func ValidateItemPatch(patch ItemPatch) error {
 		if err := ValidateName(*patch.Name); err != nil {
 			return err
 		}
+	}
+	if patch.Description != nil && !validAttribute(*patch.Description, 1000) {
+		return apperror.New(apperror.InvalidInput, "description", "descrição inválida")
+	}
+	if patch.AssessedScope != nil && !validAttribute(*patch.AssessedScope, 200) {
+		return apperror.New(apperror.InvalidInput, "assessedScope", "parte avaliada inválida")
 	}
 	if patch.Material != nil && !validAttribute(*patch.Material, MaxMaterialRunes) {
 		return apperror.New(apperror.InvalidInput, "material", "invalid material")

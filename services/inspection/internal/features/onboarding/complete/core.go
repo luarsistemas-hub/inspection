@@ -74,9 +74,12 @@ type Service struct {
 	AdminOrigin        string
 	OwnerIssuer        string
 	Stage              string
-	Now                func() time.Time
-	Within             func(context.Context, identity.ID, func(*gorm.DB) error) error
-	createInspection   inspectionCreator
+	// ComparisonMode is an integration-test seam; production onboarding creates
+	// checklist inspections only. The shared guard remains in inspections/core.Create.
+	ComparisonMode   templatecatalog.ComparisonMode
+	Now              func() time.Time
+	Within           func(context.Context, identity.ID, func(*gorm.DB) error) error
+	createInspection inspectionCreator
 }
 
 type inspectionCreator interface {
@@ -228,12 +231,16 @@ func (s Service) materialize(ctx context.Context, locator, csrf, idempotencyKey 
 		return Result{}, mapAssetError(err)
 	}
 	var referenceVersionID *identity.ID
+	comparisonMode := s.ComparisonMode
+	if comparisonMode == "" {
+		comparisonMode = templatecatalog.ChecklistOnly
+	}
 	deadline, err := deadlineAt(property)
 	if err != nil {
 		return Result{}, err
 	}
 	inspectionInput := inspectioncore.CreateInput{
-		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ComparisonMode: templatecatalog.ChecklistOnly,
+		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ComparisonMode: comparisonMode,
 		Source: inspectioncore.SourceManual, SourceKey: "onboarding:" + submission.Session.ID.String(),
 		Reason: "Primeira vistoria criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
 	}
@@ -289,6 +296,8 @@ func mapInspectionError(err error) error {
 		message = "Selecione uma pessoa responsável válida para a vistoria."
 	} else if field == "assetId" {
 		message = "Selecione um imóvel válido para a vistoria."
+	} else if field == "referenceVersionId" {
+		message = "A origem precisa ser catalogada e aprovada antes de iniciar uma vistoria de saída."
 	}
 	return apperror.New(code, field, message)
 }

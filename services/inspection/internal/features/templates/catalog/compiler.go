@@ -19,6 +19,7 @@ const (
 	SchemaVersion            = 1
 	LegacySchemaVersion      = SchemaVersion
 	EnvironmentSchemaVersion = 2
+	DescriptiveSchemaVersion = 3
 	MaxNameCodePoints        = 200
 	MaxTextCodePoints        = 2000
 	MaxTemplateBytes         = 1 << 20
@@ -83,6 +84,29 @@ type EnvironmentCapture struct {
 	} `json:"video"`
 }
 
+// ExpectedRoom describes the stable expected scope for one room in a template.
+type ExpectedRoom struct {
+	Key        string              `json:"key"`
+	TypeCode   string              `json:"typeCode"`
+	Name       string              `json:"name"`
+	Components []ExpectedComponent `json:"components"`
+}
+
+// ExpectedComponent describes one physical component and the useful views.
+type ExpectedComponent struct {
+	Key      string   `json:"key"`
+	TypeCode string   `json:"typeCode"`
+	Label    string   `json:"label"`
+	Views    []string `json:"views"`
+}
+
+// HandoverRecord defines a nonvisual declaration collected during capture.
+type HandoverRecord struct {
+	Key      string `json:"key"`
+	Kind     string `json:"kind"`
+	Required bool   `json:"required"`
+}
+
 type TemplateDocument struct {
 	SchemaVersion             int                  `json:"schemaVersion"`
 	IsVideo                   bool                 `json:"isVideo,omitempty"`
@@ -93,6 +117,9 @@ type TemplateDocument struct {
 	CaptureLayout             string               `json:"captureLayout,omitempty"`
 	EnvironmentCapture        *EnvironmentCapture  `json:"environmentCapture,omitempty"`
 	SuggestedEnvironmentTypes []string             `json:"suggestedEnvironmentTypes,omitempty"`
+	AssetProfile              string               `json:"assetProfile,omitempty"`
+	ExpectedRooms             []ExpectedRoom       `json:"expectedRooms,omitempty"`
+	HandoverRecords           []HandoverRecord     `json:"handoverRecords,omitempty"`
 	AnalysisType              string               `json:"analysisType"`
 	Policy                    Policy               `json:"policy"`
 }
@@ -116,10 +143,80 @@ type Compiled struct {
 	Document  TemplateDocument
 }
 
+// DescriptiveCompileError carries a safe, Portuguese validation message for a
+// schema-v3 definition that can be shown to a template administrator.
+type DescriptiveCompileError struct{ Message string }
+
+func (e DescriptiveCompileError) Error() string { return e.Message }
+
 var safeExpression = regexp.MustCompile(`^[\pL\pN_."'()!<>=&| \t-]*$`)
 var expressionToken = regexp.MustCompile(`^\s*(\(|\)|&&|\|\||==|!=|<=|>=|<|>|!|-?[0-9]+(?:\.[0-9]+)?|true|false|null|"[^"\\]*"|'[^'\\]*'|[\pL_][\pL\pN_.]*)`)
 
 type ExpressionAST struct{ Tokens []string }
+
+var stableScopeKey = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+
+const (
+	MaxExpectedRooms      = 60
+	MaxExpectedComponents = 1200
+	MaxComponentViews     = 12
+	MaxHandoverRecords    = 40
+)
+
+func validateDescriptiveScope(rooms []ExpectedRoom, records []HandoverRecord) error {
+	if len(rooms) > MaxExpectedRooms {
+		return fmt.Errorf("o modelo excede o limite de cômodos esperados")
+	}
+	if len(records) > MaxHandoverRecords {
+		return fmt.Errorf("o modelo excede o limite de registros de entrega")
+	}
+	roomKeys, recordKeys := map[string]bool{}, map[string]bool{}
+	componentCount := 0
+	for _, room := range rooms {
+		if !stableScopeKey.MatchString(room.Key) || !inventorycore.IsEnvironmentType(room.TypeCode) || strings.TrimSpace(room.Name) == "" || !ValidName(room.Name) {
+			return fmt.Errorf("cada cômodo esperado precisa de chave, tipo e nome válidos")
+		}
+		if roomKeys[room.Key] {
+			return fmt.Errorf("a chave do cômodo está duplicada")
+		}
+		roomKeys[room.Key] = true
+		if len(room.Components) > MaxItemsPerEnvironment {
+			return fmt.Errorf("o cômodo excede o limite de componentes esperados")
+		}
+		componentKeys := map[string]bool{}
+		for _, component := range room.Components {
+			componentCount++
+			if !stableScopeKey.MatchString(component.Key) || strings.TrimSpace(component.TypeCode) == "" || strings.TrimSpace(component.Label) == "" || !ValidName(component.Label) {
+				return fmt.Errorf("cada componente esperado precisa de chave, tipo e nome válidos")
+			}
+			if componentKeys[component.Key] {
+				return fmt.Errorf("a chave do componente está duplicada")
+			}
+			componentKeys[component.Key] = true
+			if len(component.Views) > MaxComponentViews {
+				return fmt.Errorf("o componente excede o limite de vistas")
+			}
+			views := map[string]bool{}
+			for _, view := range component.Views {
+				view = strings.TrimSpace(view)
+				if view == "" || !ValidName(view) || views[view] {
+					return fmt.Errorf("as vistas do componente devem ter nomes únicos e válidos")
+				}
+				views[view] = true
+			}
+		}
+	}
+	if componentCount > MaxExpectedComponents {
+		return fmt.Errorf("o modelo excede o limite de componentes esperados")
+	}
+	for _, record := range records {
+		if !stableScopeKey.MatchString(record.Key) || recordKeys[record.Key] || (record.Kind != "KEY" && record.Kind != "CONTROL" && record.Kind != "METER" && record.Kind != "NOTE") {
+			return fmt.Errorf("cada registro de entrega precisa de chave única e tipo válido")
+		}
+		recordKeys[record.Key] = true
+	}
+	return nil
+}
 
 func CompileExpression(value string) (ExpressionAST, error) {
 	if strings.TrimSpace(value) == "" {
@@ -171,7 +268,7 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	if err := decoder.Decode(&doc); err != nil {
 		return Compiled{}, fmt.Errorf("invalid template document: %w", err)
 	}
-	if doc.SchemaVersion != LegacySchemaVersion && doc.SchemaVersion != EnvironmentSchemaVersion {
+	if doc.SchemaVersion != LegacySchemaVersion && doc.SchemaVersion != EnvironmentSchemaVersion && doc.SchemaVersion != DescriptiveSchemaVersion {
 		return Compiled{}, fmt.Errorf("unsupported schema version")
 	}
 	if refs == nil || !refs.SegmentExists(doc.SegmentVersionID) || !refs.AnalysisTypeExists(doc.AnalysisType) {
@@ -183,8 +280,11 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	if doc.SchemaVersion == LegacySchemaVersion && (doc.CaptureLayout != "" || doc.EnvironmentCapture != nil || len(doc.SuggestedEnvironmentTypes) > 0) {
 		return Compiled{}, fmt.Errorf("environment capture fields are not allowed for schemaVersion 1")
 	}
-	if doc.SchemaVersion == EnvironmentSchemaVersion {
+	if doc.SchemaVersion >= EnvironmentSchemaVersion {
 		if len(doc.Requirements) > 0 {
+			if doc.SchemaVersion == DescriptiveSchemaVersion {
+				return Compiled{}, DescriptiveCompileError{Message: "Modelos de versão 3 não podem definir requisitos legados."}
+			}
 			return Compiled{}, fmt.Errorf("requirements are not allowed for schemaVersion 2")
 		}
 		if doc.CaptureLayout != EnvironmentsLayout {
@@ -219,6 +319,22 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 			}
 			seenTypes[code] = true
 		}
+	}
+	if doc.SchemaVersion == DescriptiveSchemaVersion {
+		if doc.IsVideo {
+			return Compiled{}, DescriptiveCompileError{Message: "A versão 3 do esquema está disponível somente para modelos de fotos."}
+		}
+		if doc.AssetProfile != "PROPERTY_COMPONENTS" && doc.AssetProfile != "FURNISHED_PROPERTY" && doc.AssetProfile != "SELECTED_ITEMS" {
+			return Compiled{}, DescriptiveCompileError{Message: "O perfil do imóvel informado não é compatível."}
+		}
+		if len(doc.Requirements) > 0 {
+			return Compiled{}, DescriptiveCompileError{Message: "Modelos de versão 3 não podem definir requisitos legados."}
+		}
+		if err := validateDescriptiveScope(doc.ExpectedRooms, doc.HandoverRecords); err != nil {
+			return Compiled{}, DescriptiveCompileError{Message: err.Error() + "."}
+		}
+	} else if doc.AssetProfile != "" || len(doc.ExpectedRooms) > 0 || len(doc.HandoverRecords) > 0 {
+		return Compiled{}, fmt.Errorf("os campos de escopo descritivo só podem ser usados em modelos de versão 3")
 	}
 	if len(doc.ParticipantRoles) == 0 {
 		return Compiled{}, fmt.Errorf("at least one participant role is required")

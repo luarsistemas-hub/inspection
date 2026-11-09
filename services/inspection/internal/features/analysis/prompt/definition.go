@@ -25,13 +25,15 @@ type Task string
 
 const (
 	Findings         Task = "FINDINGS"
+	FindingsCurrent  Task = "FINDINGS_CURRENT"
+	FindingsCompare  Task = "FINDINGS_COMPARE"
 	InventoryCatalog Task = "INVENTORY_CATALOG"
 	InventoryCompare Task = "INVENTORY_COMPARE"
 )
 
 // IsKnownTask reports whether task is one of the supported prompt tasks.
 func IsKnownTask(task string) bool {
-	return task == string(Findings) || task == string(InventoryCatalog) || task == string(InventoryCompare)
+	return task == string(Findings) || task == string(FindingsCurrent) || task == string(FindingsCompare) || task == string(InventoryCatalog) || task == string(InventoryCompare)
 }
 
 // Definition is stored verbatim (in canonical JSON) in prompt rows and snapshots.
@@ -40,6 +42,7 @@ type Definition struct {
 	ModelAlias           string         `json:"modelAlias"`
 	OutputSchema         map[string]any `json:"outputSchema"`
 	MinimumConfidenceBPS int            `json:"minimumConfidenceBps"`
+	SchemaVersion        int            `json:"schemaVersion,omitempty"`
 }
 
 const outputSchemaJSON = `{"type":"object","additionalProperties":false,"required":["noRelevantChange","findings"],"properties":{"noRelevantChange":{"type":["boolean","null"]},"findings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["category","title","description","severity","confidence","evidenceIds","quality","recommendedAction"],"properties":{"category":{"type":"string","enum":["CONSERVATION","INVENTORY","CLEANLINESS","OBSTRUCTION","EVIDENCE_QUALITY"]},"title":{"type":"string"},"description":{"type":"string"},"severity":{"type":"string","enum":["NONE","LOW","MEDIUM","HIGH","CRITICAL"]},"confidence":{"type":"number","minimum":0,"maximum":1},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"quality":{"type":"string","enum":["ADEQUATE","LIMITED","INSUFFICIENT"]},"recommendedAction":{"type":"string"}}}}}}`
@@ -60,6 +63,8 @@ func DefaultDefinition() Definition {
 func DefaultDefinitionForTask(task string) Definition {
 	definition := DefaultDefinition()
 	switch Task(task) {
+	case FindingsCurrent, FindingsCompare:
+		definition.SystemPrompt = findingsSystemPrompt(Task(task))
 	case InventoryCatalog, InventoryCompare:
 		definition.SystemPrompt = inventorySystemPrompt(Task(task))
 		definition.OutputSchema = inventoryOutputSchema(Task(task))
@@ -67,14 +72,38 @@ func DefaultDefinitionForTask(task string) Definition {
 	return definition
 }
 
+// DefinitionForTaskVersion returns a code-owned prompt contract for an
+// explicitly selected schema version. The default remains the historical
+// reader until a version has passed its corpus release gate.
+func DefinitionForTaskVersion(task string, version int) Definition {
+	definition := DefaultDefinitionForTask(task)
+	if Task(task) == InventoryCatalog && version == CurrentCatalogSchemaVersion {
+		definition.SchemaVersion = version
+		definition.OutputSchema = inventoryCatalogSchema(version)
+		definition.SystemPrompt += "\n" + inventoryCatalogV2Instruction()
+	}
+	return definition
+}
+
 // OutputSchemaForTask returns a fresh copy of the fixed schema for task.
 func OutputSchemaForTask(task string) map[string]any {
 	switch Task(task) {
+	case FindingsCurrent, FindingsCompare:
+		return OutputSchema()
 	case InventoryCatalog, InventoryCompare:
+		if Task(task) == InventoryCatalog {
+			return inventoryCatalogSchema(1)
+		}
 		return inventoryOutputSchema(Task(task))
 	default:
 		return OutputSchema()
 	}
+}
+
+// OutputSchemaForVersion returns the immutable reader for a pinned task
+// version. It is also used by compatibility fixtures for historical readers.
+func OutputSchemaForVersion(task string, version int) map[string]any {
+	return outputSchemaForVersion(task, version)
 }
 
 func IsKnownType(value string) bool { return strings.TrimSpace(value) == RealEstate }
@@ -123,11 +152,62 @@ func ValidateTask(task string, definition Definition) error {
 	if err != nil {
 		return fmt.Errorf("invalid fixed output schema")
 	}
-	expectedSchema := OutputSchemaForTask(task)
+	version := definition.SchemaVersion
+	if version == 0 {
+		version = 1 // snapshots created before schema versions remain readable
+	}
+	expectedSchema := outputSchemaForVersion(task, version)
 	if len(expectedSchema) == 0 || !reflect.DeepEqual(definition.OutputSchema, expectedSchema) || len(actual) == 0 {
 		return fmt.Errorf("invalid fixed output schema")
 	}
 	return nil
+}
+
+// ParsePinnedTask validates a prompt against the schema reader pinned by the
+// immutable snapshot metadata, while checking the stored content digest.
+func ParsePinnedTask(task string, payload []byte, digest string, schemaVersion int) (Definition, error) {
+	definition, err := ParseTask(task, payload)
+	if err != nil {
+		return Definition{}, err
+	}
+	version := definition.SchemaVersion
+	if version == 0 {
+		version = 1
+	}
+	if schemaVersion > 0 && schemaVersion != version {
+		return Definition{}, fmt.Errorf("pinned analysis schema version mismatch")
+	}
+	canonical, actualDigest, err := CanonicalizeTask(task, definition)
+	if err != nil || len(canonical) == 0 || (digest != "" && actualDigest != digest) {
+		return Definition{}, fmt.Errorf("pinned analysis schema digest mismatch")
+	}
+	return definition, nil
+}
+
+func outputSchemaForVersion(task string, version int) map[string]any {
+	if Task(task) == InventoryCatalog {
+		return inventoryCatalogSchema(version)
+	}
+	if version != 1 {
+		return nil
+	}
+	return OutputSchemaForTask(task)
+}
+
+// CurrentCatalogSchemaVersion is the latest code-owned catalog contract.
+const CurrentCatalogSchemaVersion = 2
+
+// SchemaPin copies the immutable schema identity from a resolved prompt snapshot
+// onto a newly created inventory generation.
+func SchemaPin(version int, digest string) (int, *string) {
+	return version, &digest
+}
+
+func findingsSystemPrompt(task Task) string {
+	if task == FindingsCompare {
+		return "Analise somente mudanças entre evidências de referência e atuais. Separe condição atual de mudança histórica e não atribua responsabilidade, desgaste normal ou custo. " + defaultSystemPrompt
+	}
+	return "Descreva a condição atual observável. Não conclua mudança histórica, ausência ou normalidade sem evidência suficiente. " + defaultSystemPrompt
 }
 
 // ParseTask decodes and validates one task's stored prompt.

@@ -87,10 +87,10 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 			return llm.StructuredRequest{}, err
 		}
 		var promptSnapshot database.AnalysisPromptSnapshot
-		if err := tx.WithContext(ctx).Where("id=?", inspection.AnalysisPromptSnapshotID).First(&promptSnapshot).Error; err != nil {
+		if err := tx.WithContext(ctx).Where("id=?", job.PromptSnapshotID).First(&promptSnapshot).Error; err != nil {
 			return llm.StructuredRequest{}, err
 		}
-		profileDocument, err := analysisprompt.Parse(promptSnapshot.DefinitionJSON)
+		profileDocument, err := analysisprompt.ParseTask(promptSnapshot.Task, promptSnapshot.DefinitionJSON)
 		if err != nil {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis: invalid pinned prompt")
 		}
@@ -218,10 +218,10 @@ func buildVideoPlanRequest(ctx context.Context, tx *gorm.DB, store objectstore.S
 		return llm.StructuredRequest{}, err
 	}
 	var promptSnapshot database.AnalysisPromptSnapshot
-	if err := tx.WithContext(ctx).Where("id=? AND analysis_type=?", inspection.AnalysisPromptSnapshotID, "REAL_ESTATE").Take(&promptSnapshot).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("id=? AND analysis_type=?", job.PromptSnapshotID, "REAL_ESTATE").Take(&promptSnapshot).Error; err != nil {
 		return llm.StructuredRequest{}, err
 	}
-	profileDocument, err := analysisprompt.Parse(promptSnapshot.DefinitionJSON)
+	profileDocument, err := analysisprompt.ParseTask(promptSnapshot.Task, promptSnapshot.DefinitionJSON)
 	if err != nil {
 		return llm.StructuredRequest{}, fmt.Errorf("analysis: invalid pinned prompt")
 	}
