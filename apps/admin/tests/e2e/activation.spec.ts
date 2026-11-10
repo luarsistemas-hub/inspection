@@ -19,6 +19,7 @@ async function mailText(request: APIRequestContext, email: string, subject: stri
 }
 
 test("E2E-007 activates an owner from the real invitation before normal PKCE login", async ({ page, request }, testInfo) => {
+  test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "requer a stack local e o seed de QA");
   const suffix = `${Date.now()}-${testInfo.project.name.replace(/[^a-z0-9]/gi, "-")}`;
   const email = `activation.${suffix}@example.test`;
   const deadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

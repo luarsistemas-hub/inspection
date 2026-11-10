@@ -347,7 +347,7 @@ test("UT-339 unsupported video recorder offers impossibility and renders no phot
   await expect(page.locator('input[type="file"][accept*="image/"]')).toHaveCount(0);
 });
 
-test("E2E-003 expected baseline rooms, differentiated duplicate name, pending block and resolution", async ({ page }) => {
+test("E2E-003 expected baseline rooms, differentiated duplicate name, pending review and resolution", async ({ page }) => {
   const external = bootstrap({ reference: { comparisonMode: "FIXED_ORIGIN" }, requirements: [requirement("env:bedroom", "Quarto", "BEDROOM")], environments: [environment("env:bedroom", "Quarto", "BEDROOM", false)] });
   await configurePhotoCapture(page, external);
   await authenticateCapture(page, "comparative");
@@ -362,8 +362,7 @@ test("E2E-003 expected baseline rooms, differentiated duplicate name, pending bl
   await page.getByRole("button", { name: "Revisar vistoria" }).click();
   const pendingEnvironments = page.getByRole("list", { name: "Ambientes pendentes" });
   await expect(pendingEnvironments.getByRole("listitem")).toHaveText(["Quarto", "Quarto 2"]);
-  await expect(page.getByRole("button", { name: "Enviar vistoria completa" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Confirmar envio incompleto" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Confirmar envio incompleto" })).toBeEnabled();
   await page.getByRole("button", { name: "Ver etapa" }).first().click();
   await page.getByRole("button", { name: "Não consegue fotografar?" }).click();
   await page.getByLabel("Motivo da impossibilidade").selectOption("LOCKED");

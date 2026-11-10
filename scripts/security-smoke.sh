@@ -3,7 +3,7 @@ set -eu
 
 api=${INSPECTION_SECURITY_API_URL:-http://localhost:8080}
 products="${INSPECTION_SECURITY_PRODUCT_URLS:-http://localhost:3000/ http://localhost:3002/ http://localhost:3003/healthz}"
-body='{"query":"query { tenant { id } }"}'
+body='{"query":"query { inspections(first: 1) { nodes { id } } }"}'
 response=$(curl -fsS -H 'Content-Type: application/json' -d "$body" "$api/graphql")
 printf '%s' "$response" | grep -q 'UNAUTHENTICATED'
 
