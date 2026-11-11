@@ -65,7 +65,7 @@ install -d -o root -g root -m 0750 "$release_stage"
 cp -a "$stage/source/." "$release_stage/"
 release_target="$release_root/$source_sha"
 if [[ -e "$release_target" ]]; then
-  diff -qr "$release_stage" "$release_target" >/dev/null || { echo 'Source SHA already exists with a different release bundle.' >&2; exit 1; }
+  diff -qr --exclude='__pycache__' "$release_stage" "$release_target" >/dev/null || { echo 'Source SHA already exists with a different release bundle.' >&2; exit 1; }
   rm -rf "$release_stage"
 else
   mv "$release_stage" "$release_target"
