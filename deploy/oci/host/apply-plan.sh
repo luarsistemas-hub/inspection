@@ -115,7 +115,7 @@ fi
 
 if [[ -s /etc/inspection/compose.env ]]; then install -m 0600 /etc/inspection/compose.env "$old_env"; else : > "$old_env"; fi
 if [[ -s /etc/inspection/releases/current.env ]]; then install -m 0600 /etc/inspection/releases/current.env "$old_receipt"; else : > "$old_receipt"; fi
-runtime_hash="$(PYTHONPATH="$release_dir/deploy/oci" python3 - "$release_dir" <<'PY'
+runtime_hash="$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$release_dir/deploy/oci" python3 - "$release_dir" <<'PY'
 import pathlib, sys
 from planner import runtime_config_sha256
 print(runtime_config_sha256(pathlib.Path(sys.argv[1])))
