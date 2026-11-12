@@ -64,12 +64,15 @@ async function openBaselines(page: Page, role = "MANAGER", returnTo = "/baseline
   await expect(page.getByRole("navigation", { name: "Painel" })).toBeVisible();
   if (returnTo === "/baselines") {
     await expect(page.getByRole("heading", { name: "Inventários", exact: true })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /Inventário carregado|\d+ versões? disponíveis\./ })).toBeVisible();
     const versionHistory = page.locator("details.baseline-history-item");
     for (let index = 0; index < await versionHistory.count(); index += 1) {
       const entry = versionHistory.nth(index);
-      if (await entry.locator("summary").getAttribute("aria-expanded") !== "true") {
+      if (!(await entry.evaluate((element) => (element as HTMLDetailsElement).open))) {
         await entry.locator("summary").click();
       }
+      await expect(entry).toHaveJSProperty("open", true);
+      await expect(entry.getByRole("heading", { name: /^Versão / })).toBeVisible();
     }
   }
   return calls;

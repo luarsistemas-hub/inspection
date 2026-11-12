@@ -827,6 +827,7 @@ export type CustomerChecklistComponent = {
   __typename?: 'CustomerChecklistComponent';
   condition: Maybe<Scalars['String']['output']>;
   description: Maybe<Scalars['String']['output']>;
+  displayGroup: Scalars['String']['output'];
   evidenceIds: Array<Scalars['ID']['output']>;
   label: Scalars['String']['output'];
   limitations: Array<Scalars['String']['output']>;
@@ -1008,6 +1009,7 @@ export type CustomerReport = {
   comparison: Maybe<CustomerComparison>;
   context: ReportContext;
   evidenceNotice: Scalars['String']['output'];
+  findingCounts: ReportFindingCounts;
   handover: Maybe<CustomerHandover>;
   historical: Scalars['Boolean']['output'];
   inspectionId: Scalars['ID']['output'];
@@ -1016,6 +1018,7 @@ export type CustomerReport = {
   processing: Maybe<ReportProcessing>;
   reasonLabels: Array<Scalars['String']['output']>;
   requirements: Array<ReportRequirement>;
+  scopeProfile: Scalars['String']['output'];
   scopeStatements: Array<Scalars['String']['output']>;
   snapshotId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
@@ -3824,6 +3827,7 @@ export type Report = {
   createdAt: Scalars['String']['output'];
   evidence: ReportEvidenceConnection;
   evidenceNotice: Scalars['String']['output'];
+  findingCounts: ReportFindingCounts;
   findings: Array<ReportFinding>;
   handover: Maybe<ReportHandover>;
   html: Scalars['String']['output'];
@@ -3840,6 +3844,7 @@ export type Report = {
   publication: Maybe<ReportPublication>;
   reasonLabels: Array<Scalars['String']['output']>;
   requirements: Array<ReportRequirement>;
+  scopeProfile: Scalars['String']['output'];
   scopeStatements: Array<Scalars['String']['output']>;
   timeline: Array<ReportTimelineEntry>;
   version: Scalars['Int']['output'];
@@ -3887,6 +3892,7 @@ export type ReportChecklistComponent = {
 export type ReportChecklistCoverage = {
   __typename?: 'ReportChecklistCoverage';
   expected: Scalars['Int']['output'];
+  expectedRooms: Maybe<Scalars['Int']['output']>;
   fullyAssessed: Scalars['Int']['output'];
   impossible: Scalars['Int']['output'];
   notApplicable: Scalars['Int']['output'];
@@ -4018,6 +4024,16 @@ export type ReportFinding = {
   recommendedAction: Scalars['String']['output'];
   severity: Scalars['String']['output'];
   title: Scalars['String']['output'];
+};
+
+export type ReportFindingCounts = {
+  __typename?: 'ReportFindingCounts';
+  critical: Scalars['Int']['output'];
+  high: Scalars['Int']['output'];
+  informational: Scalars['Int']['output'];
+  low: Scalars['Int']['output'];
+  medium: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
 };
 
 export type ReportHandover = {
