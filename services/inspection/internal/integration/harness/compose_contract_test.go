@@ -18,6 +18,9 @@ import (
 func TestComposeHasIsolatedNotificationSimulators(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	if output, err := exec.CommandContext(ctx, "docker", "info").CombinedOutput(); err != nil {
+		t.Skipf("Docker daemon is unavailable; skipping Compose contract test: %v\n%s", err, output)
+	}
 
 	root, err := filepath.Abs("../../../../../")
 	if err != nil {
