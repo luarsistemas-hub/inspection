@@ -43,8 +43,8 @@ func TestCustomerSchemaExposesOnlyAllowlistedFieldsIT220(t *testing.T) {
 		}
 	}
 	allowlist := map[string][]string{
-		"CustomerReport":               {"inspectionId", "snapshotId", "version", "classification", "classificationLabel", "limited", "advisory", "status", "historical", "evidenceNotice", "scopeProfile", "scopeStatements", "reasonLabels", "findingCounts", "context", "requirements", "inventory", "checklist", "processing", "handover", "comparison"},
-		"ReportFindingCounts":          {"total", "critical", "high", "medium", "low", "informational"},
+		"CustomerReport":                {"inspectionId", "snapshotId", "version", "classification", "classificationLabel", "limited", "advisory", "status", "historical", "evidenceNotice", "scopeProfile", "scopeStatements", "reasonLabels", "findingCounts", "context", "requirements", "inventory", "checklist", "processing", "handover", "comparison"},
+		"ReportFindingCounts":           {"total", "critical", "high", "medium", "low", "informational"},
 		"CustomerChecklist":             {"coverage", "rooms"},
 		"CustomerChecklistRoom":         {"name", "components"},
 		"CustomerChecklistComponent":    {"label", "displayGroup", "status", "description", "condition", "reviewLabel", "evidenceIds", "limitations"},
