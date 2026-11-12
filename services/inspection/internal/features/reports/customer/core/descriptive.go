@@ -22,13 +22,14 @@ type ChecklistRoomView struct {
 	Components []ChecklistComponentView `json:"components"`
 }
 type ChecklistComponentView struct {
-	Label       string   `json:"label"`
-	Status      string   `json:"status"`
-	Description string   `json:"description"`
-	Condition   string   `json:"condition"`
-	ReviewLabel string   `json:"reviewLabel"`
-	EvidenceIDs []string `json:"evidenceIds"`
-	Limitations []string `json:"limitations"`
+	Label        string   `json:"label"`
+	DisplayGroup string   `json:"displayGroup"`
+	Status       string   `json:"status"`
+	Description  string   `json:"description"`
+	Condition    string   `json:"condition"`
+	ReviewLabel  string   `json:"reviewLabel"`
+	EvidenceIDs  []string `json:"evidenceIds"`
+	Limitations  []string `json:"limitations"`
 }
 type ChecklistCoverageView struct {
 	Expected          int  `json:"expected"`
@@ -140,8 +141,20 @@ func ProjectChecklist(snapshot reportcore.Snapshot) *ChecklistView {
 	}
 	for _, room := range checklist.Rooms {
 		out := ChecklistRoomView{Name: room.Name, Components: make([]ChecklistComponentView, 0, len(room.Components))}
+		typeCodes := make(map[string]string, len(room.Components))
+		for _, sourceRoom := range snapshot.Checklist.Rooms {
+			if sourceRoom.Key != room.Key {
+				continue
+			}
+			for _, component := range sourceRoom.Components {
+				if !component.OutsideScope {
+					typeCodes[component.Key] = component.TypeCode
+				}
+			}
+			break
+		}
 		for _, component := range room.Components {
-			out.Components = append(out.Components, ChecklistComponentView{Label: component.Label, Status: reportcore.PresentationLabel(component.Status), Description: component.Description, Condition: reportcore.PresentationLabel(component.Condition), ReviewLabel: reportcore.PresentationLabel(component.ReviewStatus), EvidenceIDs: reportcore.EvidenceReferences(snapshot, component.EvidenceIDs), Limitations: component.Limitations})
+			out.Components = append(out.Components, ChecklistComponentView{Label: component.Label, DisplayGroup: reportcore.ChecklistGroupLabel(typeCodes[component.Key]), Status: reportcore.PresentationLabel(component.Status), Description: component.Description, Condition: reportcore.PresentationLabel(component.Condition), ReviewLabel: reportcore.PresentationLabel(component.ReviewStatus), EvidenceIDs: reportcore.EvidenceReferences(snapshot, component.EvidenceIDs), Limitations: component.Limitations})
 		}
 		view.Rooms = append(view.Rooms, out)
 	}

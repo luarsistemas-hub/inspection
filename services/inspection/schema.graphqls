@@ -408,8 +408,9 @@ type ReportRequirement { key: String! section: String! label: String! instructio
 type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! sourceAvailability: String evidenceKind: String frameId: ID timestampMs: Int ptsMicros: String preparationId: ID planId: ID sourceMediaId: ID component: String label: String reference: String flags: [String!]! url: String }
 type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
+type ReportFindingCounts { total: Int! critical: Int! high: Int! medium: Int! low: Int! informational: Int! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! classificationLabel: String! limited: Boolean! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! evidenceNotice: String! scopeStatements: [String!]! reasonLabels: [String!]! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: ReportChecklist processing: ReportProcessing handover: ReportHandover comparison: ReportComparison evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! publication: ReportPublication }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! classificationLabel: String! limited: Boolean! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! evidenceNotice: String! scopeProfile: String! scopeStatements: [String!]! reasonLabels: [String!]! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: ReportChecklist processing: ReportProcessing handover: ReportHandover comparison: ReportComparison evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! findingCounts: ReportFindingCounts! timeline: [ReportTimelineEntry!]! pdfStatus: String! publication: ReportPublication }
 type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! scopeLabel: String! reviewLabel: String! publication: ReportPublication }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
@@ -420,10 +421,10 @@ type CustomerPortfolioItem { assetId: ID! assetName: String! assetExternalKey: S
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
-type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! classificationLabel: String! limited: Boolean! advisory: String! status: String! historical: Boolean! evidenceNotice: String! scopeStatements: [String!]! reasonLabels: [String!]! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: CustomerChecklist processing: ReportProcessing handover: CustomerHandover comparison: CustomerComparison }
+type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! classificationLabel: String! limited: Boolean! advisory: String! status: String! historical: Boolean! evidenceNotice: String! scopeProfile: String! scopeStatements: [String!]! reasonLabels: [String!]! findingCounts: ReportFindingCounts! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: CustomerChecklist processing: ReportProcessing handover: CustomerHandover comparison: CustomerComparison }
 type ReportVerification { reportNumber: String version: Int digest: String status: String issuedAt: String }
 type ReportChecklist { coverage: ReportChecklistCoverage! rooms: [ReportChecklistRoom!]! }
-type ReportChecklistCoverage { expected: Int! fullyAssessed: Int! partiallyAssessed: Int! notObserved: Int! notApplicable: Int! impossible: Int! unknownScope: Boolean! }
+type ReportChecklistCoverage { expected: Int! expectedRooms: Int fullyAssessed: Int! partiallyAssessed: Int! notObserved: Int! notApplicable: Int! impossible: Int! unknownScope: Boolean! }
 type ReportChecklistRoom { key: String! typeCode: String! name: String! components: [ReportChecklistComponent!]! }
 type ReportChecklistComponent { key: String! typeCode: String label: String! status: String! description: String condition: String reviewStatus: String reviewLabel: String assessedScope: String notAssessed: [String!]! evidenceIds: [ID!]! limitations: [String!]! conflict: Boolean! outsideScope: Boolean! attributeSources: [String!]! }
 type ReportProcessing { status: String! message: String }
@@ -431,7 +432,7 @@ type ReportHandover { entries: [ReportHandoverEntry!]! }
 type ReportHandoverEntry { key: String! kind: String! status: String! payload: JSON evidenceIds: [ID!]! declarant: String }
 type CustomerChecklist { coverage: ReportChecklistCoverage! rooms: [CustomerChecklistRoom!]! }
 type CustomerChecklistRoom { name: String! components: [CustomerChecklistComponent!]! }
-type CustomerChecklistComponent { label: String! status: String! description: String condition: String reviewLabel: String evidenceIds: [ID!]! limitations: [String!]! }
+type CustomerChecklistComponent { label: String! displayGroup: String! status: String! description: String condition: String reviewLabel: String evidenceIds: [ID!]! limitations: [String!]! }
 type CustomerHandover { entries: [CustomerHandoverEntry!]! }
 type CustomerHandoverEntry { label: String! kind: String! status: String! type: String value: String unit: String date: String declarant: String evidenceIds: [ID!]! }
 enum ComparisonOutcome { UNCHANGED CHANGED IMPROVED MISSING NOT_OBSERVED NO_BASIS }

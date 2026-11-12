@@ -22,7 +22,7 @@ func TestCustomerSchemaExposesOnlyAllowlistedFieldsIT220(t *testing.T) {
 		"findings": true, "timeline": true, "reasoncodes": true, "reasoning": true, "promptdigest": true,
 		"displaydigest": true, "framedigest": true, "pdfstatus": true, "evidence": true, "notes": true,
 	}
-	checklistTypes := []string{"CustomerChecklist", "CustomerChecklistRoom", "CustomerChecklistComponent", "CustomerHandover", "CustomerHandoverEntry", "CustomerComparison", "CustomerComparisonItem", "CustomerComparisonPair", "CustomerComparisonObservation"}
+	checklistTypes := []string{"CustomerChecklist", "CustomerChecklistRoom", "CustomerChecklistComponent", "CustomerHandover", "CustomerHandoverEntry", "CustomerComparison", "CustomerComparisonItem", "CustomerComparisonPair", "CustomerComparisonObservation", "ReportFindingCounts"}
 	for _, field := range []string{"id", "url", "typeCode", "key", "outsideScope", "attributeSources"} {
 		forbidden[field] = true
 	}
@@ -43,9 +43,11 @@ func TestCustomerSchemaExposesOnlyAllowlistedFieldsIT220(t *testing.T) {
 		}
 	}
 	allowlist := map[string][]string{
+		"CustomerReport":               {"inspectionId", "snapshotId", "version", "classification", "classificationLabel", "limited", "advisory", "status", "historical", "evidenceNotice", "scopeProfile", "scopeStatements", "reasonLabels", "findingCounts", "context", "requirements", "inventory", "checklist", "processing", "handover", "comparison"},
+		"ReportFindingCounts":          {"total", "critical", "high", "medium", "low", "informational"},
 		"CustomerChecklist":             {"coverage", "rooms"},
 		"CustomerChecklistRoom":         {"name", "components"},
-		"CustomerChecklistComponent":    {"label", "status", "description", "condition", "reviewLabel", "evidenceIds", "limitations"},
+		"CustomerChecklistComponent":    {"label", "displayGroup", "status", "description", "condition", "reviewLabel", "evidenceIds", "limitations"},
 		"CustomerHandover":              {"entries"},
 		"CustomerHandoverEntry":         {"label", "kind", "status", "type", "value", "unit", "date", "declarant", "evidenceIds"},
 		"CustomerComparison":            {"baselineVersionNumber", "purpose", "purposeLabel", "activatedAt", "status", "statusLabel", "counts", "displayed", "items", "outsideBaseline", "disclaimer"},

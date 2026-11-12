@@ -35,7 +35,7 @@ func TestTask07SharedComparisonGoldenMatchesHTMLAndExtractedCustomerPDF(t *testi
 		t.Fatal(err)
 	}
 	visibleHTML := html.UnescapeString(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(string(markup), " "))
-	pairPattern := regexp.MustCompile(`Referência E[0-9]{3} ↔ vistoria atual E[0-9]{3}`)
+	pairPattern := regexp.MustCompile(`Referência E[0-9]{3}; vistoria atual E[0-9]{3}`)
 	pair := pairPattern.FindString(visibleHTML)
 	if pair == "" {
 		t.Fatalf("customer HTML did not render the paired evidence references: %s", visibleHTML)

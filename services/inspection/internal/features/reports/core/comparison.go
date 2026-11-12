@@ -476,7 +476,7 @@ func ComparisonItemLine(item ComparisonItem) string {
 
 // ComparisonPairLine presents one evidence pair with report-local references.
 func ComparisonPairLine(snapshot Snapshot, pair ComparisonPair) string {
-	return "Referência " + EvidenceReference(snapshot, pair.BaselineEvidenceID) + " ↔ vistoria atual " + EvidenceReference(snapshot, pair.CurrentEvidenceID)
+	return "Referência " + EvidenceReference(snapshot, pair.BaselineEvidenceID) + "; vistoria atual " + EvidenceReference(snapshot, pair.CurrentEvidenceID)
 }
 
 // ComparisonDisclaimer is shown with every comparison.

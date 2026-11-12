@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"html/template"
 	"regexp"
+	"sort"
 	"strings"
+	"time"
 )
 
 // ErrInvalidSnapshot marks report validation failures that cannot succeed on retry.
@@ -29,12 +31,68 @@ func PresentationLabel(value string) string {
 		return ""
 	}
 	labels := map[string]string{
-		"OBSERVED": "Observado", "PARTIAL": "Parcial", "NOT_OBSERVED": "Não observado", "NOT_APPLICABLE": "Não aplicável", "IMPOSSIBLE": "Impossível de capturar", "NOT_REVIEWED": "Não revisado", "ACCEPTED": "Aceito", "EDITED": "Editado", "REJECTED": "Rejeitado", "NOT_AUTHORIZED": "Não autorizada", "PENDING": "Pendente", "COMPLETED": "Concluída", "FAILED": "Falha na análise", "INCONCLUSIVE": "Análise inconclusiva", "DECLARED": "Declarado", "NEW": "Novo", "GOOD": "Bom", "FAIR": "Regular", "POOR": "Ruim", "NOT_ASSESSABLE": "Não avaliável",
+		"OBSERVED": "Observado", "PARTIAL": "Parcial", "NOT_OBSERVED": "Não observado", "NOT_APPLICABLE": "Não aplicável", "IMPOSSIBLE": "Impossível de capturar", "NOT_REVIEWED": "Não revisado", "ACCEPTED": "Aceito", "EDITED": "Editado", "REJECTED": "Rejeitado", "NOT_AUTHORIZED": "Não autorizada", "PENDING": "Pendente", "COMPLETED": "Concluída", "FAILED": "Falha na análise", "INCONCLUSIVE": "Análise inconclusiva", "DECLARED": "Declarado", "NEW": "Novo", "GOOD": "Bom", "FAIR": "Regular", "POOR": "Ruim", "NOT_ASSESSABLE": "Não avaliável", "PROPERTY_COMPONENTS": "Componentes do imóvel",
 	}
 	if label, ok := labels[value]; ok {
 		return label
 	}
 	return reportLabel(nil, value)
+}
+
+// ScopeProfileLabel returns a customer-safe label, including an explicit
+// fallback when the snapshot has no usable scope profile.
+func ScopeProfileLabel(snapshot Snapshot) string {
+	if snapshot.Scope == nil || snapshot.Scope.Unknown || strings.TrimSpace(snapshot.Scope.Profile) == "" {
+		return "Escopo não informado"
+	}
+	return PresentationLabel(snapshot.Scope.Profile)
+}
+
+// ExpectedRoomCount returns the number of environments in the pinned scope.
+func ExpectedRoomCount(snapshot Snapshot) (int, bool) {
+	if snapshot.Scope == nil || snapshot.Scope.Unknown || len(snapshot.Scope.Document) == 0 {
+		return 0, false
+	}
+	var scope struct {
+		Rooms []json.RawMessage `json:"rooms"`
+	}
+	if json.Unmarshal(snapshot.Scope.Document, &scope) != nil || len(scope.Rooms) == 0 {
+		return 0, false
+	}
+	return len(scope.Rooms), true
+}
+
+// ChecklistGroupLabel returns a stable editorial heading for a visual item.
+func ChecklistGroupLabel(typeCode string) string {
+	switch typeCode {
+	case "WALL", "FLOOR", "CEILING", "ROOF":
+		return "Superfícies"
+	case "DOOR", "WINDOW":
+		return "Aberturas"
+	case "CABINET", "WARDROBE", "COUNTERTOP":
+		return "Marcenaria e bancadas"
+	case "SINK", "FAUCET", "TOILET", "SHOWER":
+		return "Instalações hidráulicas"
+	case "APPLIANCE", "APPLIANCE_OTHER", "LIGHTING", "SOCKET_SWITCH":
+		return "Instalações e equipamentos"
+	case "FURNITURE", "SOFA", "TABLE", "CHAIR":
+		return "Mobiliário"
+	default:
+		return "Outros componentes"
+	}
+}
+
+// ChecklistGroupOrder returns the shared presentation order for editorial groups.
+func ChecklistGroupOrder(label string) int {
+	order := map[string]int{
+		"Superfícies": 0, "Aberturas": 1, "Marcenaria e bancadas": 2,
+		"Instalações hidráulicas": 3, "Instalações e equipamentos": 4,
+		"Mobiliário": 5, "Outros componentes": 6,
+	}
+	if index, ok := order[label]; ok {
+		return index
+	}
+	return len(order)
 }
 
 // EvidenceReference gives one stable, human-readable number to evidence in a snapshot.
@@ -75,6 +133,7 @@ type Snapshot struct {
 	Context            Context           `json:"context"`
 	Requirements       []Requirement     `json:"requirements,omitempty"`
 	Findings           []Finding         `json:"findings,omitempty"`
+	FindingCounts      *FindingCounts    `json:"findingCounts,omitempty"`
 	Evidence           []Evidence        `json:"evidence,omitempty"`
 	Inventory          *InventorySection `json:"inventory,omitempty"`
 	Checklist          *ChecklistSection `json:"checklist,omitempty"`
@@ -88,6 +147,36 @@ type Snapshot struct {
 	// ScopeStatements bound video conclusions to the observed scope.
 	ScopeStatements []string `json:"scopeStatements,omitempty"`
 	Advisory        string   `json:"advisory"`
+}
+
+// FindingCounts contains aggregate severities safe to present without the finding details.
+type FindingCounts struct {
+	Total         int `json:"total"`
+	Critical      int `json:"critical"`
+	High          int `json:"high"`
+	Medium        int `json:"medium"`
+	Low           int `json:"low"`
+	Informational int `json:"informational"`
+}
+
+// CountFindings returns an aggregate suitable for a customer-facing summary.
+func CountFindings(findings []Finding) FindingCounts {
+	counts := FindingCounts{Total: len(findings)}
+	for _, finding := range findings {
+		switch finding.Severity {
+		case "CRITICAL":
+			counts.Critical++
+		case "HIGH":
+			counts.High++
+		case "MEDIUM":
+			counts.Medium++
+		case "LOW":
+			counts.Low++
+		default:
+			counts.Informational++
+		}
+	}
+	return counts
 }
 
 // ChecklistSection contains descriptive room and component facts in report v3.
@@ -853,14 +942,71 @@ func descriptiveHTMLTemplate(snapshot Snapshot, internal bool) (*template.Templa
 		"evidenceRefs": func(ids []string) []string {
 			return EvidenceReferences(snapshot, ids)
 		},
+		"groupedRooms": func() []checklistHTMLRoom { return groupChecklistRooms(snapshot, internal) },
 		"handover": func(entry HandoverEntry) string {
 			return FormatHandoverForSnapshot(snapshot, entry, internal)
 		},
 		"source": func(value AttributeSource) string {
 			return FormatAttributeSourceForSnapshot(snapshot, value)
 		},
+		"timestamp": func(value string) string {
+			parsed, err := time.Parse(time.RFC3339Nano, value)
+			if err != nil {
+				return "não informada"
+			}
+			return parsed.UTC().Format("02/01/2006 15:04 UTC")
+		},
+		"purpose": func() string {
+			if snapshot.Context.Inspection.StageLabel != "" {
+				return snapshot.Context.Inspection.StageLabel
+			}
+			return "Laudo de vistoria"
+		},
+		"scopeProfile": func() string { return ScopeProfileLabel(snapshot) },
+		"scopeVersion": func() string {
+			if snapshot.Scope == nil || snapshot.Scope.Version == 0 {
+				return "não informada"
+			}
+			return fmt.Sprintf("v%d", snapshot.Scope.Version)
+		},
+		"expectedRoomCount": func() string {
+			if count, known := ExpectedRoomCount(snapshot); known {
+				return fmt.Sprintf("%d", count)
+			}
+			return "não informado"
+		},
+		"findingSeveritySummary": func() string {
+			counts := CountFindings(snapshot.Findings)
+			if snapshot.FindingCounts != nil {
+				counts = *snapshot.FindingCounts
+			}
+			parts := make([]string, 0, 5)
+			for _, item := range []struct {
+				label string
+				count int
+			}{{"críticas", counts.Critical}, {"altas", counts.High}, {"moderadas", counts.Medium}, {"baixas", counts.Low}, {"informativas", counts.Informational}} {
+				if item.count > 0 {
+					parts = append(parts, fmt.Sprintf("%d %s", item.count, item.label))
+				}
+			}
+			if len(parts) == 0 {
+				return "Nenhuma constatação registrada"
+			}
+			return "Constatações por gravidade: " + strings.Join(parts, " · ")
+		},
+		"pendingHandoverCount": func() int {
+			count := 0
+			if snapshot.Handover != nil {
+				for _, entry := range snapshot.Handover.Entries {
+					if entry.Status == "PENDING" {
+						count++
+					}
+				}
+			}
+			return count
+		},
 	}
-	const source = `<section id="descriptive-checklist"><h2>Checklist descritivo</h2>{{if .Checklist.Coverage.UnknownScope}}<p>Escopo não definido; não há percentual de cobertura.</p>{{else}}<p>{{.Checklist.Coverage.Expected}} componentes esperados · {{.Checklist.Coverage.FullyAssessed}} avaliados · {{.Checklist.Coverage.PartiallyAssessed}} parcialmente avaliados · {{.Checklist.Coverage.NotObserved}} não observados · {{.Checklist.Coverage.NotApplicable}} não aplicáveis · {{.Checklist.Coverage.Impossible}} impossíveis de capturar</p>{{end}}{{range .Checklist.Rooms}}<article><h3>{{.Name}}</h3>{{range .Components}}<p><strong>{{.Label}}</strong> · {{status .Status}}{{if .Description}} · {{.Description}}{{end}}{{if .Condition}} · {{condition .Condition}}{{end}}{{if .ReviewStatus}} · {{review .ReviewStatus}}{{end}}{{if .AssessedScope}}<br>Extensão avaliada: {{.AssessedScope}}{{end}}{{if .NotAssessed}}<br>Partes não avaliadas: {{join .NotAssessed ", "}}{{end}}{{if and (internal) .OutsideScope}}<br>Observado fora do escopo; não compõe a cobertura nem o inventário de referência.{{end}}{{if .EvidenceIDs}}<br>Evidência: {{range $index, $ref := evidenceRefs .EvidenceIDs}}{{if $index}}, {{end}}{{$ref}}{{end}}{{end}}{{range .AttributeSources}}<br>{{source .}}{{end}}{{range .Limitations}}<br>Limitação: {{.}}{{end}}</p>{{else}}<p>Nenhum componente observado.</p>{{end}}</article>{{else}}<p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p>{{end}}</section>{{if .Processing}}<p>Estado da análise: {{status .Processing.Status}}{{if .Processing.Message}} · {{.Processing.Message}}{{end}}</p>{{end}}{{if .Handover}}<section id="handover"><h2>Chaves, controles e medidores</h2>{{range .Handover.Entries}}<p>{{handover .}}</p>{{else}}<p>Nenhum registro adicional.</p>{{end}}</section>{{end}}`
+	const source = `{{if .SchemaVersion}}{{if ge .SchemaVersion 3}}<section id="executive-summary"><h2>Identificação e síntese</h2><p>Finalidade: {{purpose}} · Data declarada: {{if .Context.Inspection.SubmittedAt}}{{timestamp .Context.Inspection.SubmittedAt}}{{else}}não informada{{end}} · Emissão: {{timestamp .Context.Inspection.GeneratedAt}} · Revisão do escopo {{scopeVersion}}</p><p>Perfil de bens: {{scopeProfile}} · Ambientes previstos: {{expectedRoomCount}} · {{len .Checklist.Rooms}} registrado(s)</p><p>{{findingSeveritySummary}} · {{pendingHandoverCount}} registro(s) de entrega pendente(s)</p></section>{{end}}{{end}}<section id="descriptive-checklist"><h2>Checklist descritivo</h2>{{if .Checklist.Coverage.UnknownScope}}<p>Escopo não definido; não há percentual de cobertura.</p>{{else}}<p>{{.Checklist.Coverage.Expected}} componentes esperados · {{.Checklist.Coverage.FullyAssessed}} avaliados · {{.Checklist.Coverage.PartiallyAssessed}} parcialmente avaliados · {{.Checklist.Coverage.NotObserved}} não observados · {{.Checklist.Coverage.NotApplicable}} não aplicáveis · {{.Checklist.Coverage.Impossible}} impossíveis de capturar</p>{{end}}{{range groupedRooms}}<article><h3>{{.Name}}</h3>{{range .Groups}}<h4>{{.Label}}</h4>{{range .Components}}<p><strong>{{.Label}}</strong> · {{status .Status}}{{if .Description}} · {{.Description}}{{end}}{{if .Condition}} · {{condition .Condition}}{{end}}{{if .ReviewStatus}} · {{review .ReviewStatus}}{{end}}{{if .AssessedScope}}<br>Extensão avaliada: {{.AssessedScope}}{{end}}{{if .NotAssessed}}<br>Partes não avaliadas: {{join .NotAssessed ", "}}{{end}}{{if and (internal) .OutsideScope}}<br>Observado fora do escopo; não compõe a cobertura nem o inventário de referência.{{end}}{{if .EvidenceIDs}}<br>Evidência: {{range $index, $ref := evidenceRefs .EvidenceIDs}}{{if $index}}, {{end}}{{$ref}}{{end}}{{end}}{{range .AttributeSources}}<br>{{source .}}{{end}}{{range .Limitations}}<br>Limitação: {{.}}{{end}}</p>{{end}}{{else}}<p>Nenhum componente observado.</p>{{end}}</article>{{else}}<p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p>{{end}}</section>{{if .Processing}}<p>Estado da análise: {{status .Processing.Status}}{{if .Processing.Message}} · {{.Processing.Message}}{{end}}</p>{{end}}{{if .Handover}}<section id="handover"><h2>Chaves, controles e medidores</h2>{{range .Handover.Entries}}<p>{{handover .}}</p>{{else}}<p>Nenhum registro adicional.</p>{{end}}</section>{{end}}`
 	return template.New("descriptive").Funcs(funcs).Parse(source)
 }
 
@@ -921,6 +1067,44 @@ type htmlModel struct {
 	Internal                bool
 	// V3 enables the report-local evidence references of snapshot v3.
 	V3 bool
+}
+
+type checklistHTMLGroup struct {
+	Label      string
+	Components []ChecklistComponent
+}
+
+type checklistHTMLRoom struct {
+	Name   string
+	Groups []checklistHTMLGroup
+}
+
+func groupChecklistRooms(snapshot Snapshot, internal bool) []checklistHTMLRoom {
+	if snapshot.SchemaVersion < 3 || snapshot.Checklist == nil {
+		return nil
+	}
+	rooms := make([]checklistHTMLRoom, 0, len(snapshot.Checklist.Rooms))
+	for _, room := range snapshot.Checklist.Rooms {
+		groups := make(map[string][]ChecklistComponent)
+		for _, component := range room.Components {
+			if component.OutsideScope && !internal {
+				continue
+			}
+			label := ChecklistGroupLabel(component.TypeCode)
+			groups[label] = append(groups[label], component)
+		}
+		labels := make([]string, 0, len(groups))
+		for label := range groups {
+			labels = append(labels, label)
+		}
+		sort.Slice(labels, func(i, j int) bool { return ChecklistGroupOrder(labels[i]) < ChecklistGroupOrder(labels[j]) })
+		grouped := make([]checklistHTMLGroup, 0, len(labels))
+		for _, label := range labels {
+			grouped = append(grouped, checklistHTMLGroup{Label: label, Components: groups[label]})
+		}
+		rooms = append(rooms, checklistHTMLRoom{Name: room.Name, Groups: grouped})
+	}
+	return rooms
 }
 
 func groupEvidence(snapshot Snapshot) []evidenceGroup {

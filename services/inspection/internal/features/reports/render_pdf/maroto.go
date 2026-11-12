@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"inspection/services/inspection/internal/features/reports/core"
 	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
@@ -59,6 +60,48 @@ type MarotoRenderer struct {
 	MaxPages        int
 	MaxImageBytes   int64
 	MaxPDFBytes     int64
+}
+
+func pendingHandoverCount(section *core.HandoverSection) int {
+	if section == nil {
+		return 0
+	}
+	count := 0
+	for _, entry := range section.Entries {
+		if entry.Status == "PENDING" {
+			count++
+		}
+	}
+	return count
+}
+
+func pdfTimestamp(value string) string {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return "não informada"
+	}
+	return parsed.UTC().Format("02/01/2006 15:04 UTC")
+}
+
+func findingSeveritySummary(snapshot core.Snapshot) string {
+	counts := core.CountFindings(snapshot.Findings)
+	if snapshot.FindingCounts != nil {
+		counts = *snapshot.FindingCounts
+	}
+	parts := make([]string, 0, 5)
+	for _, item := range []struct {
+		label string
+		count int
+	}{{"críticas", counts.Critical}, {"altas", counts.High}, {"moderadas", counts.Medium}, {"baixas", counts.Low}, {"informativas", counts.Informational}} {
+		if item.count == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", item.count, item.label))
+	}
+	if len(parts) == 0 {
+		return "Nenhuma constatação registrada."
+	}
+	return "Constatações por gravidade: " + strings.Join(parts, " · ") + "."
 }
 
 func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets pdf.AssetBundle) ([]byte, error) {
@@ -152,9 +195,26 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		prop.Family = "Roboto"
 		documentMaker.AddRows(textRows(value, prop, fullWidthChunk)...)
 	}
+	evidenceIndex := make(map[string]string, len(document.Snapshot.Evidence))
+	if presentation.v3 {
+		for index, evidence := range document.Snapshot.Evidence {
+			evidenceIndex[evidence.ID] = fmt.Sprintf("E%03d", index+1)
+		}
+	}
 	addText("Classificação: "+core.ClassificationLabelForSnapshot(document.Snapshot)+" · "+label(document.Snapshot.Mode), props.Text{Size: 13, Top: 4, Bottom: 2})
 	addText("Imóvel: "+asset.Name+" · "+asset.Address, props.Text{Size: 9, Bottom: 2})
-	addText(fmt.Sprintf("Responsável: %s · Modelo: %s v%d", document.Snapshot.Context.Participant.Name, document.Snapshot.Context.Template.Name, document.Snapshot.Context.Template.Version), props.Text{Size: 9, Bottom: 2})
+	if presentation.v3 {
+		stage := document.Snapshot.Context.Inspection.StageLabel
+		if stage == "" {
+			stage = "Laudo de vistoria"
+		}
+		addText("Finalidade: "+stage+" · Data declarada: "+pdfTimestamp(document.Snapshot.Context.Inspection.SubmittedAt), props.Text{Size: 9, Bottom: 2})
+		addText(fmt.Sprintf("Emissão: %s · Versão %d", pdfTimestamp(document.Snapshot.Context.Inspection.GeneratedAt), document.Version), props.Text{Size: 9, Bottom: 2})
+		addText(fmt.Sprintf("Responsável: %s · Modelo: %s v%d", document.Snapshot.Context.Participant.Name, document.Snapshot.Context.Template.Name, document.Snapshot.Context.Template.Version), props.Text{Size: 9, Bottom: 2})
+		addText("Perfil de bens: "+core.ScopeProfileLabel(document.Snapshot), props.Text{Size: 9, Bottom: 2})
+	} else {
+		addText(fmt.Sprintf("Responsável: %s · Modelo: %s v%d", document.Snapshot.Context.Participant.Name, document.Snapshot.Context.Template.Name, document.Snapshot.Context.Template.Version), props.Text{Size: 9, Bottom: 2})
+	}
 	addText(document.Snapshot.Advisory, props.Text{Size: 9, Bottom: 4})
 	if document.Snapshot.VerificationCode != "" && r.DashboardOrigin != "" {
 		code, err := qr.Encode(reportVerificationURL(r.DashboardOrigin, document.Snapshot.VerificationCode, document.Version), qr.M, qr.Auto)
@@ -183,18 +243,36 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	}
 	if checklist := document.Snapshot.Checklist; checklist != nil {
 		addText("Checklist descritivo", props.Text{Size: 11, Top: 4})
+		if expectedRooms, known := core.ExpectedRoomCount(document.Snapshot); known {
+			addText(fmt.Sprintf("Síntese: %d ambientes previstos · %d registrados · %s · %d registros de entrega pendentes", expectedRooms, len(checklist.Rooms), findingSeveritySummary(document.Snapshot), pendingHandoverCount(document.Snapshot.Handover)), props.Text{Size: 9})
+		} else {
+			addText(fmt.Sprintf("Síntese: escopo de ambientes não informado · %d registrados · %s · %d registros de entrega pendentes", len(checklist.Rooms), findingSeveritySummary(document.Snapshot), pendingHandoverCount(document.Snapshot.Handover)), props.Text{Size: 9})
+		}
 		if checklist.Coverage.UnknownScope {
 			addText("Escopo não definido; não há percentual de cobertura.", props.Text{Size: 9})
 		} else {
 			addText(fmt.Sprintf("Cobertura: %d componentes esperados; %d avaliados; %d parcialmente avaliados; %d não observados; %d não aplicáveis; %d impossíveis de capturar.", checklist.Coverage.Expected, checklist.Coverage.FullyAssessed, checklist.Coverage.PartiallyAssessed, checklist.Coverage.NotObserved, checklist.Coverage.NotApplicable, checklist.Coverage.Impossible), props.Text{Size: 9})
 		}
 		for _, room := range checklist.Rooms {
-			addText(room.Name, props.Text{Size: 10, Top: 4})
+			roomLead := &keptHeading{}
+			roomLead.add(room.Name, props.Text{Size: 10, Top: 4})
 			if len(room.Components) == 0 {
-				addText("Nenhum componente observado.", props.Text{Size: 9})
+				roomLead.add("Nenhum componente observado.", props.Text{Size: 9})
+				roomLead.flush(documentMaker, 0)
 				continue
 			}
-			for _, component := range room.Components {
+			firstImageKept := false
+			components := append([]core.ChecklistComponent(nil), room.Components...)
+			sort.SliceStable(components, func(i, j int) bool {
+				return core.ChecklistGroupOrder(core.ChecklistGroupLabel(components[i].TypeCode)) < core.ChecklistGroupOrder(core.ChecklistGroupLabel(components[j].TypeCode))
+			})
+			previousGroup := ""
+			for _, component := range components {
+				group := core.ChecklistGroupLabel(component.TypeCode)
+				if group != previousGroup {
+					roomLead.add(group, props.Text{Size: 8, Top: 3})
+					previousGroup = group
+				}
 				line := component.Label + " · " + core.PresentationLabel(component.Status)
 				if component.Description != "" {
 					line += " · " + component.Description
@@ -205,7 +283,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 				if component.ReviewStatus != "" {
 					line += " · " + core.PresentationLabel(component.ReviewStatus)
 				}
-				addText(line, props.Text{Size: 9})
+				roomLead.add(line, props.Text{Size: 9, Bottom: 2})
 				if component.AssessedScope != "" {
 					addText("Extensão avaliada: "+component.AssessedScope, props.Text{Size: 8})
 				}
@@ -223,9 +301,26 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 					addText(core.FormatAttributeSourceForSnapshot(document.Snapshot, source), props.Text{Size: 8})
 				}
 				for _, limitation := range component.Limitations {
-					addText("Limitação: "+limitation, props.Text{Size: 8})
+					roomLead.add("Limitação: "+limitation, props.Text{Size: 8})
+				}
+				if !firstImageKept && len(component.EvidenceIDs) > 0 {
+					for _, evidenceID := range component.EvidenceIDs {
+						for _, evidence := range document.Snapshot.Evidence {
+							if evidence.ID == evidenceID {
+								firstImageKept = true
+								if err := presentation.addEvidenceRows(ctx, documentMaker, roomLead, []core.Evidence{evidence}, assets, evidenceIndex, component.Label, document.SnapshotID, r.DashboardOrigin); err != nil {
+									return nil, err
+								}
+								break
+							}
+						}
+						if firstImageKept {
+							break
+						}
+					}
 				}
 			}
+			roomLead.flush(documentMaker, 0)
 		}
 		if len(checklist.Rooms) == 0 && len(document.Snapshot.Evidence) == 0 {
 			addText("Nenhuma evidência registrada; isso não significa ausência de problemas.", props.Text{Size: 9})
@@ -258,12 +353,6 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		}
 	}
 
-	evidenceIndex := make(map[string]string, len(document.Snapshot.Evidence))
-	if presentation.v3 {
-		for index, evidence := range document.Snapshot.Evidence {
-			evidenceIndex[evidence.ID] = fmt.Sprintf("E%03d", index+1)
-		}
-	}
 	if presentation.v3 && len(document.Snapshot.Evidence) > 10 {
 		addText("Anexo de evidências · índice", props.Text{Size: 11, Top: 6})
 		for index, evidence := range document.Snapshot.Evidence {
@@ -274,6 +363,10 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		}
 	}
 	if comparison := document.Snapshot.Comparison; comparison != nil {
+		evidenceByID := make(map[string]core.Evidence, len(document.Snapshot.Evidence))
+		for _, evidence := range document.Snapshot.Evidence {
+			evidenceByID[evidence.ID] = evidence
+		}
 		// Report v3 presents the complete comparison instead of the
 		// exception-first inventory section; both derive from the same issue.
 		addText("Comparação com a referência", props.Text{Size: 11, Top: 6})
@@ -301,6 +394,19 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 						line += " · " + note
 					}
 					addText(line, props.Text{Size: 8})
+					paired := make([]core.Evidence, 0, 2)
+					if evidence, ok := evidenceByID[pair.BaselineEvidenceID]; ok {
+						paired = append(paired, evidence)
+					}
+					if evidence, ok := evidenceByID[pair.CurrentEvidenceID]; ok {
+						paired = append(paired, evidence)
+					}
+					if len(paired) > 0 {
+						lead := &keptHeading{}
+						if err := presentation.addEvidenceRows(ctx, documentMaker, lead, paired, assets, evidenceIndex, item.Name, document.SnapshotID, r.DashboardOrigin); err != nil {
+							return nil, err
+						}
+					}
 				}
 				for _, limitation := range item.Limitations {
 					addText("Limitação: "+limitation, props.Text{Size: 8})

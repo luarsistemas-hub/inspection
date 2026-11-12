@@ -446,13 +446,14 @@ type ComplexityRoot struct {
 	}
 
 	CustomerChecklistComponent struct {
-		Condition   func(childComplexity int) int
-		Description func(childComplexity int) int
-		EvidenceIds func(childComplexity int) int
-		Label       func(childComplexity int) int
-		Limitations func(childComplexity int) int
-		ReviewLabel func(childComplexity int) int
-		Status      func(childComplexity int) int
+		Condition    func(childComplexity int) int
+		Description  func(childComplexity int) int
+		DisplayGroup func(childComplexity int) int
+		EvidenceIds  func(childComplexity int) int
+		Label        func(childComplexity int) int
+		Limitations  func(childComplexity int) int
+		ReviewLabel  func(childComplexity int) int
+		Status       func(childComplexity int) int
 	}
 
 	CustomerChecklistRoom struct {
@@ -607,6 +608,7 @@ type ComplexityRoot struct {
 		Comparison          func(childComplexity int) int
 		Context             func(childComplexity int) int
 		EvidenceNotice      func(childComplexity int) int
+		FindingCounts       func(childComplexity int) int
 		Handover            func(childComplexity int) int
 		Historical          func(childComplexity int) int
 		InspectionID        func(childComplexity int) int
@@ -615,6 +617,7 @@ type ComplexityRoot struct {
 		Processing          func(childComplexity int) int
 		ReasonLabels        func(childComplexity int) int
 		Requirements        func(childComplexity int) int
+		ScopeProfile        func(childComplexity int) int
 		ScopeStatements     func(childComplexity int) int
 		SnapshotID          func(childComplexity int) int
 		Status              func(childComplexity int) int
@@ -1928,6 +1931,7 @@ type ComplexityRoot struct {
 		CreatedAt           func(childComplexity int) int
 		Evidence            func(childComplexity int, first *int, after *string) int
 		EvidenceNotice      func(childComplexity int) int
+		FindingCounts       func(childComplexity int) int
 		Findings            func(childComplexity int) int
 		HTML                func(childComplexity int) int
 		HTMLDigest          func(childComplexity int) int
@@ -1944,6 +1948,7 @@ type ComplexityRoot struct {
 		Publication         func(childComplexity int) int
 		ReasonLabels        func(childComplexity int) int
 		Requirements        func(childComplexity int) int
+		ScopeProfile        func(childComplexity int) int
 		ScopeStatements     func(childComplexity int) int
 		Timeline            func(childComplexity int) int
 		Version             func(childComplexity int) int
@@ -1981,6 +1986,7 @@ type ComplexityRoot struct {
 
 	ReportChecklistCoverage struct {
 		Expected          func(childComplexity int) int
+		ExpectedRooms     func(childComplexity int) int
 		FullyAssessed     func(childComplexity int) int
 		Impossible        func(childComplexity int) int
 		NotApplicable     func(childComplexity int) int
@@ -2100,6 +2106,15 @@ type ComplexityRoot struct {
 		RecommendedAction func(childComplexity int) int
 		Severity          func(childComplexity int) int
 		Title             func(childComplexity int) int
+	}
+
+	ReportFindingCounts struct {
+		Critical      func(childComplexity int) int
+		High          func(childComplexity int) int
+		Informational func(childComplexity int) int
+		Low           func(childComplexity int) int
+		Medium        func(childComplexity int) int
+		Total         func(childComplexity int) int
 	}
 
 	ReportHandover struct {
@@ -4557,6 +4572,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CustomerChecklistComponent.Description(childComplexity), true
+	case "CustomerChecklistComponent.displayGroup":
+		if e.ComplexityRoot.CustomerChecklistComponent.DisplayGroup == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerChecklistComponent.DisplayGroup(childComplexity), true
 	case "CustomerChecklistComponent.evidenceIds":
 		if e.ComplexityRoot.CustomerChecklistComponent.EvidenceIds == nil {
 			break
@@ -5239,6 +5260,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CustomerReport.EvidenceNotice(childComplexity), true
+	case "CustomerReport.findingCounts":
+		if e.ComplexityRoot.CustomerReport.FindingCounts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerReport.FindingCounts(childComplexity), true
 	case "CustomerReport.handover":
 		if e.ComplexityRoot.CustomerReport.Handover == nil {
 			break
@@ -5287,6 +5314,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CustomerReport.Requirements(childComplexity), true
+	case "CustomerReport.scopeProfile":
+		if e.ComplexityRoot.CustomerReport.ScopeProfile == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerReport.ScopeProfile(childComplexity), true
 	case "CustomerReport.scopeStatements":
 		if e.ComplexityRoot.CustomerReport.ScopeStatements == nil {
 			break
@@ -12123,6 +12156,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Report.EvidenceNotice(childComplexity), true
+	case "Report.findingCounts":
+		if e.ComplexityRoot.Report.FindingCounts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Report.FindingCounts(childComplexity), true
 	case "Report.findings":
 		if e.ComplexityRoot.Report.Findings == nil {
 			break
@@ -12219,6 +12258,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Report.Requirements(childComplexity), true
+	case "Report.scopeProfile":
+		if e.ComplexityRoot.Report.ScopeProfile == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Report.ScopeProfile(childComplexity), true
 	case "Report.scopeStatements":
 		if e.ComplexityRoot.Report.ScopeStatements == nil {
 			break
@@ -12373,6 +12418,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportChecklistCoverage.Expected(childComplexity), true
+	case "ReportChecklistCoverage.expectedRooms":
+		if e.ComplexityRoot.ReportChecklistCoverage.ExpectedRooms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportChecklistCoverage.ExpectedRooms(childComplexity), true
 	case "ReportChecklistCoverage.fullyAssessed":
 		if e.ComplexityRoot.ReportChecklistCoverage.FullyAssessed == nil {
 			break
@@ -12883,6 +12934,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportFinding.Title(childComplexity), true
+
+	case "ReportFindingCounts.critical":
+		if e.ComplexityRoot.ReportFindingCounts.Critical == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportFindingCounts.Critical(childComplexity), true
+	case "ReportFindingCounts.high":
+		if e.ComplexityRoot.ReportFindingCounts.High == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportFindingCounts.High(childComplexity), true
+	case "ReportFindingCounts.informational":
+		if e.ComplexityRoot.ReportFindingCounts.Informational == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportFindingCounts.Informational(childComplexity), true
+	case "ReportFindingCounts.low":
+		if e.ComplexityRoot.ReportFindingCounts.Low == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportFindingCounts.Low(childComplexity), true
+	case "ReportFindingCounts.medium":
+		if e.ComplexityRoot.ReportFindingCounts.Medium == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportFindingCounts.Medium(childComplexity), true
+	case "ReportFindingCounts.total":
+		if e.ComplexityRoot.ReportFindingCounts.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportFindingCounts.Total(childComplexity), true
 
 	case "ReportHandover.entries":
 		if e.ComplexityRoot.ReportHandover.Entries == nil {
@@ -15692,8 +15780,9 @@ type ReportRequirement { key: String! section: String! label: String! instructio
 type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! sourceAvailability: String evidenceKind: String frameId: ID timestampMs: Int ptsMicros: String preparationId: ID planId: ID sourceMediaId: ID component: String label: String reference: String flags: [String!]! url: String }
 type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
+type ReportFindingCounts { total: Int! critical: Int! high: Int! medium: Int! low: Int! informational: Int! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! classificationLabel: String! limited: Boolean! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! evidenceNotice: String! scopeStatements: [String!]! reasonLabels: [String!]! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: ReportChecklist processing: ReportProcessing handover: ReportHandover comparison: ReportComparison evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! publication: ReportPublication }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! classificationLabel: String! limited: Boolean! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! evidenceNotice: String! scopeProfile: String! scopeStatements: [String!]! reasonLabels: [String!]! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: ReportChecklist processing: ReportProcessing handover: ReportHandover comparison: ReportComparison evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! findingCounts: ReportFindingCounts! timeline: [ReportTimelineEntry!]! pdfStatus: String! publication: ReportPublication }
 type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! scopeLabel: String! reviewLabel: String! publication: ReportPublication }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
@@ -15704,10 +15793,10 @@ type CustomerPortfolioItem { assetId: ID! assetName: String! assetExternalKey: S
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
-type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! classificationLabel: String! limited: Boolean! advisory: String! status: String! historical: Boolean! evidenceNotice: String! scopeStatements: [String!]! reasonLabels: [String!]! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: CustomerChecklist processing: ReportProcessing handover: CustomerHandover comparison: CustomerComparison }
+type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! classificationLabel: String! limited: Boolean! advisory: String! status: String! historical: Boolean! evidenceNotice: String! scopeProfile: String! scopeStatements: [String!]! reasonLabels: [String!]! findingCounts: ReportFindingCounts! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory checklist: CustomerChecklist processing: ReportProcessing handover: CustomerHandover comparison: CustomerComparison }
 type ReportVerification { reportNumber: String version: Int digest: String status: String issuedAt: String }
 type ReportChecklist { coverage: ReportChecklistCoverage! rooms: [ReportChecklistRoom!]! }
-type ReportChecklistCoverage { expected: Int! fullyAssessed: Int! partiallyAssessed: Int! notObserved: Int! notApplicable: Int! impossible: Int! unknownScope: Boolean! }
+type ReportChecklistCoverage { expected: Int! expectedRooms: Int fullyAssessed: Int! partiallyAssessed: Int! notObserved: Int! notApplicable: Int! impossible: Int! unknownScope: Boolean! }
 type ReportChecklistRoom { key: String! typeCode: String! name: String! components: [ReportChecklistComponent!]! }
 type ReportChecklistComponent { key: String! typeCode: String label: String! status: String! description: String condition: String reviewStatus: String reviewLabel: String assessedScope: String notAssessed: [String!]! evidenceIds: [ID!]! limitations: [String!]! conflict: Boolean! outsideScope: Boolean! attributeSources: [String!]! }
 type ReportProcessing { status: String! message: String }
@@ -15715,7 +15804,7 @@ type ReportHandover { entries: [ReportHandoverEntry!]! }
 type ReportHandoverEntry { key: String! kind: String! status: String! payload: JSON evidenceIds: [ID!]! declarant: String }
 type CustomerChecklist { coverage: ReportChecklistCoverage! rooms: [CustomerChecklistRoom!]! }
 type CustomerChecklistRoom { name: String! components: [CustomerChecklistComponent!]! }
-type CustomerChecklistComponent { label: String! status: String! description: String condition: String reviewLabel: String evidenceIds: [ID!]! limitations: [String!]! }
+type CustomerChecklistComponent { label: String! displayGroup: String! status: String! description: String condition: String reviewLabel: String evidenceIds: [ID!]! limitations: [String!]! }
 type CustomerHandover { entries: [CustomerHandoverEntry!]! }
 type CustomerHandoverEntry { label: String! kind: String! status: String! type: String value: String unit: String date: String declarant: String evidenceIds: [ID!]! }
 enum ComparisonOutcome { UNCHANGED CHANGED IMPROVED MISSING NOT_OBSERVED NO_BASIS }
@@ -16897,6 +16986,8 @@ func (ec *executionContext) childFields_CustomerChecklistComponent(ctx context.C
 	switch field.Name {
 	case "label":
 		return ec.fieldContext_CustomerChecklistComponent_label(ctx, field)
+	case "displayGroup":
+		return ec.fieldContext_CustomerChecklistComponent_displayGroup(ctx, field)
 	case "status":
 		return ec.fieldContext_CustomerChecklistComponent_status(ctx, field)
 	case "description":
@@ -17223,10 +17314,14 @@ func (ec *executionContext) childFields_CustomerReport(ctx context.Context, fiel
 		return ec.fieldContext_CustomerReport_historical(ctx, field)
 	case "evidenceNotice":
 		return ec.fieldContext_CustomerReport_evidenceNotice(ctx, field)
+	case "scopeProfile":
+		return ec.fieldContext_CustomerReport_scopeProfile(ctx, field)
 	case "scopeStatements":
 		return ec.fieldContext_CustomerReport_scopeStatements(ctx, field)
 	case "reasonLabels":
 		return ec.fieldContext_CustomerReport_reasonLabels(ctx, field)
+	case "findingCounts":
+		return ec.fieldContext_CustomerReport_findingCounts(ctx, field)
 	case "context":
 		return ec.fieldContext_CustomerReport_context(ctx, field)
 	case "requirements":
@@ -19477,6 +19572,8 @@ func (ec *executionContext) childFields_Report(ctx context.Context, field graphq
 		return ec.fieldContext_Report_advisory(ctx, field)
 	case "evidenceNotice":
 		return ec.fieldContext_Report_evidenceNotice(ctx, field)
+	case "scopeProfile":
+		return ec.fieldContext_Report_scopeProfile(ctx, field)
 	case "scopeStatements":
 		return ec.fieldContext_Report_scopeStatements(ctx, field)
 	case "reasonLabels":
@@ -19499,6 +19596,8 @@ func (ec *executionContext) childFields_Report(ctx context.Context, field graphq
 		return ec.fieldContext_Report_evidence(ctx, field)
 	case "findings":
 		return ec.fieldContext_Report_findings(ctx, field)
+	case "findingCounts":
+		return ec.fieldContext_Report_findingCounts(ctx, field)
 	case "timeline":
 		return ec.fieldContext_Report_timeline(ctx, field)
 	case "pdfStatus":
@@ -19573,6 +19672,8 @@ func (ec *executionContext) childFields_ReportChecklistCoverage(ctx context.Cont
 	switch field.Name {
 	case "expected":
 		return ec.fieldContext_ReportChecklistCoverage_expected(ctx, field)
+	case "expectedRooms":
+		return ec.fieldContext_ReportChecklistCoverage_expectedRooms(ctx, field)
 	case "fullyAssessed":
 		return ec.fieldContext_ReportChecklistCoverage_fullyAssessed(ctx, field)
 	case "partiallyAssessed":
@@ -19813,6 +19914,24 @@ func (ec *executionContext) childFields_ReportFinding(ctx context.Context, field
 		return ec.fieldContext_ReportFinding_evidenceIds(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportFinding", field.Name)
+}
+
+func (ec *executionContext) childFields_ReportFindingCounts(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "total":
+		return ec.fieldContext_ReportFindingCounts_total(ctx, field)
+	case "critical":
+		return ec.fieldContext_ReportFindingCounts_critical(ctx, field)
+	case "high":
+		return ec.fieldContext_ReportFindingCounts_high(ctx, field)
+	case "medium":
+		return ec.fieldContext_ReportFindingCounts_medium(ctx, field)
+	case "low":
+		return ec.fieldContext_ReportFindingCounts_low(ctx, field)
+	case "informational":
+		return ec.fieldContext_ReportFindingCounts_informational(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReportFindingCounts", field.Name)
 }
 
 func (ec *executionContext) childFields_ReportHandover(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -30901,6 +31020,29 @@ func (ec *executionContext) fieldContext_CustomerChecklistComponent_label(_ cont
 	return graphql.NewScalarFieldContext("CustomerChecklistComponent", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _CustomerChecklistComponent_displayGroup(ctx context.Context, field graphql.CollectedField, obj *CustomerChecklistComponent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerChecklistComponent_displayGroup(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DisplayGroup, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerChecklistComponent_displayGroup(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerChecklistComponent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CustomerChecklistComponent_status(ctx context.Context, field graphql.CollectedField, obj *CustomerChecklistComponent) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33672,6 +33814,29 @@ func (ec *executionContext) fieldContext_CustomerReport_evidenceNotice(_ context
 	return graphql.NewScalarFieldContext("CustomerReport", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _CustomerReport_scopeProfile(ctx context.Context, field graphql.CollectedField, obj *CustomerReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerReport_scopeProfile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ScopeProfile, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerReport_scopeProfile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerReport", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CustomerReport_scopeStatements(ctx context.Context, field graphql.CollectedField, obj *CustomerReport) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33716,6 +33881,38 @@ func (ec *executionContext) _CustomerReport_reasonLabels(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_CustomerReport_reasonLabels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CustomerReport", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerReport_findingCounts(ctx context.Context, field graphql.CollectedField, obj *CustomerReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerReport_findingCounts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FindingCounts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ReportFindingCounts) graphql.Marshaler {
+			return ec.marshalNReportFindingCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportFindingCounts(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerReport_findingCounts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CustomerReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportFindingCounts(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _CustomerReport_context(ctx context.Context, field graphql.CollectedField, obj *CustomerReport) (ret graphql.Marshaler) {
@@ -61435,6 +61632,29 @@ func (ec *executionContext) fieldContext_Report_evidenceNotice(_ context.Context
 	return graphql.NewScalarFieldContext("Report", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Report_scopeProfile(ctx context.Context, field graphql.CollectedField, obj *Report) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Report_scopeProfile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ScopeProfile, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Report_scopeProfile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Report", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Report_scopeStatements(ctx context.Context, field graphql.CollectedField, obj *Report) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -61776,6 +61996,38 @@ func (ec *executionContext) fieldContext_Report_findings(_ context.Context, fiel
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ReportFinding(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Report_findingCounts(ctx context.Context, field graphql.CollectedField, obj *Report) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Report_findingCounts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FindingCounts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ReportFindingCounts) graphql.Marshaler {
+			return ec.marshalNReportFindingCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportFindingCounts(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Report_findingCounts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Report",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportFindingCounts(ctx, field)
 		},
 	}
 	return fc, nil
@@ -62389,6 +62641,29 @@ func (ec *executionContext) _ReportChecklistCoverage_expected(ctx context.Contex
 	)
 }
 func (ec *executionContext) fieldContext_ReportChecklistCoverage_expected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportChecklistCoverage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportChecklistCoverage_expectedRooms(ctx context.Context, field graphql.CollectedField, obj *ReportChecklistCoverage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportChecklistCoverage_expectedRooms(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpectedRooms, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ReportChecklistCoverage_expectedRooms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportChecklistCoverage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -64425,6 +64700,144 @@ func (ec *executionContext) _ReportFinding_evidenceIds(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_ReportFinding_evidenceIds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportFinding", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportFindingCounts_total(ctx context.Context, field graphql.CollectedField, obj *ReportFindingCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportFindingCounts_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportFindingCounts_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportFindingCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportFindingCounts_critical(ctx context.Context, field graphql.CollectedField, obj *ReportFindingCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportFindingCounts_critical(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Critical, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportFindingCounts_critical(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportFindingCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportFindingCounts_high(ctx context.Context, field graphql.CollectedField, obj *ReportFindingCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportFindingCounts_high(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.High, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportFindingCounts_high(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportFindingCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportFindingCounts_medium(ctx context.Context, field graphql.CollectedField, obj *ReportFindingCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportFindingCounts_medium(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Medium, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportFindingCounts_medium(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportFindingCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportFindingCounts_low(ctx context.Context, field graphql.CollectedField, obj *ReportFindingCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportFindingCounts_low(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Low, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportFindingCounts_low(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportFindingCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReportFindingCounts_informational(ctx context.Context, field graphql.CollectedField, obj *ReportFindingCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportFindingCounts_informational(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Informational, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportFindingCounts_informational(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportFindingCounts", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _ReportHandover_entries(ctx context.Context, field graphql.CollectedField, obj *ReportHandover) (ret graphql.Marshaler) {
@@ -84441,6 +84854,11 @@ func (ec *executionContext) _CustomerChecklistComponent(ctx context.Context, sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "displayGroup":
+			out.Values[i] = ec._CustomerChecklistComponent_displayGroup(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "status":
 			out.Values[i] = ec._CustomerChecklistComponent_status(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -85544,6 +85962,11 @@ func (ec *executionContext) _CustomerReport(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "scopeProfile":
+			out.Values[i] = ec._CustomerReport_scopeProfile(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "scopeStatements":
 			out.Values[i] = ec._CustomerReport_scopeStatements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -85551,6 +85974,11 @@ func (ec *executionContext) _CustomerReport(ctx context.Context, sel ast.Selecti
 			}
 		case "reasonLabels":
 			out.Values[i] = ec._CustomerReport_reasonLabels(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "findingCounts":
+			out.Values[i] = ec._CustomerReport_findingCounts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -95752,6 +96180,11 @@ func (ec *executionContext) _Report(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "scopeProfile":
+			out.Values[i] = ec._Report_scopeProfile(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "scopeStatements":
 			out.Values[i] = ec._Report_scopeStatements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -95837,6 +96270,11 @@ func (ec *executionContext) _Report(ctx context.Context, sel ast.SelectionSet, o
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "findings":
 			out.Values[i] = ec._Report_findings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "findingCounts":
+			out.Values[i] = ec._Report_findingCounts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
@@ -96095,6 +96533,11 @@ func (ec *executionContext) _ReportChecklistCoverage(ctx context.Context, sel as
 		case "expected":
 			out.Values[i] = ec._ReportChecklistCoverage_expected(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expectedRooms":
+			out.Values[i] = ec._ReportChecklistCoverage_expectedRooms(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "fullyAssessed":
@@ -96905,6 +97348,69 @@ func (ec *executionContext) _ReportFinding(ctx context.Context, sel ast.Selectio
 			}
 		case "evidenceIds":
 			out.Values[i] = ec._ReportFinding_evidenceIds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var reportFindingCountsImplementors = []string{"ReportFindingCounts"}
+
+func (ec *executionContext) _ReportFindingCounts(ctx context.Context, sel ast.SelectionSet, obj *ReportFindingCounts) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportFindingCountsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportFindingCounts")
+		case "total":
+			out.Values[i] = ec._ReportFindingCounts_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "critical":
+			out.Values[i] = ec._ReportFindingCounts_critical(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "high":
+			out.Values[i] = ec._ReportFindingCounts_high(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "medium":
+			out.Values[i] = ec._ReportFindingCounts_medium(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "low":
+			out.Values[i] = ec._ReportFindingCounts_low(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "informational":
+			out.Values[i] = ec._ReportFindingCounts_informational(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -104792,6 +105298,16 @@ func (ec *executionContext) marshalNReportFinding2ᚖinspectionᚋservicesᚋins
 		return graphql.Null
 	}
 	return ec._ReportFinding(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNReportFindingCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportFindingCounts(ctx context.Context, sel ast.SelectionSet, v *ReportFindingCounts) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReportFindingCounts(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNReportHandoverEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportHandoverEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*ReportHandoverEntry) graphql.Marshaler {

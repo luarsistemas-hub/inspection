@@ -438,6 +438,10 @@
 .report-dialog-body .report-inventory--list .report-inventory-pairs { grid-column: 1 / -1; }
 
 .report-descriptive-checklist, .report-handover, .report-processing, .report-v3-comparison, .report-version-history { margin: 1rem; padding: 1rem; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); }
+.report-executive-summary { margin: 1rem; padding: 1rem; border-inline-start: 3px solid var(--inspection-brand); background: var(--inspection-surface); }
+.report-executive-summary h3 { margin-block: 0 .5rem; }
+.report-executive-summary p { margin-block: .35rem; }
+.report-checklist-group h5 { margin: .75rem 0 .25rem; color: var(--inspection-muted); }
 .report-descriptive-checklist > header, .report-v3-comparison > header, .report-v3-comparison-item > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
 .report-checklist-room, .report-v3-comparison-item { margin-block-start: 1rem; padding-block-start: .75rem; border-block-start: 1px solid var(--inspection-border); }
 .report-checklist-room ul, .report-handover ul, .report-version-history ol { display: grid; gap: .75rem; padding-inline-start: 1.25rem; }

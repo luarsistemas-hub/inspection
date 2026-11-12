@@ -133,7 +133,7 @@ func (r *queryResolver) customerReportWithComparison(ctx context.Context, inspec
 		return nil, err
 	}
 	if publication.Status == publicationcore.Invalidated {
-		return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: "", ClassificationLabel: "", Limited: false, Status: publication.Status, Historical: true, EvidenceNotice: "", ScopeStatements: []string{}, ReasonLabels: []string{}, Context: &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{}, Participant: &graphql1.ReportParticipantContext{}, Template: &graphql1.ReportTemplateContext{}, Inspection: &graphql1.ReportInspectionContext{}}, Requirements: []*graphql1.ReportRequirement{}}, nil
+		return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: "", ClassificationLabel: "", Limited: false, Status: publication.Status, Historical: true, EvidenceNotice: "", ScopeProfile: "Escopo não informado", ScopeStatements: []string{}, ReasonLabels: []string{}, FindingCounts: mapFindingCounts(nil), Context: &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{}, Participant: &graphql1.ReportParticipantContext{}, Template: &graphql1.ReportTemplateContext{}, Inspection: &graphql1.ReportInspectionContext{}}, Requirements: []*graphql1.ReportRequirement{}}, nil
 	}
 	view := mapReport(row)
 	var snapshot reportcore.Snapshot
@@ -157,7 +157,7 @@ func (r *queryResolver) customerReportWithComparison(ctx context.Context, inspec
 	if err != nil {
 		return nil, invalidComparisonFilter()
 	}
-	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, ClassificationLabel: reportcore.ClassificationLabelForSnapshot(screened), Limited: reportcore.ClassificationLimitedForSnapshot(screened), Advisory: view.Advisory, Status: publication.Status, Historical: publication.Status != publicationcore.Published, EvidenceNotice: reportcore.EvidenceNotice(screened), ScopeStatements: append([]string{}, screened.ScopeStatements...), ReasonLabels: customerReasonLabels(screened), Context: view.Context, Requirements: view.Requirements, Inventory: customerInventoryFromSnapshot(row.CanonicalJSON), Checklist: mapCustomerChecklist(descriptive), Processing: func() *graphql1.ReportProcessing {
+	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, ClassificationLabel: reportcore.ClassificationLabelForSnapshot(screened), Limited: reportcore.ClassificationLimitedForSnapshot(screened), Advisory: view.Advisory, Status: publication.Status, Historical: publication.Status != publicationcore.Published, EvidenceNotice: reportcore.EvidenceNotice(screened), ScopeProfile: reportcore.ScopeProfileLabel(screened), ScopeStatements: append([]string{}, screened.ScopeStatements...), ReasonLabels: customerReasonLabels(screened), FindingCounts: mapFindingCounts(screened.Findings), Context: view.Context, Requirements: view.Requirements, Inventory: customerInventoryFromSnapshot(row.CanonicalJSON), Checklist: mapCustomerChecklist(descriptive, screened), Processing: func() *graphql1.ReportProcessing {
 		if snapshot.SchemaVersion >= 3 {
 			return mapCustomerReportProcessing(snapshot.Processing)
 		}

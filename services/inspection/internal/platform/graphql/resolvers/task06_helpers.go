@@ -90,7 +90,7 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	for _, code := range snapshot.ReasonCodes {
 		reasonLabels = append(reasonLabels, reportcore.ReasonLabel(code))
 	}
-	return &graphql1.Report{EvidenceNotice: reportcore.EvidenceNotice(snapshot), ScopeStatements: append([]string{}, snapshot.ScopeStatements...), ReasonLabels: reasonLabels, ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, ClassificationLabel: reportcore.ClassificationLabelForSnapshot(snapshot), Limited: reportcore.ClassificationLimitedForSnapshot(snapshot), JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Inventory: mapCustomerInventory(customerreport.MapInventory(snapshot)), Checklist: mapInternalChecklist(snapshot), Processing: mapReportProcessing(snapshot.Processing), Handover: mapInternalHandover(snapshot), Comparison: mapInternalComparison(snapshot.Comparison), Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+	return &graphql1.Report{EvidenceNotice: reportcore.EvidenceNotice(snapshot), ScopeProfile: reportcore.ScopeProfileLabel(snapshot), ScopeStatements: append([]string{}, snapshot.ScopeStatements...), ReasonLabels: reasonLabels, ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, ClassificationLabel: reportcore.ClassificationLabelForSnapshot(snapshot), Limited: reportcore.ClassificationLimitedForSnapshot(snapshot), JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Inventory: mapCustomerInventory(customerreport.MapInventory(snapshot)), Checklist: mapInternalChecklist(snapshot), Processing: mapReportProcessing(snapshot.Processing), Handover: mapInternalHandover(snapshot), Comparison: mapInternalComparison(snapshot.Comparison), Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, FindingCounts: mapFindingCounts(snapshot.Findings), Timeline: timeline, PDFStatus: "PENDING"}
 }
 
 func mapInternalChecklist(snapshot reportcore.Snapshot) *graphql1.ReportChecklist {
@@ -98,7 +98,12 @@ func mapInternalChecklist(snapshot reportcore.Snapshot) *graphql1.ReportChecklis
 	if value == nil {
 		return nil
 	}
-	out := &graphql1.ReportChecklist{Coverage: &graphql1.ReportChecklistCoverage{Expected: value.Coverage.Expected, FullyAssessed: value.Coverage.FullyAssessed, PartiallyAssessed: value.Coverage.PartiallyAssessed, NotObserved: value.Coverage.NotObserved, NotApplicable: value.Coverage.NotApplicable, Impossible: value.Coverage.Impossible, UnknownScope: value.Coverage.UnknownScope}, Rooms: []*graphql1.ReportChecklistRoom{}}
+	expectedRooms, hasExpectedRooms := reportcore.ExpectedRoomCount(snapshot)
+	var expectedRoomsValue *int
+	if hasExpectedRooms {
+		expectedRoomsValue = &expectedRooms
+	}
+	out := &graphql1.ReportChecklist{Coverage: &graphql1.ReportChecklistCoverage{Expected: value.Coverage.Expected, ExpectedRooms: expectedRoomsValue, FullyAssessed: value.Coverage.FullyAssessed, PartiallyAssessed: value.Coverage.PartiallyAssessed, NotObserved: value.Coverage.NotObserved, NotApplicable: value.Coverage.NotApplicable, Impossible: value.Coverage.Impossible, UnknownScope: value.Coverage.UnknownScope}, Rooms: []*graphql1.ReportChecklistRoom{}}
 	for _, room := range value.Rooms {
 		r := &graphql1.ReportChecklistRoom{Key: room.Key, TypeCode: room.TypeCode, Name: room.Name, Components: []*graphql1.ReportChecklistComponent{}}
 		for _, component := range room.Components {
@@ -122,6 +127,25 @@ func mapReportProcessing(value *reportcore.ProcessingState) *graphql1.ReportProc
 		return nil
 	}
 	return &graphql1.ReportProcessing{Status: value.Status, Message: optional(value.Message)}
+}
+
+func mapFindingCounts(findings []reportcore.Finding) *graphql1.ReportFindingCounts {
+	counts := &graphql1.ReportFindingCounts{Total: len(findings)}
+	for _, finding := range findings {
+		switch finding.Severity {
+		case "CRITICAL":
+			counts.Critical++
+		case "HIGH":
+			counts.High++
+		case "MEDIUM":
+			counts.Medium++
+		case "LOW":
+			counts.Low++
+		default:
+			counts.Informational++
+		}
+	}
+	return counts
 }
 
 func mapCustomerReportProcessing(value *reportcore.ProcessingState) *graphql1.ReportProcessing {
@@ -150,15 +174,20 @@ func mapInternalHandover(snapshot reportcore.Snapshot) *graphql1.ReportHandover 
 	return out
 }
 
-func mapCustomerChecklist(value *customerreport.ChecklistView) *graphql1.CustomerChecklist {
+func mapCustomerChecklist(value *customerreport.ChecklistView, snapshot reportcore.Snapshot) *graphql1.CustomerChecklist {
 	if value == nil {
 		return nil
 	}
-	out := &graphql1.CustomerChecklist{Coverage: &graphql1.ReportChecklistCoverage{Expected: value.Coverage.Expected, FullyAssessed: value.Coverage.FullyAssessed, PartiallyAssessed: value.Coverage.PartiallyAssessed, NotObserved: value.Coverage.NotObserved, NotApplicable: value.Coverage.NotApplicable, Impossible: value.Coverage.Impossible, UnknownScope: value.Coverage.UnknownScope}, Rooms: []*graphql1.CustomerChecklistRoom{}}
+	expectedRooms, hasExpectedRooms := reportcore.ExpectedRoomCount(snapshot)
+	var expectedRoomsValue *int
+	if hasExpectedRooms {
+		expectedRoomsValue = &expectedRooms
+	}
+	out := &graphql1.CustomerChecklist{Coverage: &graphql1.ReportChecklistCoverage{Expected: value.Coverage.Expected, ExpectedRooms: expectedRoomsValue, FullyAssessed: value.Coverage.FullyAssessed, PartiallyAssessed: value.Coverage.PartiallyAssessed, NotObserved: value.Coverage.NotObserved, NotApplicable: value.Coverage.NotApplicable, Impossible: value.Coverage.Impossible, UnknownScope: value.Coverage.UnknownScope}, Rooms: []*graphql1.CustomerChecklistRoom{}}
 	for _, room := range value.Rooms {
 		r := &graphql1.CustomerChecklistRoom{Name: room.Name, Components: []*graphql1.CustomerChecklistComponent{}}
 		for _, component := range room.Components {
-			r.Components = append(r.Components, &graphql1.CustomerChecklistComponent{Label: component.Label, Status: component.Status, Description: optional(component.Description), Condition: optional(component.Condition), ReviewLabel: optional(component.ReviewLabel), EvidenceIds: component.EvidenceIDs, Limitations: component.Limitations})
+			r.Components = append(r.Components, &graphql1.CustomerChecklistComponent{Label: component.Label, DisplayGroup: component.DisplayGroup, Status: component.Status, Description: optional(component.Description), Condition: optional(component.Condition), ReviewLabel: optional(component.ReviewLabel), EvidenceIds: component.EvidenceIDs, Limitations: component.Limitations})
 		}
 		out.Rooms = append(out.Rooms, r)
 	}

@@ -141,9 +141,9 @@ test("E2E-004 keeps the sound descriptive catalog, evidence number, limitation a
   await expect(reportDialog.locator(".report-checklist-evidence figcaption")).toHaveText("E001");
   await expect(reportDialog.locator(".report-descriptive-checklist").getByText("Não revisado", { exact: true })).toBeVisible();
   await expect(reportDialog.getByText("Limitação: A parte superior não foi observada.")).toBeVisible();
-  await expect(reportDialog.getByText("Avaliação completa: 1 de 1", { exact: false })).toBeVisible();
+  await expect(reportDialog.getByRole("region", { name: "Identificação e síntese do laudo" }).getByText(/avaliação completa: 1 de 1/)).toBeVisible();
+  await expect(reportDialog.getByText(/Perfil de bens: Não informado/)).toBeVisible();
   await expect(reportDialog.getByText("Chaves · Pendente", { exact: true })).toBeVisible();
-  await expect(reportDialog.getByText("Pendente")).toBeVisible();
 });
 
 test("E2E-005 customer report paginates checklist media and never requests withheld evidence", async ({ page }) => {
@@ -156,10 +156,14 @@ test("E2E-005 customer report paginates checklist media and never requests withh
   await page.getByRole("button", { name: "Abrir resultado publicado" }).click();
   const report = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Apartamento QA" }) });
   await expect(report.getByText("Referência · versão 4 · Entrada no imóvel")).toBeVisible();
+  await expect(report.getByText("Perfil de bens: Não informado", { exact: true })).toBeVisible();
   await expect(report.getByText("Sem base para comparar", { exact: true })).toBeVisible();
-  await expect(report.getByText("Evidência da referência indisponível · Evidência atual indisponível", { exact: true })).toBeVisible();
-  await expect(report.getByText("Referência E001 ↔ vistoria atual E002")).toBeVisible();
+  const unavailablePair = report.getByRole("heading", { name: "Cama" }).locator("xpath=ancestor::article");
+  await expect(unavailablePair.getByText("Evidência da referência indisponível.", { exact: true })).toHaveCount(1);
+  await expect(unavailablePair.getByText("Evidência atual indisponível.", { exact: true })).toHaveCount(2);
+  await expect(report.getByText("E001 ↔ E002", { exact: true })).toBeVisible();
   await expect(report.locator(".report-descriptive-checklist")).toContainText("Armários");
+  await expect(report.locator(".report-descriptive-checklist")).not.toContainText("Ambientes previstos");
   await expect(report.locator(".report-checklist-evidence figcaption")).toHaveText(["E001", "E026", "E027"]);
   await report.locator(".report-checklist-evidence").scrollIntoViewIfNeeded();
   await expect(report.locator(".report-checklist-evidence img")).toHaveCount(2);
@@ -280,7 +284,7 @@ test("E2E-008 customer comparison filters retain counts and the total denominato
   await expect(report.getByText("Armários íntegros nas vistas disponíveis.")).toBeVisible();
   await expect(report.getByText("Limitação: A parte superior não foi observada.")).toBeVisible();
   await expect(report.getByText(comparisonGolden.disclaimer, { exact: true })).toBeVisible();
-  await expect(report.getByText(comparisonGolden.pair, { exact: true })).toBeVisible();
+  await expect(report.getByText("E001 ↔ E002", { exact: true })).toBeVisible();
   await report.getByRole("button", { name: "Alterado (1)", exact: true }).click();
   await expect(report.locator(".report-v3-comparison-item")).toHaveCount(1);
   await expect(report.getByText(`1 de ${comparisonGolden.counts} itens`)).toBeVisible();

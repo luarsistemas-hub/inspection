@@ -751,13 +751,14 @@ type CustomerChecklist struct {
 }
 
 type CustomerChecklistComponent struct {
-	Label       string   `json:"label"`
-	Status      string   `json:"status"`
-	Description *string  `json:"description,omitempty"`
-	Condition   *string  `json:"condition,omitempty"`
-	ReviewLabel *string  `json:"reviewLabel,omitempty"`
-	EvidenceIds []string `json:"evidenceIds"`
-	Limitations []string `json:"limitations"`
+	Label        string   `json:"label"`
+	DisplayGroup string   `json:"displayGroup"`
+	Status       string   `json:"status"`
+	Description  *string  `json:"description,omitempty"`
+	Condition    *string  `json:"condition,omitempty"`
+	ReviewLabel  *string  `json:"reviewLabel,omitempty"`
+	EvidenceIds  []string `json:"evidenceIds"`
+	Limitations  []string `json:"limitations"`
 }
 
 type CustomerChecklistRoom struct {
@@ -921,8 +922,10 @@ type CustomerReport struct {
 	Status              string               `json:"status"`
 	Historical          bool                 `json:"historical"`
 	EvidenceNotice      string               `json:"evidenceNotice"`
+	ScopeProfile        string               `json:"scopeProfile"`
 	ScopeStatements     []string             `json:"scopeStatements"`
 	ReasonLabels        []string             `json:"reasonLabels"`
+	FindingCounts       *ReportFindingCounts `json:"findingCounts"`
 	Context             *ReportContext       `json:"context"`
 	Requirements        []*ReportRequirement `json:"requirements"`
 	Inventory           *CustomerInventory   `json:"inventory,omitempty"`
@@ -2400,6 +2403,7 @@ type Report struct {
 	CreatedAt           string                    `json:"createdAt"`
 	Advisory            string                    `json:"advisory"`
 	EvidenceNotice      string                    `json:"evidenceNotice"`
+	ScopeProfile        string                    `json:"scopeProfile"`
 	ScopeStatements     []string                  `json:"scopeStatements"`
 	ReasonLabels        []string                  `json:"reasonLabels"`
 	Context             *ReportContext            `json:"context"`
@@ -2411,6 +2415,7 @@ type Report struct {
 	Comparison          *ReportComparison         `json:"comparison,omitempty"`
 	Evidence            *ReportEvidenceConnection `json:"evidence"`
 	Findings            []*ReportFinding          `json:"findings"`
+	FindingCounts       *ReportFindingCounts      `json:"findingCounts"`
 	Timeline            []*ReportTimelineEntry    `json:"timeline"`
 	PDFStatus           string                    `json:"pdfStatus"`
 	Publication         *ReportPublication        `json:"publication,omitempty"`
@@ -2448,6 +2453,7 @@ type ReportChecklistComponent struct {
 
 type ReportChecklistCoverage struct {
 	Expected          int  `json:"expected"`
+	ExpectedRooms     *int `json:"expectedRooms,omitempty"`
 	FullyAssessed     int  `json:"fullyAssessed"`
 	PartiallyAssessed int  `json:"partiallyAssessed"`
 	NotObserved       int  `json:"notObserved"`
@@ -2567,6 +2573,15 @@ type ReportFinding struct {
 	Quality           string   `json:"quality"`
 	RecommendedAction string   `json:"recommendedAction"`
 	EvidenceIds       []string `json:"evidenceIds"`
+}
+
+type ReportFindingCounts struct {
+	Total         int `json:"total"`
+	Critical      int `json:"critical"`
+	High          int `json:"high"`
+	Medium        int `json:"medium"`
+	Low           int `json:"low"`
+	Informational int `json:"informational"`
 }
 
 type ReportHandover struct {

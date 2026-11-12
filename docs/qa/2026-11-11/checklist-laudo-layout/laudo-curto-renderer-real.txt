@@ -1,0 +1,38 @@
+PÁGINA 1
+LAUDO INTERNO DE VISTORIA
+Apartamento 12 · Rua São João, 12 — São Paulo
+Classificação: Sem alertas identificados
+Classificação: Sem alertas identificados · Histórico
+Imóvel: Apartamento 12 · Rua São João, 12 — São Paulo
+Responsável: João da Silva · Modelo: Vistoria periódica v1
+Laudo com manutenção preventiva recomendada.
+Verifique a autenticidade deste laudo
+Estado da análise: Concluída
+Checklist descritivo
+Cobertura: 1 componentes esperados; 1 avaliados; 0 parcialmente avaliados; 0 não observados; 0 não aplicáveis; 0 impossíveis
+de capturar.
+Cozinha
+Piso · Observado · Componente observado · Bom · Não revisado
+Evidência: E001
+Chaves, controles e medidores
+Medidor · Declarado · Energia · 123.4 · kWh · Data: 2026-11-04 · Declarante: Participante · Evidência: E002
+Motivos
+• Alteração observada
+Evidências
+Cobertura · Telhado e calhas
+Registrar estado atual.
+Análise atual · Concluída
+E001 · Vistoria atual · Foto ilustrativa
+Laudo RPT-T04 · versão 1
+1 / 2
+
+PÁGINA 2
+LAUDO INTERNO DE VISTORIA
+Apartamento 12 · Rua São João, 12 — São Paulo
+Classificação: Sem alertas identificados
+Evidências adicionais
+E002 · Vistoria atual · Foto do medidor
+Constatações
+Nenhuma constatação registrada; isso não confirma ausência de problemas.
+Laudo RPT-T04 · versão 1
+2 / 2

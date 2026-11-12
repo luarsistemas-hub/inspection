@@ -5,6 +5,7 @@ query AdminGate { me { tenantId roles productEntitlements } tenant { id name sta
 query AdminAnalysisPrompt { analysisPrompt(type: REAL_ESTATE) { analysisType systemPrompt modelAlias minimumConfidenceBps canonicalDigest revision updatedAt } }
 
 mutation BootstrapTenant($input: CreateTenantInput!) { createTenant(input: $input) { tenant { id name status } userErrors { code field message correlationId } clientMutationId } }
+mutation UpdateTenant($input: UpdateTenantInput!) { updateTenant(input: $input) { tenant { id name language defaultTimezone status version } userErrors { code field message correlationId } clientMutationId } }
 
 query AdminOrganization($first: Int!, $after: String) { businessUnits(first: $first, after: $after) { nodes { id code name status version } pageInfo { endCursor hasNextPage } } }
 

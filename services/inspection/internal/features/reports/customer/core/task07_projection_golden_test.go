@@ -36,7 +36,7 @@ func TestTask07CustomerChecklistProjectionMatchesSharedGolden(t *testing.T) {
 		Checklist: &reportcore.ChecklistSection{
 			Coverage: reportcore.ChecklistCoverage{Expected: 1, FullyAssessed: 1},
 			Rooms: []reportcore.ChecklistRoom{{Key: "kitchen", Name: "Cozinha", Components: []reportcore.ChecklistComponent{{
-				Label: "Armários", Status: "OBSERVED", Description: "Armários íntegros nas vistas disponíveis.", Condition: "GOOD", ReviewStatus: "NOT_REVIEWED",
+				TypeCode: "CABINET", Label: "Armários", Status: "OBSERVED", Description: "Armários íntegros nas vistas disponíveis.", Condition: "GOOD", ReviewStatus: "NOT_REVIEWED",
 				EvidenceIDs: []string{"current-photo"}, Limitations: []string{"A parte superior não foi observada."},
 			}}}},
 		},

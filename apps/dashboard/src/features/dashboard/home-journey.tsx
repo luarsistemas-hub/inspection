@@ -14,7 +14,7 @@ import { presentDashboardStatus, presentInspectionSource } from "./presentation"
 
 type Inspection = InspectionsQuery["inspections"]["nodes"][number];
 
-export function HomeJourney({ refreshKey }: { refreshKey: number }) {
+export function HomeJourney({ refreshKey, canMutate }: { refreshKey: number; canMutate: boolean }) {
   const [overview, setOverview] = useState<OperationalOverviewQuery>();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [message, setMessage] = useState("Carregando as vistorias…");
@@ -55,6 +55,11 @@ export function HomeJourney({ refreshKey }: { refreshKey: number }) {
   const focusedInspection = inspections.find((inspection) => inspection.id === focusedInspectionId) ?? needsAttention[0] ?? upcoming[0];
 
   return <div className="feature home-journey">
+    <section className="home-welcome" aria-labelledby="home-welcome-title">
+      <div><span className="home-welcome-kicker">Painel de vistorias</span><h2 id="home-welcome-title">Sua operação, em um só lugar</h2><p>Organize a agenda, acompanhe pendências e mantenha os laudos prontos para consulta.</p></div>
+      {canMutate && <Link href="/inspections?create=1" className="home-welcome-action">Começar uma vistoria <span aria-hidden="true">→</span></Link>}
+    </section>
+
     {summary && <section className="home-summary" aria-label="Resumo das vistorias">
       <Link className="home-stat home-stat--attention" href="/triage">
         <span>Vistorias com atenção</span><strong>{summary.attention}</strong>
@@ -72,7 +77,8 @@ export function HomeJourney({ refreshKey }: { refreshKey: number }) {
       <ul className="home-inspection-list">
         {needsAttention.slice(0, 2).map((inspection) => <InspectionRow inspection={inspection} key={inspection.id} attention selected={focusedInspection?.id === inspection.id} onFocus={setFocusedInspectionId} />)}
       </ul>
-      {!needsAttention.length && <p className="home-empty">Nenhuma vistoria precisa de atenção agora.</p>}
+      {!needsAttention.length && (summary?.attention ?? 0) > 0 && <div className="home-empty home-empty--attention"><p>{summary?.attention === 1 ? "Há 1 vistoria na fila de atenção que não aparece nesta lista resumida." : `Há ${summary?.attention} vistorias na fila de atenção que não aparecem nesta lista resumida.`}</p><Link href="/triage">Consultar triagem →</Link></div>}
+      {!needsAttention.length && !(summary?.attention ?? 0) && <p className="home-empty">Nenhuma vistoria precisa de atenção agora.</p>}
       {needsAttention.length > 2 && <Link className="home-more" href="/inspections">Ver as outras {needsAttention.length - 2} pendências →</Link>}
     </section>
 
@@ -83,6 +89,8 @@ export function HomeJourney({ refreshKey }: { refreshKey: number }) {
       </ul>
       {!upcoming.length && <p className="home-empty">Não há vistorias a realizar neste contexto.</p>}
     </section></div>{focusedInspection && <aside className="home-focus-detail" aria-label="Vistoria selecionada"><span className="home-focus-eyebrow">Vistoria selecionada</span><h2>{focusedInspection.assetName?.trim() || "Imóvel indisponível"}</h2><p>{focusedInspection.assetAddress || "Endereço indisponível"}</p><dl><div><dt>Situação</dt><dd>{presentDashboardStatus(focusedInspection.status)}</dd></div><div><dt>Responsável</dt><dd>{focusedInspection.participantName?.trim() || "Indisponível"}</dd></div><div><dt>Vencimento</dt><dd>{formatScheduleDateTime(focusedInspection.dueAt)}</dd></div></dl><Link href={`/inspections?inspectionId=${encodeURIComponent(focusedInspection.id)}`}>Abrir vistoria <span aria-hidden="true">→</span></Link></aside>}</div>
+
+    {canMutate && <section className="home-setup" aria-labelledby="home-setup-title"><div className="home-setup-heading"><div><span>Próximos passos</span><h2 id="home-setup-title">Prepare sua operação</h2><p>Atalhos para organizar o fluxo da sua equipe.</p></div><span className="home-setup-count">4 etapas</span></div><ol>{[["Registrar um imóvel", "Cadastre o imóvel que será vistoriado.", "/portfolio"], ["Criar ou revisar uma vistoria", "Defina imóvel, responsável e escopo.", "/inspections?create=1"], ["Acompanhar a agenda", "Confira horários e prazos da equipe.", "/schedules"], ["Consultar os laudos", "Acesse os documentos publicados.", "/reports"]].map(([title, description, href], index) => <li key={title}><span className="home-setup-index">{index + 1}</span><div><strong>{title}</strong><p>{description}</p></div><Link href={href} aria-label={`${title}: abrir`}>→</Link></li>)}</ol></section>}
 
     <p className="home-load-status" role="status" aria-live="polite">{message}</p>
   </div>;

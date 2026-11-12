@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "b9dc5783ce2231af011f09002c41e1efd7b10b469e33c2d09f10256fd8add4a9",
+  "schemaSha256": "7d145d2e66b9241ac5b7fb7c1dfe07116016c325f6a89e231f4c7341d8c97619",
   "capabilities": [
     {
       "root": "Query.me",
@@ -1752,477 +1752,477 @@
         {
           "name": "ActivateBaselineVersion",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ActivateOriginVersion",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "AddExceptionalStage",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "AddInventoryItem",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "BulkAcceptInventoryEnvironment",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CancelInspection",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CancelSchedule",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CloseOriginInvitation",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CloseProject",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ConfigureNotificationPreferences",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ConfirmAudioNoteText",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ConfirmInspectionScope",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CreateInspection",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CreateProject",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CreateSchedule",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CustomerEvidence",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CustomerPortfolio",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CustomerReport",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "CustomerTimeline",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardAudioNote",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardAudioNotes",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardBaselineAsset",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardBaselineAssets",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardBaselineInventory",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardBaselineVersions",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardCounterpartyOptions",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardCustomerBaselineAssets",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardFormOptions",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardGate",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardInventoryDraft",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardInventoryTrail",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardMemberships",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardOriginVersions",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardReviewers",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DashboardTemplateVersion",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DecideInventoryItems",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DeclareSensitiveDetectionFalsePositive",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DiscardAudioNote",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "DiscardBaselineDraft",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InspectionCoverage",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InspectionDetail",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InspectionOriginPromotion",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InspectionScopeTemplateVersion",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InspectionVideoPreparation",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "Inspections",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InvalidateInspection",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InvalidateOriginVersion",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InvalidateReportPublication",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "InviteOriginCapture",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "MarkAllNotificationsRead",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "MarkNotificationRead",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "MergeInventoryItems",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "MyNotifications",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "NotificationDeliveries",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "OperationalOverview",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "PlanInspection",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ProjectDetail",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ProjectTimeline",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "Projects",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "PromoteInspectionToOrigin",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "PublishReport",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReanalyzeVideoInspection",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RegenerateInventorySuggestions",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReissueReport",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RemoveInventoryEnvironment",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReopenProject",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReportDownload",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReportWorkspace",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "Reports",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RequestOriginCataloging",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RequestRecapture",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RequestVideoReplacement",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ResendCounterpartyInvitation",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ResendInspectionInvitation",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ResolveBaselineContestation",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RetryAudioNote",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RetryInspectionVideoPreparation",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "RetryInventoryDraft",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReviseAudioNote",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "ReviseComparisonPairing",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "Schedules",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "SensitiveMediaOriginal",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "SensitiveMediaReviews",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "SetAudioNoteHighlight",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "SkipProjectStage",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "SplitInventoryItem",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "StartBaselineDraftFromInspection",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "StartProjectStage",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "TriageAssignees",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "TriageCase",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "TriageWorkspace",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "UpdateSchedule",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "UpdateTriageCase",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "UpsertInventoryEnvironment",
           "type": "mutation",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         },
         {
           "name": "VerifyReport",
           "type": "query",
-          "documentSha256": "7832ad9a3733afed839bf48484ee6907c286406ee0db4b1dbb963f68d229cbef"
+          "documentSha256": "09c9bc620bff3d5a988fee21eb49ad4873e2e844b476cb6dd3144fcc828ac075"
         }
       ]
     },

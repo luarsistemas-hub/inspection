@@ -1,4 +1,20 @@
 /* Foco: a mesma hierarquia visual em todas as áreas da Administração. */
+.tenant-profile-card { display: grid; grid-template-columns: minmax(15rem, 1.2fr) minmax(0, 2fr) auto; align-items: center; gap: 1.25rem; margin-block: 1rem 1.35rem; padding: clamp(1rem, 2.2vw, 1.5rem); border: 1px solid var(--inspection-border); border-radius: .8rem; background: var(--inspection-surface-raised); }
+.tenant-profile-brand { display: flex; align-items: center; gap: .9rem; min-inline-size: 0; }
+.tenant-profile-brand > span { display: grid; flex: none; place-items: center; inline-size: 3.5rem; block-size: 3.5rem; border-radius: .7rem; background: var(--inspection-brand-container); color: var(--inspection-on-brand-container); font: 600 1.1rem/1 var(--inspection-font-sans); }
+.tenant-profile-brand small { color: var(--inspection-brand-strong); font-size: .64rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.tenant-profile-brand h2 { margin: .18rem 0; font: 600 1.1rem/1.25 var(--inspection-font-sans); overflow-wrap: anywhere; }
+.tenant-profile-brand p { margin: 0; color: var(--inspection-muted); font-size: .72rem; }
+.tenant-profile-card dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; margin: 0; }
+.tenant-profile-card dl > div { display: grid; align-content: center; gap: .25rem; min-inline-size: 0; min-block-size: 3rem; padding-inline-start: .8rem; border-inline-start: 1px solid var(--inspection-border); }
+.tenant-profile-card dt { color: var(--inspection-muted); font-size: .64rem; }
+.tenant-profile-card dd { margin: 0; font-size: .76rem; font-weight: 650; overflow-wrap: anywhere; }
+.tenant-profile-status { color: var(--inspection-muted); }
+.tenant-profile-status.is-active { color: #287252; }
+.tenant-profile-card > .inspection-button { white-space: nowrap; }
+.tenant-profile-form { max-block-size: min(75vh, 48rem); }
+@media (max-width: 70rem) { .tenant-profile-card { grid-template-columns: minmax(0, 1fr) auto; } .tenant-profile-card dl { grid-column: 1 / -1; grid-row: 2; } .tenant-profile-card > .inspection-button { grid-column: 2; grid-row: 1; } }
+@media (max-width: 42rem) { .tenant-profile-card { grid-template-columns: minmax(0, 1fr); } .tenant-profile-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-column: 1; grid-row: auto; } .tenant-profile-card dl > div { padding-block: .35rem; } .tenant-profile-card > .inspection-button { grid-column: 1; grid-row: auto; justify-self: start; } }
 .admin-shell {
   --focus-navy: #192443;
   --focus-navy-active: #314368;

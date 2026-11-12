@@ -14,6 +14,7 @@
       "components": [
         {
           "label": "Armários",
+          "displayGroup": "Marcenaria e bancadas",
           "status": "Observado",
           "description": "Armários íntegros nas vistas disponíveis.",
           "condition": "Bom",

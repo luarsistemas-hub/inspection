@@ -46,6 +46,7 @@ export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, do
       </div>
       {downloadMessage && <p className="report-detail-status" role="status">{downloadMessage}</p>}
     </header>
+    <section className="report-executive-summary" aria-label="Identificação e síntese do laudo"><h3>Identificação e síntese</h3><p>Finalidade: {report.context.inspection?.stageLabel || "Laudo de vistoria"} · Data declarada: {report.context.inspection?.submittedAt ? formatReportDate(report.context.inspection.submittedAt) : "não informada"} · Emissão: {formatReportDate(report.createdAt)} · Versão {report.version}</p><p>Perfil de bens: {report.scopeProfile || "Não informado"}{report.processing ? ` · Análise: ${presentAnalysisStatus(report.processing.status)}` : ""}</p>{report.checklist && <p>{coverageLabel(report.checklist.coverage, report.checklist.rooms.length)}</p>}<p>{findingCountsSummary(report.findingCounts)} · {report.handover?.entries.filter((entry) => entry.status === "PENDING").length ?? 0} registro(s) de entrega pendente(s)</p></section>
     <div className="report-details">
       <details><summary>Dados do imóvel e da vistoria</summary><p>{report.context.asset.externalKey} · Responsável: {report.context.participant?.name}<br />{report.context.template?.name} · v{report.context.template?.version}{report.context.inspection?.stageLabel && <> · {report.context.inspection.stageLabel}</>}</p>{captureInstructions.map((instruction) => <p key={instruction}>{instruction}</p>)}</details>
     </div>
@@ -63,30 +64,53 @@ export function CustomerReportVisual({ report, evidence, onMediaError }: { repor
   const customerEvidenceNotice = report.evidenceNotice;
   return <article className="report-visual report-visual--customer">
     <CustomerReportHeader classificationLabel={classificationLabel} advisory={report.advisory} context={report.context} version={report.version} historical={report.historical} showVersionState={Boolean(report.checklist || report.comparison)} />
+    <section className="report-executive-summary" aria-label="Identificação e síntese do laudo"><h3>Identificação e síntese</h3><p>Finalidade: {report.context.inspection.stageLabel || "Laudo de vistoria"} · Data declarada: {report.context.inspection.submittedAt ? formatReportDate(report.context.inspection.submittedAt) : "não informada"} · Emissão: {formatReportDate(report.context.inspection.generatedAt)} · Versão {report.version}</p><p>Perfil de bens: {report.scopeProfile || "Não informado"}</p>{report.checklist && <p>{coverageLabel(report.checklist.coverage, report.checklist.rooms.length)}</p>}<p>{findingCountsSummary(report.findingCounts)} · {report.handover?.entries.filter((entry) => entry.status === "PENDING").length ?? 0} registro(s) de entrega pendente(s){report.comparison ? ` · ${report.comparison.counts.total} itens na comparação` : ""}</p></section>
     {customerEvidenceNotice && <p role="note">{customerEvidenceNotice}</p>}
     {((report.scopeStatements?.length ?? 0) > 0 || (report.reasonLabels?.length ?? 0) > 0) && <ReportReasons scope={report.scopeStatements ?? []} reasons={report.reasonLabels ?? []} />}
     {report.checklist ? <CustomerChecklistView checklist={report.checklist} evidence={evidence} snapshotId={report.snapshotId} onMediaError={onMediaError} /> : report.inventory && <InventoryReport inventory={report.inventory} evidence={evidence.map((item) => ({ ...item, availability: item.mediaAvailability }))} snapshotId={report.snapshotId} classification={report.classification} limited={report.limited} />}
     {report.processing && <ProcessingState status={report.processing.status} message={report.processing.message} />}
     {report.handover && <CustomerHandoverView entries={report.handover.entries} />}
-    {report.comparison && <CustomerComparisonView comparison={report.comparison} />}
+    {report.comparison && <CustomerComparisonView comparison={report.comparison} evidence={evidence.map((item) => ({ id: item.id, snapshotId: report.snapshotId, requirementKey: item.requirementKey, role: item.role, description: item.description, capturedAt: item.capturedAt, flags: item.flags, availability: item.mediaAvailability ?? item.state, sourceAvailability: item.sourceAvailability, url: item.url, evidenceKind: item.evidenceKind, frameId: item.frameId, timestampMs: item.timestampMs, ptsMicros: item.ptsMicros, sourceMediaId: item.sourceMediaId, component: item.component, label: item.label, reference: item.reference }))} onMediaError={onMediaError} />}
     {(report.requirements.length > 0 || !report.checklist) && !(report.inventory && !report.checklist && !report.comparison && report.classification === "NORMAL" && !report.limited && report.inventory.problems.length === 0) && <ReportEvidence requirements={report.requirements} evidence={evidence.map((item) => ({ ...item, snapshotId: report.snapshotId, availability: item.mediaAvailability }))} findings={[]} hasReferenceInReport={evidence.some((item) => item.role === "REFERENCE")} onMediaError={onMediaError} />}
   </article>;
 }
 
-function coverageLabel(coverage: { expected: number; fullyAssessed: number; partiallyAssessed: number; notObserved: number; notApplicable: number; impossible: number; unknownScope: boolean }) {
-  if (coverage.unknownScope || coverage.expected === 0) return "Escopo não definido; não há percentual de cobertura.";
-  return `Avaliação completa: ${coverage.fullyAssessed} de ${coverage.expected} · avaliação parcial: ${coverage.partiallyAssessed} · não observados: ${coverage.notObserved} · não aplicáveis: ${coverage.notApplicable} · impossíveis de capturar: ${coverage.impossible}`;
+function coverageLabel(coverage: { expected: number; expectedRooms?: number | null; fullyAssessed: number; partiallyAssessed: number; notObserved: number; notApplicable: number; impossible: number; unknownScope: boolean }, registeredRooms?: number) {
+  const roomSummary = `${coverage.expectedRooms ?? "Ambientes previstos não informados"} · ${registeredRooms ?? 0} ambiente(s) registrado(s)`;
+  if (coverage.unknownScope || coverage.expected === 0) return `${roomSummary}. Escopo não definido; não há percentual de cobertura.`;
+  return `${roomSummary} · avaliação completa: ${coverage.fullyAssessed} de ${coverage.expected} componentes · avaliação parcial: ${coverage.partiallyAssessed} · não observados: ${coverage.notObserved} · não aplicáveis: ${coverage.notApplicable} · impossíveis de capturar: ${coverage.impossible}`;
+}
+function findingCountsSummary(value?: { total: number; critical: number; high: number; medium: number; low: number; informational: number }) {
+  const counts = value ?? { total: 0, critical: 0, high: 0, medium: 0, low: 0, informational: 0 };
+  if (counts.total === 0) return "Nenhuma constatação registrada";
+  const details = [["críticas", counts.critical], ["altas", counts.high], ["moderadas", counts.medium], ["baixas", counts.low], ["informativas", counts.informational]].filter(([, count]) => Number(count) > 0).map(([label, count]) => `${count} ${label}`);
+  return `${counts.total} constatação(ões) (${details.join(" · ")})`;
 }
 function comparisonCountLabel(displayed: number, total: number) { return `${displayed} de ${total} ${total === 1 ? "item" : "itens"}`; }
 
 function componentState(value: string) {
   return ({ OBSERVED: "Observado", PARTIAL: "Parcial", NOT_OBSERVED: "Não observado", NOT_APPLICABLE: "Não aplicável", IMPOSSIBLE: "Impossível de capturar" } as Record<string, string>)[value] ?? "Situação não informada";
 }
+function checklistGroup(typeCode: string | null | undefined) {
+  if (["WALL", "FLOOR", "CEILING", "ROOF"].includes(typeCode ?? "")) return "Superfícies";
+  if (["DOOR", "WINDOW"].includes(typeCode ?? "")) return "Aberturas";
+  if (["CABINET", "WARDROBE", "COUNTERTOP"].includes(typeCode ?? "")) return "Marcenaria e bancadas";
+  if (["SINK", "FAUCET", "TOILET", "SHOWER"].includes(typeCode ?? "")) return "Instalações hidráulicas";
+  if (["APPLIANCE", "APPLIANCE_OTHER", "LIGHTING", "SOCKET_SWITCH"].includes(typeCode ?? "")) return "Instalações e equipamentos";
+  if (["FURNITURE", "SOFA", "TABLE", "CHAIR"].includes(typeCode ?? "")) return "Mobiliário";
+  return "Outros componentes";
+}
+function groupChecklist<T>(items: T[], getGroup: (item: T) => string): Array<{ group: string; items: T[] }> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) { const key = getGroup(item); groups.set(key, [...(groups.get(key) ?? []), item]); }
+  const order = ["Superfícies", "Aberturas", "Marcenaria e bancadas", "Instalações hidráulicas", "Instalações e equipamentos", "Mobiliário", "Outros componentes"];
+  return [...groups].map(([group, items]) => ({ group, items })).sort((a, b) => (order.indexOf(a.group) < 0 ? order.length : order.indexOf(a.group)) - (order.indexOf(b.group) < 0 ? order.length : order.indexOf(b.group)));
+}
 function DescriptiveChecklist({ checklist, evidence, snapshotId, onMediaError }: { checklist: NonNullable<InternalReport["checklist"]>; evidence: ReportEvidenceItem[]; snapshotId: string; onMediaError?: () => void }) {
   const evidenceById = new Map(evidence.map((item) => [item.id, item]));
   return <section className="report-descriptive-checklist" aria-label="Checklist descritivo">
-    <header><h3>Checklist descritivo</h3><p>{coverageLabel(checklist.coverage)}</p></header>
-    {checklist.rooms.map((room) => <section key={room.key} className="report-checklist-room"><h4>{room.name}</h4>{room.components.length === 0 ? <p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p> : <ul>{room.components.map((component, index) => <li key={`${component.key}-${index}`}>
+    <header><h3>Checklist descritivo</h3></header>
+    {checklist.rooms.map((room) => <section key={room.key} className="report-checklist-room"><h4>{room.name}</h4>{room.components.length === 0 ? <p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p> : groupChecklist(room.components, (component) => checklistGroup(component.typeCode)).map(({ group, items }) => <div className="report-checklist-group" key={group}><h5>{group}</h5><ul>{items.map((component, index) => <li key={`${component.key}-${index}`}>
       <strong>{component.label}</strong><span>{componentState(component.status)}</span>
       {component.description && <p>{component.description}</p>}{component.condition && <p>Condição observada: {reportConditionLabel(component.condition)}</p>}
       {component.reviewLabel && <p>{component.reviewLabel}</p>}
@@ -97,15 +121,15 @@ function DescriptiveChecklist({ checklist, evidence, snapshotId, onMediaError }:
       {component.outsideScope && <p>Observado fora do escopo; não compõe a cobertura nem o inventário de referência.</p>}
       {(component.attributeSources ?? []).map((source, sourceIndex) => <p key={sourceIndex}>{source}</p>)}
       {component.evidenceIds.length > 0 && <div className="report-checklist-evidence"><strong>Evidências</strong>{component.evidenceIds.map((id) => { const item = evidenceById.get(id); return <figure key={id}>{item && (item.evidenceKind === "VIDEO_FRAME" ? <VideoEvidencePlayer item={{ ...item, snapshotId }} onMediaError={onMediaError} /> : <EvidenceThumbnail item={item} onMediaError={onMediaError} />)}<figcaption>{item?.reference ?? item?.description ?? "Evidência disponível no laudo"}</figcaption></figure>; })}</div>}
-    </li>)}</ul>}</section>)}
+    </li>)}</ul></div>)}</section>)}
     {!checklist.rooms.some((room) => room.components.length > 0) && <p>Nenhum componente observado.</p>}
   </section>;
 }
 
 export function CustomerChecklistView({ checklist, evidence, snapshotId, onMediaError }: { checklist: NonNullable<NonNullable<CustomerReport["checklist"]>>; evidence: CustomerEvidenceQuery["customerEvidence"]["nodes"]; snapshotId: string; onMediaError?: () => void }) {
   const evidenceByReference = new Map<string, ReportEvidenceItem>(evidence.map((item) => [item.reference, { id: item.id, snapshotId, requirementKey: item.requirementKey, role: item.role, description: item.description, capturedAt: item.capturedAt, flags: item.flags, availability: item.mediaAvailability ?? item.state, sourceAvailability: item.sourceAvailability, url: item.url, evidenceKind: item.evidenceKind, frameId: item.frameId, timestampMs: item.timestampMs, ptsMicros: item.ptsMicros, sourceMediaId: item.sourceMediaId, component: item.component, label: item.label, reference: item.reference }]));
-  return <section className="report-descriptive-checklist" aria-label="Checklist descritivo"><header><h3>Checklist descritivo</h3><p>{coverageLabel(checklist.coverage)}</p></header>
-    {checklist.rooms.map((room, roomIndex) => <section key={room.name + "-" + roomIndex} className="report-checklist-room"><h4>{room.name}</h4>{room.components.length === 0 ? <p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p> : <ul>{room.components.map((component, index) => <li key={component.label + "-" + index}><strong>{component.label}</strong><span>{component.status}</span>{component.description && <p>{component.description}</p>}{component.condition && <p>Condição observada: {component.condition}</p>}{component.reviewLabel && <p>{component.reviewLabel}</p>}{component.limitations.map((limitation, limitationIndex) => <p key={limitationIndex}>Limitação: {limitation}</p>)}{component.evidenceIds.length > 0 && <div className="report-checklist-evidence"><strong>Evidências</strong>{component.evidenceIds.map((reference) => { const item = evidenceByReference.get(reference); return <figure key={reference}>{item && item.availability === "AVAILABLE" && <EvidenceThumbnail item={item} onMediaError={onMediaError} />}<figcaption>{reference}</figcaption></figure>; })}</div>}</li>)}</ul>}</section>)}
+  return <section className="report-descriptive-checklist" aria-label="Checklist descritivo"><header><h3>Checklist descritivo</h3></header>
+    {checklist.rooms.map((room, roomIndex) => <section key={room.name + "-" + roomIndex} className="report-checklist-room"><h4>{room.name}</h4>{room.components.length === 0 ? <p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p> : groupChecklist(room.components, (component) => component.displayGroup).map(({ group, items }) => <div className="report-checklist-group" key={group}><h5>{group}</h5><ul>{items.map((component, index) => <li key={component.label + "-" + index}><strong>{component.label}</strong><span>{component.status}</span>{component.description && <p>{component.description}</p>}{component.condition && <p>Condição observada: {component.condition}</p>}{component.reviewLabel && <p>{component.reviewLabel}</p>}{component.limitations.map((limitation, limitationIndex) => <p key={limitationIndex}>Limitação: {limitation}</p>)}{component.evidenceIds.length > 0 && <div className="report-checklist-evidence"><strong>Evidências</strong>{component.evidenceIds.map((reference) => { const item = evidenceByReference.get(reference); return <figure key={reference}>{item && item.availability === "AVAILABLE" && <EvidenceThumbnail item={item} onMediaError={onMediaError} />}<figcaption>{reference}</figcaption></figure>; })}</div>}</li>)}</ul></div>)}</section>)}
     {checklist.rooms.length === 0 && <p>Nenhuma evidência registrada; isso não significa ausência de problemas.</p>}
   </section>;
 }
@@ -152,15 +176,28 @@ function PairingRevision({ item, evidence, disabled, onSubmit }: { item: NonNull
   if (!baselineChoices.length || !currentChoices.length) return <p>Não há evidências dos dois lados para revisar o pareamento.</p>;
   return <details className="report-pairing-revision"><summary>Revisar pareamento</summary><label>Imagem da referência<select disabled={disabled} value={baseline} onChange={(event) => setBaseline(event.target.value)}>{baselineChoices.map((entry) => <option key={entry.id} value={entry.id}>{entry.reference ?? entry.description ?? "Evidência"}</option>)}</select></label><label>Imagem da vistoria atual<select disabled={disabled} value={current} onChange={(event) => setCurrent(event.target.value)}>{currentChoices.map((entry) => <option key={entry.id} value={entry.id}>{entry.reference ?? entry.description ?? "Evidência"}</option>)}</select></label><button type="button" disabled={disabled || busy || !baseline || !current} onClick={() => { setBusy(true); setMessage(""); void onSubmit(baseline, current).catch(() => setMessage("Não foi possível revisar o pareamento. Confira o acesso e tente novamente.")).finally(() => setBusy(false)); }}>Salvar revisão</button>{message && <p role="status">{message}</p>}</details>;
 }
-function CustomerComparisonView({ comparison }: { comparison: NonNullable<CustomerReport["comparison"]> }) {
+function CustomerComparisonView({ comparison, evidence, onMediaError }: { comparison: NonNullable<CustomerReport["comparison"]>; evidence: ReportEvidenceItem[]; onMediaError?: () => void }) {
   const [filter, setFilter] = useState("");
   const filtered = comparison.items.filter((item) => !filter || item.outcome === filter);
+  const evidenceByReference = new Map(evidence.map((item) => [item.reference, item]));
   return <section className="report-v3-comparison report-v3-comparison--customer" aria-label="Comparação com o inventário de referência"><header><div><p>Referência · versão {comparison.baselineVersionNumber} · {comparison.purposeLabel}</p><h3>Comparação do inventário</h3><p>{comparison.statusLabel} · {formatReportDate(comparison.activatedAt)}</p></div><strong>{comparisonCountLabel(filtered.length, comparison.counts.total)}</strong></header>
     <ComparisonFilters counts={comparison.counts} selected={filter} onSelect={setFilter} />
     {comparison.status !== "COMPLETED" && <p>{comparison.statusLabel}. Os itens sem conclusão permanecem identificados.</p>}
     {filtered.map((item, index) => <article className="report-v3-comparison-item" key={`${item.room}-${item.name}-${index}`}><header><div><p>{item.room}</p><h4>{item.name}</h4></div><strong>{item.outcomeLabel}</strong></header>
       {item.baselineCondition && <p>Condição da referência: {item.baselineCondition}</p>}{item.currentCondition && <p>Condição atual: {item.currentCondition}</p>}{item.outcome === "NO_BASIS" && <p>Não há uma vista avaliável do item na referência aprovada; por isso, não é possível comparar as condições.</p>}{item.outcome === "NOT_OBSERVED" && <p>Não houve evidência suficiente da vistoria atual para concluir a comparação.</p>}{item.limitations.map((limitation, limitIndex) => <p key={limitIndex}>Limitação: {limitation}</p>)}
-      {item.pairs.map((pair, pairIndex) => <p className="report-customer-pair" key={pairIndex}><strong>Referência {pair.baselineEvidence} ↔ vistoria atual {pair.currentEvidence}</strong><span>{pair.baselineAvailability === "UNAVAILABLE" ? "Evidência da referência indisponível" : "Evidência da referência disponível"} · {pair.currentAvailability === "UNAVAILABLE" ? "Evidência atual indisponível" : "Evidência atual disponível"}</span></p>)}
+      {item.pairs.map((pair, pairIndex) => {
+        const baseline = evidenceByReference.get(pair.baselineEvidence);
+        const current = evidenceByReference.get(pair.currentEvidence);
+        return <div className="report-customer-pair" key={pairIndex}>
+          <p><strong>{pair.baselineEvidence} ↔ {pair.currentEvidence}</strong></p>
+          <div className="report-inventory-pair">
+            <EvidenceTile title={`Referência · ${pair.baselineEvidence}`} item={baseline} onMediaError={onMediaError} />
+            <EvidenceTile title={`Vistoria atual · ${pair.currentEvidence}`} item={current} onMediaError={onMediaError} />
+          </div>
+          {(!baseline || baseline.availability !== "AVAILABLE") && <p>Evidência da referência indisponível.</p>}
+          {(!current || current.availability !== "AVAILABLE") && <p>Evidência atual indisponível.</p>}
+        </div>;
+      })}
     </article>)}
     {comparison.outsideBaseline.length > 0 && <details><summary>Observações fora do inventário de referência ({comparison.outsideBaseline.length})</summary><ul>{comparison.outsideBaseline.map((item, index) => <li key={index}>{item.room} · {item.name}</li>)}</ul></details>}
     <p>{comparison.disclaimer}</p>

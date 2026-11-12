@@ -1,0 +1,75 @@
+PÁGINA 1
+LAUDO INTERNO DE VISTORIA
+Apartamento 12 · Rua São João, 12 — São Paulo
+Classificação: Resultado com limitações
+Classificação: Resultado com limitações · Histórico
+Imóvel: Apartamento 12 · Rua São João, 12 — São Paulo
+Responsável: João da Silva · Modelo: Vistoria periódica v1
+Laudo com manutenção preventiva recomendada.
+Verifique a autenticidade deste laudo
+Estado da análise: Concluída
+Checklist descritivo
+Cobertura: 1 componentes esperados; 1 avaliados; 0 parcialmente avaliados; 0 não observados; 0 não aplicáveis; 0 impossíveis
+de capturar.
+Cozinha
+Piso · Observado · Componente observado · Bom · Não revisado
+Chaves, controles e medidores
+Medidor · Declarado · Energia · 123.4 · kWh · Data: 2026-11-04 · Declarante: Participante
+Motivos
+• Alteração observada
+Comparação com a referência
+Referência aprovada: versão 4 · Entrada no imóvel · aprovada em 01/10/2026
+Estado: Comparação concluída
+6 itens da referência · 1 sem alteração · 1 alterados · 1 melhoraram · 1 com ausência comprovada · 1 não observados · 1 sem
+base para comparar
+Alterado · 1 de 6 itens
+Sala · Sofá · Alterado · Condição na referência: Bom · Condição atual: Regular
+Rasgo novo no assento.
+Referência E002 ↔ vistoria atual E007
+Ausência comprovada · 1 de 6 itens
+Sala · Micro-ondas · Ausência comprovada · Condição na referência: Bom
+Referência E004 ↔ vistoria atual E005
+Melhorou · 1 de 6 itens
+Sala · Mesa · Melhorou · Condição na referência: Ruim · Condição atual: Bom
+Referência E003 ↔ vistoria atual E006
+Não observado · 1 de 6 itens
+Sala · Cortina · Não observado · Condição na referência: Bom
+Limitação: A ausência não foi confirmada: o ambiente não foi registrado por inteiro e o item pode ter mudado de lugar.
+Sem base para comparar · 1 de 6 itens
+Sala · Quadro · Sem base para comparar
+Limitação: A referência aprovada não mostra o item o suficiente; não há base para comparar.
+Sem alteração · 1 de 6 itens
+Sala · Cadeira 00 · Sem alteração · Condição na referência: Bom · Condição atual: Bom
+Referência E001 ↔ vistoria atual E008
+Observado fora da referência (informativo)
+Sala · Luminária
+Esta comparação descreve diferenças visuais entre as evidências e não atribui responsabilidade, desgaste natural ou custo de reparo.
+Laudo RPT-T04 · versão 1
+1 / 3
+
+PÁGINA 2
+LAUDO INTERNO DE VISTORIA
+Apartamento 12 · Rua São João, 12 — São Paulo
+Classificação: Resultado com limitações
+Evidências
+Cobertura · Telhado e calhas
+Registrar estado atual.
+Análise atual · Concluída
+Nenhuma evidência registrada para este requisito.
+Evidências adicionais
+Referência Vistoria atual
+E001 · Referência · Referência E005 · Vistoria atual · Vistoria atual
+E002 · Referência · Referência E006 · Vistoria atual · Vistoria atual
+E003 · Referência · Referência E007 · Vistoria atual · Vistoria atual
+Laudo RPT-T04 · versão 1
+2 / 3
+
+PÁGINA 3
+LAUDO INTERNO DE VISTORIA
+Apartamento 12 · Rua São João, 12 — São Paulo
+Classificação: Resultado com limitações
+E004 · Referência · Referência E008 · Vistoria atual · Vistoria atual
+Constatações
+Nenhuma constatação registrada; isso não confirma ausência de problemas.
+Laudo RPT-T04 · versão 1
+3 / 3

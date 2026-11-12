@@ -771,6 +771,8 @@ func projectForAudience(snapshot reportcore.Snapshot, audience string) (reportco
 	case "PDF":
 		return snapshot, true, nil
 	case "PDF_CUSTOMER":
+		counts := reportcore.CountFindings(snapshot.Findings)
+		snapshot.FindingCounts = &counts
 		snapshot.Findings = nil
 		snapshot = projectCustomerSnapshot(snapshot)
 		if snapshot.SchemaVersion >= 3 && reportcore.ValidateCustomerSnapshot(snapshot) != nil {

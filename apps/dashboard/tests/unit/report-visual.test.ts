@@ -245,7 +245,7 @@ describe("Report evidence presentation", () => {
     expect(markup).toContain("Armários");
     expect(markup).toContain('src="/cabinet.jpg"');
     expect(markup).toContain('alt="Imagem da evidência"');
-    expect(markup).toContain("Avaliação completa: 1 de 1");
+    expect(markup).toContain("avaliação completa: 1 de 1 componentes");
     expect(markup).not.toContain("Todos os itens esperados foram verificados");
   });
 
@@ -379,7 +379,9 @@ describe("Report evidence presentation", () => {
     expect(markup).toContain("Não observado");
     expect(markup).not.toContain("https://");
     expect(markup).not.toContain("<img");
-    expect(markup).toContain("Referência E001 ↔ vistoria atual E002");
+    expect(markup).toContain("E001 ↔ E002");
+    expect(markup).toContain("Referência · E001");
+    expect(markup).toContain("Vistoria atual · E002");
     expect(markup).not.toContain("S3");
   });
 
